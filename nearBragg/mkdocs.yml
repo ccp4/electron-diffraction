@@ -1,5 +1,5 @@
-site_name: 'Wallpapers'
-site_author: 'Tarik Ronan Drevon'
+site_name: 'nearBragg'
+site_author: ''
 
 docs_dir: 'docs'
 site_dir: 'site'
@@ -20,6 +20,3 @@ extra_javascript:
 
 nav:
 - Home: index.md
-- lattice: lattice.md
-- plane group: plane_group.md
-

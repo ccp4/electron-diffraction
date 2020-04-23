@@ -1,5 +1,8 @@
-*/results/
+## projects data,binaries,etc...
+*/bin
+*/dat
+*/figures
 
-nearBragg_doc.py
-makeRun.sh
-*.bin
+## Python
+*/__pycache__
+*.egg-info

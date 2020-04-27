@@ -1,7 +1,8 @@
 from utils import *
-from electronAtomicScatteringFactors import get_elec_atomic_factors
-datpath=get_figpath(__file__,'/../output/')
-figpath=get_figpath(__file__,'/../figures/')
+from scattering_factors import get_elec_atomic_factors
+from utils import displayStandards as dsp
+datpath=get_figpath(__file__,'/dat/Silicon/Si110/')
+figpath=get_figpath(__file__,'/figures/')
 ax,by,cz = 5.43,5.43,1.3575
 Vcell = ax**3
 
@@ -83,8 +84,8 @@ def plot_beam_vs_thickness(file,rip='IridO',iBs=[],tol=1e-2,cm='Greens',**kwargs
     '''rip flags :
     I(Intens),r(real),i(imag),d(display max beam I), O(0,0 beam in default iBs)
     '''
-    hk = open(datpath+file).readline().rstrip().split('=  ')[1].split(' ')
-    beams = np.loadtxt(datpath+file,skiprows=3).T
+    hk = open(file).readline().rstrip().split('=  ')[1].split(' ')
+    beams = np.loadtxt(file,skiprows=3).T
     nbs = len(hk)
     t,beams = beams[0,:-5]*cz,beams[1:,:-5]
     re = [beams[2*i,:] for i in range(nbs)]
@@ -96,19 +97,21 @@ def plot_beam_vs_thickness(file,rip='IridO',iBs=[],tol=1e-2,cm='Greens',**kwargs
     nbs = len(iBs);
     csp,csr,csi,plts = getCs(cm,nbs),getCs('Blues',nbs),getCs('Reds',nbs),[]
     for i,idx in zip(range(nbs),iBs):
-        if 'I' in rip : plts += [[t,Ib[idx],csp[i],'$I_{%s}$' %(hk[idx])]]
+        if 'I' in rip : plts += [[t,Ib[idx],[csp[i],'-s'],'$I_{%s}$' %(hk[idx])]]
         if 'r' in rip : plts += [[t,re[idx],csr[i],'$re$']]
         if 'i' in rip : plts += [[t,im[idx],csi[i],'$im$']]
-    stddisp(plts,lw=2,labs=['$thickness(A)$','$I_{hk}$'],**kwargs)#,xylims=[0,t.max(),0,5])
+    dsp.stddisp(plts,lw=2,labs=['$thickness(A)$','$I_{hk}$'],**kwargs)#,xylims=[0,t.max(),0,5])
     if 'd' in rip : print('Imax:',Imax,'iBs:',iBs,', nbs=',nbs)
 
 
-plt.close('all')
+# plt.close('all')
+plot_beam_vs_thickness(datpath+'si110_autoslic_beams.txt',rip='spI',cm='jet',iBs=[],tol=1e-3,
+    legLoc='center left out',setPos=True,axPos=[0.1,0.1,0.7,0.8],
+    name=figpath+'Si110_Ihk.svg',opt='s',figsize='f')
+
 #plot_pattern_section(file='si_autoslic100.tif')
 #import_structure_factor(['si110_2x2.txt'],imopt='c',name=figpath+'si110_S_2D.png',opt='s')
 #import_structure_factor(['si110_2x2.txt','si110_10x10.txt'],opt='s',name=figpath+'si110_S_1D.svg',gridOn=0  )
-plot_beam_vs_thickness('si110_autoslic_beams.txt',rip='spI',cm='jet',iBs=[],tol=1e-3,
-    legLoc='right',name=figpath+'si110_Ihk.svg',opt='ps',)
     # inset={'axpos':[0.2,0.18,0.25,0.25],'xylims':[0,150,0,0.02]})
 #plot_fe(qmax=3,Nx=20,opt='s',name=figpath+'Si_vg.svg',axPos=[0.2,0.125,0.75,0.8],setPos=1,lw=3,gridOn=0)
 # import_vatom('Si_vatom.txt',opt='s',name=figpath+'Si_va.svg',axPos=[0.2,0.125,0.75,0.8],setPos=1,lw=3)

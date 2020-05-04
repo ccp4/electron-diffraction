@@ -1,8 +1,11 @@
-from utils import*
+from utils.displayStandards import*
+import pandas as pd
+from utils.physicsConstants import mc2,c0,A,h,emass,keV
 
 dat_path = get_figpath(__file__,'/data/')
 __all__ = ['get_xray_atomic_factors','get_elec_atomic_factors',
-    'get_v_from_KE','wavelength']
+    'get_v_from_KE','wavelength','get_elt']
+
 
 def get_xray_atomic_factors(elts,qmax=2,npts=100):
     '''elts : list of atoms by name
@@ -48,32 +51,38 @@ def get_elec_atomic_factors(elts,q=None,qmax=2,npts=100):
 #     theta0 = Z**(1/3)/(k0*a0)               #no dim
 #     return 2*Z/(sqrt(T)*k0)/(theta**2+theta0**2)
 
+########################################################################
 ####def : misc
+########################################################################
 def get_v_from_KE(KE):
     ''' v = get_v_from_KE(KE)
     KE : energy (keV)
     v  : speed (normalized to c)
     '''
-    #pmc2 = (np.array(KE)/mc2 + 1)**2 - 1
-    #vc2 = pmc2/(1+pmc2)
-    #np.sqrt(vc2)
-    return np.sqrt(1 - 1/(1+np.array(KE)/mc2)**2)
+    v =  np.sqrt(1 - 1/(1+np.array(KE)/mc2)**2)
+    return v
 
 def wavelength(KE):
     '''w = wavelength(KE)
     KE : energy (keV)
     lam  : wavelength (Angstrom)
     '''
-    emass = 510.99906   #keV
+    #emass = 510.99906   #keV
     lam = h*c0/(np.sqrt(KE*(2*emass+KE))*keV)
     return lam/A
 
+def get_elt(elts):
+    Z = np.array(pd.read_pickle(dat_path+'elec.pkl')['Z'][elts].values,dtype=int)
+    return Z
+
 ################################################################################
-def test_elect_atomic(opt='p',fmt='svg'):
+#### def : test
+################################################################################
+def _test_elect_atomic(opt='p',fmt='svg'):
     elts = ['H','C','N','O','S','P']  #+ ['Si','Cu','Au','U']
     qe,fq_e=get_elec_atomic_factors(elts,qmax=3,npts=100)
     qx,fq_x=get_xray_atomic_factors(elts,qmax=6,npts=100)
-    Z = pd.read_pickle(dat_path+'atoms.pkl')['Z'][elts].values
+    Z = get_elt(elts) #pd.read_pickle(dat_path+'atoms.pkl')['Z'][elts].values
     cs=[unicolor(0.85),unicolor(0.4),(0,0,1),(1,0,0),(0,1,1),(1,0,1)] #+ ['k']*4
     df=pd.DataFrame(np.array([Z,cs,fq_e,fq_x]).T,columns=['Z','color','fq_e','fq_x'],index=elts)
 
@@ -86,7 +95,11 @@ def test_elect_atomic(opt='p',fmt='svg'):
         figsize='f',name=figpath+'xray_atomic_scattering_factors.%s' %fmt)
     return df
 
+def _test_misc(KE=200,elts=['H','C','O','Si','Fe']):
+    print( '''KE=%.2f,v=%.4f,lambda=%.4f
+        ''' %(KE,get_v_from_KE(KE),wavelength(KE)))
+    print(green+'get_elt(',elts,') = ',red,get_elt(elts), black)
 if __name__=="__main__":
     figpath=get_figpath(__file__,'/figures/');#print(figpath)
-    #figpath=get_figpath(__file__,'/../../docs/figures/');#print(figpath)
-    test_elect_atomic(opt='p',fmt='png')
+    #_test_elect_atomic(opt='p',fmt='png')
+    _test_misc()

@@ -1,10 +1,12 @@
-from utils import*
-from mpl_toolkits.mplot3d import Axes3D
+from utils.displayStandards import* # stddisp
 from scattering_factors import*
-figpath=get_figpath(__file__,"/figures/")
+import numpy as np
+from math import pi
 
-
-def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v='q'):
+__all__=['structure_factor3D','plot_structure3D','get_miller3D',
+        'get_pendulossung']
+        
+def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     '''Computes structure factor in 3D from :
     - `pattern` : Nx4 array - N atoms with each row : x,y,z,Z
     - `lat_vec` : 3x3 array - reciprocal lattice vectors
@@ -53,8 +55,35 @@ def structure_factor2D(pattern,lat_vec,hk=None,hkMax=10,sym=1,v='q'):
         Fhl += F_i*fq[i]
     return Fhl
 
+###
+def get_pendulossung(name='Si',miller=[0,0,0],keV=200,opt='p'):
+    ''' give the theorertical 2-beam approximation Pendullosung thickness
+    - `name`    : compound
+    - `miller`  : [h,k,l]
+    - `keV`     : wavelength (keV)
+    RETURN
+    - xi : Pendullosung thickness (A)
+    '''
+    # compute structure factor
+    from crystals import Crystal
+    crys = Crystal.from_database(name)
+    lat_vec  = crys.reciprocal_vectors
+    pattern  = np.array([list(a.coords_fractional)+[a.atomic_number] for a in crys.atoms])
+    hkl,Fhkl = structure_factor3D(pattern,lat_vec,hklMax=max(miller),sym=0,v='')
+    ax,by,cz = crys.lattice_parameters[:3]
+    Vcell    = crys.volume
+    # compute Pendullosung
+    h,k,l = miller
+    Ug,K  = np.abs(Fhkl[h,k,l])/Vcell,1/wavelength(keV)
+    xi  = K/Ug
+    if 'p' in opt:
+        print(green+"\tPendullosung thickness "+name+'[%d%d%d]' %(h,k,l)+black)
+        print('%-5s= %.2f\n%-5s= %.2f\n%-5s= %.2f'%('K',K,'Ug',Ug,'xi',xi))
+    return xi
+
 ##########################################################################
 ###def : display
+##########################################################################
 def plot_structure3D(hkl,Fhkl,**kwargs):
     '''scatter plot of the intensity'''
     hx,ky,lz = hkl
@@ -64,10 +93,6 @@ def plot_structure3D(hkl,Fhkl,**kwargs):
     N = hx.max()
     lims = [0,N,0,N,0,N]
     stddisp(scat=[hx,ky,lz,c],imOpt='c',rc='3d',legOpt=0,xylims=lims,**kwargs)
-    #fig = plt.figure()
-    #ax = plt.subplot(111,projection='3d')
-    #c = ax.scatter(hx,ky,lz,c=np.log10(S+1),cmap='jet')
-    #cb=fig.colorbar(c,ax=ax)
 
 def plot2Dcutplane(Shkl,n='100',title='auto',**kwargs):
     '''Not working for arbitrary cut yet '''
@@ -116,7 +141,7 @@ def get_miller2D(hkMax=10,sym=1):
 ##########################################################################
 #### def : test
 ##########################################################################
-def test_structure_factor2D(N=5):
+def _test_structure_factor2D(N=5):
     pptype,a,b,angle='p1',50,50,90      #A
     pattern = np.array([[0.5,0.5,1]])
 
@@ -135,7 +160,7 @@ def test_structure_factor2D(N=5):
     fig.show()
     return h,l,qx,qy,Fhl
 
-def test_structure_factor3D(N=5,sym=False):
+def _test_structure_factor3D(N=5,sym=False,**kwargs):
     from crystals import Crystal
     Si = Crystal.from_database('Si'); #vol     = Si.volume
     lat_vec = Si.reciprocal_vectors
@@ -145,13 +170,14 @@ def test_structure_factor3D(N=5,sym=False):
     Shkl = np.abs(Fhkl)**2
     #plot_structure3D(hkl,Fhkl,name=figpath+'Si_Shkl.png',opt='s',cmap='jet',ms=50,title='Si $c=log_{10}(S+1)$',view=[9,-72])
     Shkl = np.log10(Shkl+1)
-    plot2Dcutplane(Shkl,n='100',name=figpath+'Si_S100.png',opt='s',cmap='jet')
-    plot2Dcutplane(Shkl,n='110',name=figpath+'Si_S110.png',opt='s',cmap='jet')
+    plot2Dcutplane(Shkl,n='100',name=figpath+'Si_S100.png',**kwargs)
+    plot2Dcutplane(Shkl,n='110',name=figpath+'Si_S110.png',**kwargs)
     #plot1Dcutline(Shkl,u='001',dopt='')
     return hkl,Fhkl
 
 
 if __name__ == "__main__" :
+    figpath=get_figpath(__file__,"/figures/")
     plt.close('all')
-    #hk,Fhk = test_structure_factor2D(N=8)
-    hkl,Fhkl = test_structure_factor3D(N=4)
+    #hk,Fhk = _test_structure_factor2D(N=8)
+    #hkl,Fhkl = _test_structure_factor3D(N=4,opt='p',cmap='jet')

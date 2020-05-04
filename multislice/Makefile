@@ -1,5 +1,5 @@
 TEMSIM=/home/ronan/Documents/CCP4/src/multislice/kirkland/temsim
-DOC_DIR=#/home/ronan/Documents/git/ccp4/docs/projects/multislice/
+DOC_DIR?=/home/ronan/Documents/git/ccp4/docs/projects/multislice
 DEBUG ?= 0
 BIN=bin/slicelib_main
 MD=${DOC_DIR}/pyMultislice.md #&1 #STDOUT

@@ -43,16 +43,20 @@ class Multislice:
     - `v`  : verbose - str or bool(all if True) or int(verbose level)
         - n(naming pattern),c(cell params),t(thickness),r(run cmd)
         - d(data),D(Decks),R(full run cmd)
-    - `save_deck` : save the decks to disk
+    - `opt` : d(save_deck), s(save_obj), r(run)
+    - `fopt` : f(force rerun), w(warn rerun). If the simulation was previously completed :
+        - 'w' is on  (default case) : the user will be asked to confirm whether he wants to rerun it,
+        - 'w' is off (fopt='') : The simulation is not rerun
+        - 'f' in fopt : The simulation is rerun
     '''
-    def __init__(self,name,mulslice,tail='',data=None,
+    def __init__(self,name,mulslice=False,tail='',data=None,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,
                 hk=[(0,0)],Nhk=0,
-                save_deck=True,save_obj=False,run=False,opt=None,
+                save_deck=True,save_obj=False,run=False,opt=None,fopt='w',
                 v=True):
         if isinstance(v,bool) : v=['','nctrdD'][v]
         if isinstance(v,int) : v=''.join(['nct','D','dR'][:min(v,3)])
-        if opt : save_deck,save_obj,run = [s in opt for s in ['dsr']]
+        if opt : save_deck,save_obj,run = [s in opt for s in 'dsr']
         self.name        = basename(name)                           #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.is_mulslice = mulslice
@@ -69,14 +73,19 @@ class Multislice:
         self.name        = self._set_name('n' in v)
         self.outf        = {
             'log'     : self.datpath+self.name+'.log',
-            'pattern' : self.datpath+self.name+'.tif',
+            'image'   : self.datpath+self.name+'.tif',
             'beamstxt': self.datpath+self.name+'_beams.txt',
             'beams'   : self.datpath+self.name+'_beams.npy',
+            'pattern'   : self.datpath+self.name+'_pattern.txt',
             }
         ## start doing things here
-        self.decks  = self.make_decks(save_deck, 'D' in v)
+        self.decks  = self.make_decks(save_deck or run, 'D' in v)
         if save_obj : self.save()
-        if run : self.run(v=[1,2]['r' in v,'R' in v])
+        if run :
+            self.p = self.run(v=('r' in v and 'R' not in v) + 2*('R' in v), fopt=fopt)
+        else:
+            self.p=None
+
     ########################################################################
     ##### Public functions
     ########################################################################
@@ -97,8 +106,10 @@ class Multislice:
             self.print_datafiles()
         return decks
 
-    def run(self,v=1):
-        '''run the simulation with temsim'''
+    def run(self,v=1,fopt='w'):
+        '''run the simulation with temsim
+        -fopt : f(force rerun), w(warn ask rerun already done)
+        '''
         temsim='/home/ronan/Documents/CCP4/src/multislice/kirkland/temsim/'
         #very ugly sorry
         if self.is_mulslice:
@@ -117,9 +128,17 @@ class Multislice:
         # cmd = '''
         #     %s -d %s -s %s -v > %s
         #     '''%(self.exe,deck_list,prog,self.outf['log'])
-        if v>0:print(green+self.name+"job submitted"+black)
-        if v>1:print(red+cmd+black)
-        p = Popen(cmd,shell=True)
+        run = True
+        if self.check_simu_state(0)=='done' and not 'f' in fopt:
+            print(red+"Simulation already performed in the past"+black)
+            if 'w' in fopt : run = input(red+"Rerun?(y/n) : "+black)=='y'
+            else : run = False
+        if run:
+            p = Popen(cmd,shell=True)
+            if v>0:print(green+self.name+" job submitted"+black)
+            if v>1:print(red+cmd+black)
+        else :
+            p = None
         return p
 
     def get_beams(self,iBs=[],tol=1e-2,bOpt=''):
@@ -145,17 +164,48 @@ class Multislice:
         beams = self.get_beams(iBs,tol,bOpt)
         plot_beam_thickness(beams,**kwargs)
 
-    def pattern(self,opt='I',cmap='jet',**kwargs):
-        '''Displays the 2D pattern out of simulation
+    def image(self,opt='I',cmap='jet',**kwargs):
+        '''Displays the 2D image out of simulation
         - opt : I(intensity)
         '''
-        im=plt.imread(self.outf['pattern'])
+        im=plt.imread(self.outf['image'])
         if 'I' in opt :
             N = int(im.shape[1]/2)
             real,imag = im[:,:N],im[:,N:];#print(real.max())
             im = real**2+imag**2
             im =im/im.max()
         stddisp(labs=['$x$','$y$'],im=im,legOpt=0,imOpt='c',**kwargs)
+
+    def pattern(self,Iopt='Incsl',tol=1e-4,**kwargs):
+        '''Displays the 2D diffraction pattern out of simulation
+        - Iopt : I(intensity), c(crop), n(normalize), s(fftshift)
+        - kwargs : see stddisp
+        '''
+        #im=plt.imread(self.outf['pattern'])
+        im = np.loadtxt(self.outf['pattern'])
+        if 'I' in Iopt :
+            real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
+            im = real**2+imag**2
+            Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
+            if 'n' in Iopt :
+                im00 = im[0,0];im[0,0] = 0
+                mMax = im.max();im /= mMax
+                if 'l' in Iopt : im[0,0] = im00/mMax
+            if 'c' in Iopt :
+                idx = im[:Nx,:Ny]>im.max()*tol
+                h,k = np.meshgrid(np.arange(Nx),np.arange(Ny))
+                r = np.sqrt(h**2+k**2)
+                Nmax = ceil(r[idx].max()); print('Pattern Nmax=%d > %E ' %(Nmax,tol))
+            else :
+                Nmax = min(2*Nx,2*Ny)
+            if 's' in Iopt : im = np.fft.fftshift(im);
+        im = im[Nx-Nmax:Nx+Nmax,Ny-Nmax:Ny+Nmax]
+        if 'l' in Iopt :
+            im[im<tol] = tol*1e-2
+            h,k = np.meshgrid(np.arange(-Nmax,Nmax),np.arange(-Nmax,Nmax))
+            Nh,Nk = self.repeat[:2]
+            im = [h/Nh,k/Nk,np.log10(im)]
+        stddisp(labs=['$h$','$k$'],im=im,legOpt=0,**kwargs)
 
     def save(self):
         '''save this multislice object'''
@@ -260,10 +310,13 @@ class Multislice:
 
     def _set_name(self,v=False):
         name = self.name+self.tail+['_autoslic','_mulslice'][self.is_mulslice]
-        if v : print('Simu name pattern = '+self.name)
+        if v :
+            self.name=name
+            print('Simu name pattern = '+self.name)
         return name
     def _set_NxNy(self,NxNy):
-        if isinstance(NxNy,int) : NxNy = [NxNy,NxNy]
+        if isinstance(NxNy,int) or  isinstance(NxNy,np.int64) :
+            NxNy = [NxNy,NxNy]
         return tuple(NxNy)
     def _set_hk(self,hk,Nhk):
         if Nhk:
@@ -297,7 +350,7 @@ class Multislice:
         deck = "%d(%s)\n" %(self.repeat[2],'abcdefghijklmnopqrstuv'[:len(self.data)]) #
         for dat in self.data :                  #potential image files
             deck+="%s\n" %(self.datpath+self.tail+dat.replace('.dat','.tif'))
-        deck += "%s\n" %(self.outf['pattern'])  #pattern file
+        deck += "%s\n" %(self.outf['image'])    #pattern file
         deck += "n\n"                           #partial coherence
         deck += "n\n"                           #start previous run
         deck += "%.2f\n" %self.keV              #wavelength
@@ -315,7 +368,7 @@ class Multislice:
     def _autoslic_deck(self):
         deck  = "%s\n" %(self.datpath+self.data)#.xyz file
         deck += "%d %d %d\n" %self.repeat       #super cell
-        deck += "%s\n" %(self.outf['pattern'])  #pattern file
+        deck += "%s\n" %(self.outf['image'])    #image file
         deck += "n\n"                           #partial coherence
         deck += "n\n"                           #start previous run
         deck += "%.4f\n" %self.keV              #wavelength
@@ -329,6 +382,8 @@ class Multislice:
             deck += "%d %d\n" %(hk)
         deck += "n\n"                           #thermal vibration
         deck += "n\n"                           #intensity cross section
+        deck += "y\n"                           #Diffraction pattern
+        deck += "%s\n" %(self.outf['pattern'])  #     filename
         return deck
 
     ########################################################################

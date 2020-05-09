@@ -20,7 +20,22 @@ from subprocess import Popen #,check_output
 from glob import glob as lsfiles
 from os.path import dirname,realpath,exists
 from postprocess import plot_beam_thickness,import_beams
-import pickle
+from string import ascii_uppercase as SLICES #ascii_letters
+from string import ascii_letters
+import pickle,socket,time
+
+ssh_hosts = {
+    'local_london':'BG-X550',
+    'tarik-CCP4stfc':'tarik-CCP4','tarik-CCP4home':'tarik-CCP4',
+    'brno':'brno'}
+
+temsim_hosts={
+    'BG-X550'   :'/home/ronan/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
+    'tarik-CCP4':'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
+    'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
+}
+
+
 
 class Multislice:
     ''' **DATA PARAMETERS :**\n
@@ -52,93 +67,84 @@ class Multislice:
     def __init__(self,name,mulslice=False,tail='',data=None,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,
                 hk=[(0,0)],Nhk=0,
-                save_deck=True,save_obj=False,run=False,opt=None,fopt='w',
-                v=True):
+                save_deck=True,save_obj=False,run=False,
+                opt=None,fopt='w',v=True,ssh=None):
         if isinstance(v,bool) : v=['','nctrdD'][v]
         if isinstance(v,int) : v=''.join(['nct','D','dR'][:min(v,3)])
         if opt : save_deck,save_obj,run = [s in opt for s in 'dsr']
+        #save args
         self.name        = basename(name)                           #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.is_mulslice = mulslice
         self.tail        = '_'+tail if tail else ''
-        self.data        = self._get_datafiles(data,'d' in v)       #;print(self.data)
-        self.cell_params = self._get_cell_params('c' in v)
+        self.name        = self._set_name('n' in v)
+        self.data        = self._get_datafiles(data)
+        self.slices      = SLICES[:len(self.data)]
+        self.outf        = self._set_filenames()
         self.keV         = keV
         self.repeat      = tuple(repeat)
         self.NxNy        = self._set_NxNy(NxNy)
         self.hk          = self._set_hk(hk,Nhk)
         self.slice_thick = self._set_slice_thick(slice_thick)
+        # find cell params and thickness
+        self.cell_params = self._get_cell_params('c' in v)
         self.thickness   = self._get_thickness('t' in v)
-        self.exe         = get_figpath(__file__,'/')+'run_temsim.sh'#;print(self.exe)
-        self.name        = self._set_name('n' in v)
-        self.outf        = {
-            'log'     : self.datpath+self.name+'.log',
-            'image'   : self.datpath+self.name+'.tif',
-            'beamstxt': self.datpath+self.name+'_beams.txt',
-            'beams'   : self.datpath+self.name+'_beams.npy',
-            'pattern'   : self.datpath+self.name+'_pattern.txt',
-            }
-        ## start doing things here
-        self.decks  = self.make_decks(save_deck or run, 'D' in v)
+        ## make decks and run if required
+        self.decks  = self.make_decks(save_deck or run)
         if save_obj : self.save()
+        if 'd' in v : self.print_datafiles()
+        if 'D' in v : self.print_decks()
         if run :
-            self.p = self.run(v=('r' in v and 'R' not in v) + 2*('R' in v), fopt=fopt)
+            vopt=('r' in v and 'R' not in v) + 2*('R' in v)
+            self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh)
         else:
             self.p=None
 
     ########################################################################
     ##### Public functions
     ########################################################################
-    def make_decks(self,save=True,v=True):
+    def make_decks(self,save=True,datpath=None):
         '''create the decks from the information provided'''
         if self.is_mulslice:
-            decks={dat.replace('.dat',self.tail+'.in') : self._atompot_deck(dat) for dat in self.data} #atompot first
-            decks[self.name+'.in']=self._mulslice_deck()
+            decks={self.name+'.in':self._mulslice_deck()}
+            for dat,i in zip(self.data,self.slices):
+                decks[dat_deck]=self._atompot_deck(i)
         else:
             decks={self.name+'.in':self._autoslic_deck()}
         if save:
+            if not datpath : datpath = self.datpath
             print(green+'Decks saved :'+black)
             for filename,deck in decks.items():
-                with open(self.datpath+filename,'w') as f : f.write(deck)
-                print(yellow+self.datpath+filename+black)
-        if v :
-            self.decks=decks
-            self.print_datafiles()
+                with open(datpath+filename,'w') as f : f.write(deck)
+                print(yellow+datpath+filename+black)
         return decks
 
-    def run(self,v=1,fopt='w'):
+    def run(self,v=1,fopt='w',ssh_alias=None,hostpath=None):
         '''run the simulation with temsim
-        -fopt : f(force rerun), w(warn ask rerun already done)
+        - fopt : f(force rerun), w(warn ask rerun already done)
+        - ssh : name of the host to run the job
         '''
-        temsim='/home/ronan/Documents/CCP4/src/multislice/kirkland/temsim/'
-        #very ugly sorry
-        if self.is_mulslice:
-            atompot_decks = [self.datpath+d for d in self.decks.keys() if 'mulslice' not in d ]
-            simu_deck = [self.datpath+d for d in self.decks.keys() if 'mulslice' in d ][0]
-            cmd='> %s && ' %(self.outf['log'])
-            for deck in atompot_decks :
-                cmd += '''cat %s | %s >> %s &&
-                    ''' %(deck,temsim+'atompot',self.outf['log'])
-            cmd += '''cat %s | %s >> %s
-                ''' %(simu_deck,temsim+'mulslice',self.outf['log'])
-        else:
-            simu_deck = self.datpath+list(self.decks.keys())[0]
-            cmd = '''cat %s | %s > %s
-                ''' %(simu_deck,temsim+'autoslic',self.outf['log'])
-        # cmd = '''
-        #     %s -d %s -s %s -v > %s
-        #     '''%(self.exe,deck_list,prog,self.outf['log'])
         run = True
-        if self.check_simu_state(0)=='done' and not 'f' in fopt:
-            print(red+"Simulation already performed in the past"+black)
-            if 'w' in fopt : run = input(red+"Rerun?(y/n) : "+black)=='y'
-            else : run = False
+        if self.check_simu_state(v=0) == 'done' :
+            if v>0 : print(red+"Simulation already performed in the past."+black)
+            if 'f' in fopt :
+                msg='Force re-running.'
+            else :
+                if 'w' in fopt :
+                    run = input(red+"Re-run?(y/n) : "+black)=='y'
+                    msg = 're-running'
+                else :
+                    run,msg = False, 'not running'
+            if v>1 : print(red+msg+black)
+        p = None
         if run:
+            if ssh_alias :
+                cmd = self._get_job_ssh(ssh_alias,v=v>2)
+            else :
+                cmd = self._get_job()
             p = Popen(cmd,shell=True)
-            if v>0:print(green+self.name+" job submitted"+black)
-            if v>1:print(red+cmd+black)
-        else :
-            p = None
+            if v>0 : print(green+self.name+" job submitted"+black)
+            if v>1 : print(magenta+cmd+black)
         return p
 
     def get_beams(self,iBs=[],tol=1e-2,bOpt=''):
@@ -149,11 +155,11 @@ class Multislice:
         '''
         if 'a' in bOpt : iBs = range(len(self.hk))
         new = 'n' in bOpt or 'f' in bOpt; #print(bOpt)
-        if not exists(self.outf['beams']) or new:
-            beams = import_beams(self.outf['beamstxt'],self.slice_thick,iBs,tol,'O' in bOpt,'p' in bOpt)
-            np.save(self.outf['beams'],beams)
-            print(green+'beams file saved\n'+yellow+self.outf['beams']+black)
-        beams = np.load(self.outf['beams'])
+        if not exists(self._outf('beams')) or new:
+            beams = import_beams(self._outf('beamstxt'),self.slice_thick,iBs,tol,'O' in bOpt,'p' in bOpt)
+            np.save(self._outf('beams'),beams)
+            print(green+'beams file saved : \n'+yellow+self._outf('beams')+black)
+        beams = np.load(self._outf('beams'))
         return beams
 
     def beam_vs_thickness(self,bOpt='',iBs=[],tol=1e-2,**kwargs):
@@ -168,7 +174,7 @@ class Multislice:
         '''Displays the 2D image out of simulation
         - opt : I(intensity)
         '''
-        im=plt.imread(self.outf['image'])
+        im=plt.imread(self._outf('image'))
         if 'I' in opt :
             N = int(im.shape[1]/2)
             real,imag = im[:,:N],im[:,N:];#print(real.max())
@@ -182,7 +188,7 @@ class Multislice:
         - kwargs : see stddisp
         '''
         #im=plt.imread(self.outf['pattern'])
-        im = np.loadtxt(self.outf['pattern'])
+        im = np.loadtxt(self._outf('pattern'))
         if 'I' in Iopt :
             real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
             im = real**2+imag**2
@@ -209,7 +215,7 @@ class Multislice:
 
     def save(self):
         '''save this multislice object'''
-        file=self.datpath+self.name +'.pkl'
+        file=self._outf('obj')
         with open(file,'wb') as out :
             pickle.dump(self, out, pickle.HIGHEST_PROTOCOL)
         print(green+"object saved\n"+yellow+file+black)
@@ -219,12 +225,13 @@ class Multislice:
     def print_datafiles(self,data=None):
         '''show data files *.dat or .xyz depending on mulslice'''
         if not data : data = self.data
-        if not isinstance(data,list) : data = [data]
+        #if not isinstance(data,list) : data = [data]
         self._print_header('%s FILES' %(['.xyz','*.dat'][self.is_mulslice]))
         for dat in data :
             print(green+dat+black)
             with open(self.datpath+dat,'r') as f: print(''.join(f.readlines()))
             print("\n")
+
     def print_decks(self,decks=None):
         '''show decks *.in'''
         self._print_header('*.in FILES')
@@ -237,26 +244,32 @@ class Multislice:
             except FileNotFoundError:
                 print(self.decks[deck])
                 print(red+"WARNING:deck file %s not on disk" %(self.datpath+deck)+black)
+
     def print_log(self):
         '''print the logfile of running multislice .log'''
         try:
-            with open(self.outf['log'],'r') as f:
+            with open(self._outf('log'),'r') as f:
                 self._print_header('.log FILE')
                 print(''.join(f.readlines()))
         except FileNotFoundError:
             print(red+'logfile not created yet, run a simu first'+black)
             return 0
 
-    def check_simu_state(self,v=True):
+    def check_simu_state(self,ssh_alias=None,v=False):
         '''see completion state of a simulation '''
+        if ssh_alias : self.ssh_get(ssh_alias,'log')
         try:
-            with open(self.outf['log'],'r') as f :
-                l1,l2=f.readlines()[-2:];#print(l1,l2)
+            with open(self._outf('log'),'r') as f :
+                lines = f.readlines()  #print(self._outf('log')) #f.readlines())
+                if len(lines)>=2 :
+                    l1,l2=lines[-2:];#print(l1,l2)
+                else :
+                    return 'empty'
             # get state
             if self.is_mulslice:
                 if 'slice' in l2 :
-                    slice = int(l2.split(',')[0].split(' ')[-1]);
-                    tot_slice = (len(self.decks.keys())-1)*self.repeat[2];
+                    slice       = int(l2.split(',')[0].split(' ')[-1]);
+                    tot_slice   = len(self.data)*self.repeat[2]
                     state="%d%%" %(100*slice/tot_slice)
                 elif 'elapsed time' in l2 : state='done'
                 else : state='init'
@@ -277,42 +290,51 @@ class Multislice:
     ########################################################################
     ######## Private functions
     ########################################################################
-    def _get_datafiles(self,data,v=True):
+    def _get_datafiles(self,data):
         dat_type = ['xyz','dat'][self.is_mulslice]
         err_msg=red+'no *.' +dat_type+' files found in :\n'+yellow+self.datpath+black
         if not data : data = lsfiles(self.datpath+'*.'+dat_type)
         if not data : raise Exception(err_msg)
-        if not isinstance(data,list) : data=[data]
-        #print(data[0].split('.')[-1])
+        if not isinstance(data,list) : data=[data]; #print(data[0].split('.')[-1])
         if not data[0].split('.')[-1]==dat_type : printf(err_msg)# raise Exception(err_msg)
-        if self.is_mulslice :
-            data = [basename(f) for f in data ]
-        else :
-            data = basename(data[0])
-        if v :
-            self.data = data
-            self.print_datafiles()
+        data = [basename(f) for f in data ]
         return data
+
+    def _set_filenames(self):
+        outf = {'obj'       : self.name+'.pkl',
+                'simu_deck' : self.name+'.in',
+                'log'       : self.name+'.log',
+                'image'     : self.name+'.tif',
+                'pattern'   : self.name+'_pattern.txt',
+                'beamstxt'  : self.name+'_beams.txt',
+                'beams'     : self.name+'_beams.npy',
+                }
+        if self.is_mulslice:
+            for dat,i in zip(self.data,self.slices):
+                outf['slice_data%s' %i] = dat
+                outf['slice_imag%s' %i] = dat.replace('.dat','.tif')
+                outf['slice_deck%s' %i] = dat.replace('.dat',self.tail+'.in')
+        else :
+            outf['data'] = self.data[0]
+        return outf
+
     def _get_cell_params(self,v=False):
         if self.is_mulslice :
             cz=[]
-            for dat in list(self.data):
-                with open(self.datpath+dat) as f:
+            for i in list(self.slices):
+                with open(self._ouf('slice_data%s' %i)) as f:
                     ax,by,cz_i = np.array(f.readline().rstrip().split(' '),dtype=float)
                     cz.append(cz_i)
         else :
-            with open(self.datpath+self.data) as f:
+            with open(self._outf('data')) as f:
                 f.readline()
                 ax,by,cz = np.array(f.readline().rstrip().split(' '),dtype=float)
         cell_params = [ax,by,[cz]]
         if v : print('ax=%.3fA, by=%.3f, cz=' %(ax,by), cz)
         return cell_params
-
     def _set_name(self,v=False):
         name = self.name+self.tail+['_autoslic','_mulslice'][self.is_mulslice]
-        if v :
-            self.name=name
-            print('Simu name pattern = '+self.name)
+        if v : print('Simu name pattern = '+name)
         return name
     def _set_NxNy(self,NxNy):
         if isinstance(NxNy,int) or  isinstance(NxNy,np.int64) :
@@ -334,12 +356,57 @@ class Multislice:
         return thickness
 
     ########################################################################
+    #### Job
+    def _get_job(self,temsim=None):
+        logfile     = self._outf('log')
+        simu_deck   = self._outf('simu_deck')
+        prog        = ['autoslic','mulslice'][self.is_mulslice]
+        if not temsim : temsim = temsim_hosts[socket.gethostname()]
+        #write the cmd
+        cmd = '> %s && ' %(logfile) #overwrite logfile
+        if self.is_mulslice:
+            for i in self.slices :
+                deck = self._outf('deck_slice%s' %i)
+                cmd += 'cat %s | %s >> %s && ' %(deck,temsim+'atompot',logfile)
+        cmd += 'cat %s | %s > %s' %(simu_deck,temsim+prog,logfile)
+        return cmd
+
+    def _get_job_ssh(self,ssh_alias,hostpath=None,v=False):
+        #save local datpath
+        datpath = self.datpath
+        hostpath = self._get_hostpath(hostpath)
+        self.datpath = hostpath
+        #scp after updating decks with new path
+        decks = self.make_decks(save=True,datpath=datpath)
+        cmd  = 'cd %s && scp ' %(datpath)
+        cmd += '%s ' %(' '.join(self.data))
+        cmd += '%s ' %(' '.join(list(self.decks.keys())))
+        cmd += '%s:%s'  %(ssh_alias,hostpath)
+        p = Popen(cmd,shell=True)
+        p.wait()
+        #get job cmd
+        host   = ssh_hosts[ssh_alias]
+        temsim = temsim_hosts[host]
+        cmd = self._get_job(temsim)
+        cmd = 'ssh %s "%s"' %(ssh_alias,cmd)
+        #restore
+        self.datpath = datpath
+        self.make_decks(save=True)
+        return cmd
+
+    def ssh_get(self,ssh_alias,file,hostpath=None,dest_path=None):
+        if not dest_path : dest_path = self.datpath
+        hostpath = self._get_hostpath(hostpath)
+        cmd = 'scp %s:%s %s' %(ssh_alias,hostpath+self.outf[file],dest_path)
+        p = Popen(cmd,shell=True)
+        p.wait()
+
+
+    ########################################################################
     #### decks
-    def _atompot_deck(self,dat):
-        datfile = self.datpath+dat
-        datimg = datfile.replace('.dat',self.tail)
-        deck  = "%s\n" %(datfile)               #.dat file
-        deck += "%s\n" %(datimg)                #.tif file
+    def _atompot_deck(self,i):
+        deck  = "%s\n" %self._outf('slice_data%s' %i)      #.dat file
+        deck += "%s\n" %self._outf('slice_imag%s' %i)       #.tif file
         deck += "n\n"                           #record fft proj
         deck += "%d %d\n" %(self.NxNy)          #sampling
         deck += "%d %d 1\n" %(self.repeat[:2])  #super cell
@@ -347,17 +414,18 @@ class Multislice:
         return deck
 
     def _mulslice_deck(self):
-        deck = "%d(%s)\n" %(self.repeat[2],'abcdefghijklmnopqrstuv'[:len(self.data)]) #
-        for dat in self.data :                  #potential image files
-            deck+="%s\n" %(self.datpath+self.tail+dat.replace('.dat','.tif'))
-        deck += "%s\n" %(self.outf['image'])    #pattern file
+        Nz,sl = self.repeat[2],ascii_letters[:len(self.data)]
+        deck = "%d(%s)\n" %(Nz,sl)              #Stack sequence
+        for i in self.slices :                  #atom pots
+            deck+="%s\n" %self._outf('slice_imag%s' %i)#
+        deck += "%s\n" %(self._outf('image'))   #image file
         deck += "n\n"                           #partial coherence
         deck += "n\n"                           #start previous run
         deck += "%.2f\n" %self.keV              #wavelength
         deck += "0 0\n"                         #crystal tilt
         deck += "0 0\n"                         #beam tilt
         deck += "y\n"                           #record beams
-        deck += "%s\n" %(self.outf['beamstxt']) #     filename
+        deck += "%s\n" %(self._outf('beamstxt'))#     filename
         deck += "%d\n" %len(self.hk)            #     nbeams
         for hk in self.hk :                     #     beam indices
             deck += "%d %d\n" %(hk)
@@ -366,9 +434,9 @@ class Multislice:
         return deck
 
     def _autoslic_deck(self):
-        deck  = "%s\n" %(self.datpath+self.data)#.xyz file
+        deck  = "%s\n" %self._outf('data')      #.xyz file
         deck += "%d %d %d\n" %self.repeat       #super cell
-        deck += "%s\n" %(self.outf['image'])    #image file
+        deck += "%s\n" %self._outf('image')     #image file
         deck += "n\n"                           #partial coherence
         deck += "n\n"                           #start previous run
         deck += "%.4f\n" %self.keV              #wavelength
@@ -376,36 +444,52 @@ class Multislice:
         deck += "0 0\n"                         #crystal tilt
         deck += "%f\n" %(self.slice_thick)      #slice thickness
         deck += "y\n"                           #record beams
-        deck += "%s\n" %(self.outf['beamstxt']) #     filename
+        deck += "%s\n" %self._outf('beamstxt')  #filename
         deck += "%d\n" %len(self.hk)            #     nbeams
         for hk in self.hk :                     #     beam indices
             deck += "%d %d\n" %(hk)
         deck += "n\n"                           #thermal vibration
         deck += "n\n"                           #intensity cross section
         deck += "y\n"                           #Diffraction pattern
-        deck += "%s\n" %(self.outf['pattern'])  #     filename
+        deck += "%s\n" %self._outf('pattern')   #     filename
         return deck
 
     ########################################################################
     #### misc private
     def _print_header(self,msg,w=70):
         head='#'*w
-        print(yellow+head)
+        print(blue+head)
         print('\t\t\t' +msg+ ' :')
         print(head+black)
+
+    def _get_hostpath(self,hostpath):
+        if not hostpath :
+            hostpath = self.datpath.replace('ronan','tarik').replace('CCP4','git/ccp4')
+        return hostpath
+
+    def _outf(self,file):
+        return self.datpath+self.outf[file]
 
 ########################################################################
 #def : test
 ########################################################################
-def test(name,Nxy=2048,Nhk=3):
-    multi=Multislice(name,keV=200,Nhk=Nhk,tail='1',
-        repeat=[6,6,40],NxNy=[Nxy,Nxy],slice_thick=1.3575,
-        mulslice=False,v='',save=True)
-    #multi.beam_vs_thickness()
+def test_base(name,**kwargs):
+    multi=Multislice(name,tail='base',keV=200,
+        repeat=[2,2,10],NxNy=256,slice_thick=1.3575,Nhk=3,
+        **kwargs)
+    ssh_alias = kwargs['ssh']
+    time.sleep(0.1)
+    if not multi.check_simu_state(ssh_alias=ssh_alias) == 'done':
+        multi.p.wait()
+    if ssh_alias :
+        multi.ssh_get(ssh_alias,'beamstxt')
+        multi.ssh_get(ssh_alias,'pattern')
+    #multi.image(opt='p')
+    multi.beam_vs_thickness(opt='p',bOpt='f')
+    multi.pattern(opt='p')
     return multi
+
 if __name__ == '__main__':
-    name = 'dat/test/'
-    # multi  = test(name,Nxy= 1024,Nhk=3)
-    #p=multi.run()
-    #multi=Multislice(name,mulslice=False,v='ndD',tail='Test',save=False);
-    #multi=Multislice(name,mulslice=True,v='n',tail='test',save=False);
+    name  = 'dat/test/'
+    multi = test_base(name,mulslice=False,fopt='f',opt='dsr',ssh='tarik-CCP4home',v='nctrdDR')
+    #multi = test_base(name,mulslice=True,fopt='f',opt='ds',v='nctrdD',ssh=None)

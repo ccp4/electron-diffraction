@@ -5,6 +5,7 @@
 
 CC = g++ -O3
 DEL = rm  # unix
+CCFLAGS= #-I -L
 #
 ODIR=../bin/obj
 BIN=../bin
@@ -45,40 +46,40 @@ remove:
 #
 
 atompot: atompot.cpp ${MYLIBS}
-	${CC} -o ${BIN}/atompot atompot.cpp $(WLIBS)
+	${CC} ${CCFLAGS} -o ${BIN}/atompot atompot.cpp $(WLIBS)
 
 autoslic: autoslic.cpp autosliccmd.cpp ${MYLIBS}
-	${CC} -fopenmp -o ${BIN}/autoslic autosliccmd.cpp autoslic.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -fopenmp -o ${BIN}/autoslic autosliccmd.cpp autoslic.cpp ${WLIBS}
 
 autostem: autostem.cpp autostemcmd.cpp ${MYLIBS}
-	${CC} -fopenmp -o ${BIN}/autostem autostemcmd.cpp autostem.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -fopenmp -o ${BIN}/autostem autostemcmd.cpp autostem.cpp ${WLIBS}
 
 display: display.cpp  ${MYLIBS}
-	${CC} -o ${BIN}/display display.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -o ${BIN}/display display.cpp ${WLIBS}
 
 image: image.cpp  ${MYLIBS}
-	${CC} -o ${BIN}/image image.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -o ${BIN}/image image.cpp ${WLIBS}
 
 incostem: incostem.cpp incostemcmd.cpp ${MYLIBS}
-	${CC} -fopenmp -o ${BIN}/incostem incostemcmd.cpp incostem.cpp probe.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -fopenmp -o ${BIN}/incostem incostemcmd.cpp incostem.cpp probe.cpp ${WLIBS}
 
 mulslice: mulslice.cpp ${MYLIBS}
-	${CC} -o ${BIN}/mulslice mulslice.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -o ${BIN}/mulslice mulslice.cpp ${WLIBS}
 
 probe: probe.cpp probecmd.cpp ${MYLIBS}
-	${CC} -o ${BIN}/probe probecmd.cpp probe.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -o ${BIN}/probe probecmd.cpp probe.cpp ${WLIBS}
 
 slicview: slicview.cpp ${MYLIBS}
-	${CC} -o ${BIN}/slicview slicview.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -o ${BIN}/slicview slicview.cpp ${WLIBS}
 
 stemslic: stemslic.cpp ${MYLIBS}
-	${CC} -o ${BIN}/stemslic stemslic.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -o ${BIN}/stemslic stemslic.cpp ${WLIBS}
 
 sumpix: sumpix.cpp ${MYLIBS}
-	${CC} -o ${BIN}/sumpix sumpix.cpp ${WLIBS}
+	${CC} ${CCFLAGS} -o ${BIN}/sumpix sumpix.cpp ${WLIBS}
 
 slice_lib_main: slicelib_main.cpp $(ODIR)/slicelib.o
-	${CC} -o ${BIN}/slicelib_main slicelib_main.cpp ${ODIR}/slicelib.o
+	${CC} ${CCFLAGS} -o ${BIN}/slicelib_main slicelib_main.cpp ${ODIR}/slicelib.o
 
 #
 # define subroutine library

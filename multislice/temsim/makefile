@@ -5,7 +5,8 @@
 
 CC = g++ -O3
 DEL = rm  # unix
-CCFLAGS= #-I -L
+FFTDIR=/home/tarik/Documents/fftw-3.3.8
+CCFLAGS= #-I${FFTDIR}/api -L${FFTDIR}/.libs -L${FFTDIR}/threads/.libs
 #
 ODIR=../bin/obj
 BIN=../bin
@@ -86,10 +87,10 @@ slice_lib_main: slicelib_main.cpp $(ODIR)/slicelib.o
 #
 
 $(ODIR)/cfpix.o:cfpix.cpp
-	${CC} -c cfpix.cpp -o $(ODIR)/cfpix.o
+	${CC} ${CCFLAGS} -c cfpix.cpp -o $(ODIR)/cfpix.o
 
 $(ODIR)/slicelib.o:slicelib.cpp
-	${CC} -c slicelib.cpp -o $(ODIR)/slicelib.o
+	${CC} ${CCFLAGS} -c slicelib.cpp -o $(ODIR)/slicelib.o
 
 $(ODIR)/floatTIFF.o:
 	${CC} -c floatTIFF.cpp -o $(ODIR)/floatTIFF.o

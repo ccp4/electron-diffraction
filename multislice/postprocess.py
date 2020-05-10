@@ -20,7 +20,7 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
     beams = np.loadtxt(file,skiprows=3).T
     if isinstance(slice_thick,list) :
         idx,beams = beams[0,:],beams[1:,:]
-        n_slices = int(len(idx)/len(slice_thick)); #print(n_slices)
+        n_slices = int(len(idx)/len(slice_thick)); #print(n_slices,len(slice_thick))
         t = np.cumsum(np.tile(slice_thick,n_slices));#print(t[:4])
     else :
         idx,beams = beams[0,:-2],beams[1:,:-2]

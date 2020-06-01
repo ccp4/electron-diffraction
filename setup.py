@@ -12,7 +12,7 @@ setuptools.setup(
     long_description='', #long_description,
     long_description_content_type="",
     url="",
-    packages=setuptools.find_packages(),
+    packages=['scattering'],#setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License ",

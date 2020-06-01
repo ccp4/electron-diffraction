@@ -5,13 +5,14 @@ from crystals import Crystal
 from rotating_crystal import orient_crystal,show_unit_cell
 from postprocess import*
 
-def Li_xyz(path,n=[0,0,1],dopt=1,lfact=1.0,tail=''):
+def Li_xyz(path,n=[0,0,1],dopt=1,lfact=1.0,wobble=0,tail=''):
     file    = path+'Li%s%s.xyz' %(''.join(np.array(n,dtype=str)),tail)
     crys    = Crystal.from_database('Li')
     pattern = np.array([
-        [a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
-    lat_params = tuple(lfact*np.array(crys.lattice_parameters[:3]))
-    coords = mupy.make_xyz(file,pattern,lat_params,n,fmt='%.4f',dopt=dopt)
+        [a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,wobble] for a in crys.atoms])
+    # lat_params = tuple(lfact*np.array(crys.lattice_parameters[:3]))
+    lat_params = lfact*np.array(crys.lattice_vectors)
+    coords,lat = mupy.make_xyz(file,pattern,lat_params,n,fmt='%.4f')
     return file
 
 #########################################################################
@@ -70,6 +71,23 @@ def Li_gif(name):
             axPos=[0,0,1,1],setPos=1,gridOn=0,ticksOn=False,
             name=name+'pattern%s.png' %istr,opt='s')
     #dsp.im2gif(name+'pattern','svg')
+
+def Li_wobble(name,nvals=np.inf,**kwargs):
+    wobbles = [0.001,0.1,0.3,1,3]
+    if nnvals   = min(nvals,len(wobbles))
+    wobbles = np.array(wobbles)[:nvals]
+    plts,cs = [],dsp.getCs('coolwarm',nvals)
+    for i,val in zip(range(nvals),wobbles):
+        tail = str(i).zfill(int(wobbles.size/10)+1)
+        data = Li_xyz(name,n=[0,0,1],dopt=1,wobble=val,tail='_'+tail)
+        multi=mupy.Multislice(name,tail=tail,data=data,
+            mulslice=0,keV=100,TDS=True,n_TDS=15,
+            NxNy=512,slice_thick=1.5,Nhk=5,repeat=[2,2,2],
+            **kwargs)
+        q,I = multi.azim_avg(out=1,opt='')
+        plts+=[[q,I,cs[i],'w=%.3f' %val]]
+    dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$','$I_q$'],opt='p',lw=2)
+
 ##########################################################################
 if __name__ == "__main__":
     plt.close('all')
@@ -77,4 +95,5 @@ if __name__ == "__main__":
     # Li_xyz(name,n=[0,0,1],dopt=1)
     # Li_patterns(name+'gif/',nzs=20, opt='drsp',fopt='',ppopt='w',v=1)
     # Li_gif(name+'gif/')
-    df = Li_latsize(name+'latsize/',nvals=3,opt='drsp',fopt='',ppopt='w',v=1)
+    # df = Li_latsize(name+'latsize/',nvals=3,opt='drsp',fopt='',ppopt='w',v=1)
+    Li_wobble(name+'wobble/',nvals=2,opt='drsp',fopt='',ppopt='w',v=1,ssh='local_london')

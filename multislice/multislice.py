@@ -15,7 +15,7 @@ forcing to repostprocess in case it was already done in an older simulation :
 multi.beam_vs_thickness(bOpt='f')
 ```
 '''
-from utils.displayStandards import*
+#from utils.displayStandards import*
 from utils.glob_colors import*
 from subprocess import Popen #,check_output
 from glob import glob as lsfiles
@@ -27,6 +27,8 @@ import pickle,socket,time
 import pandas as pd
 import numpy as np
 import postprocess as pp
+import utils.displayStandards as dsp
+# from .rotating_crystal import orient_crystal
 from rotating_crystal import orient_crystal
 
 ssh_hosts = {
@@ -52,13 +54,17 @@ class Multislice:
         - if None and autoslic simu : first *.xyz found
         - Otherwise paths to filename(s) of the data files to use (must be in name)
     \n**MULTISLICE simulation parameters :**\n
-    - `mulslice` : True(mulslice)=>periodic, False(autoslic)
+    - `mulslice` : False(autoslic), True(mulslice)=>periodic
     - `keV` : float - wavelength in keV
     - `repeat` : 3-int-list - super cell size in the x,y,z directions
     - `NxNy` : 2-int-list or int : sampling in x and y (same sampling in x and y if only int provided)
     - `slice_thick` : float - slice thickness (A)
     - `hk` : list of tuple - beams to record as function of depth
     - `Nhk`: int - set hk on a grid of multiples of the supercell size. Prevails over hk argument if >0. default(0)
+    \n**Thermal parameters**:\n
+    - `TDS` : bool - include thermal vibrations (as dictated by wobble parameter in .dat )
+    - `T`   : Temperature in K if TDS is True
+    - `nTDS` : Number of runs to average over
     \n**OUTPUT options:**\n
     - `v`  : verbose - str or bool(all if True) or int(verbose level)
         - n(naming pattern),c(cell params),t(thickness),r(run cmd)
@@ -71,6 +77,7 @@ class Multislice:
     - `ppopt` : u(update),w(wait), I(image)B(beam)P(pattern)
     '''
     def __init__(self,name,mulslice=False,tail='',data=None,
+                TDS=False,T=300,n_TDS=16,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,
                 hk=[(0,0)],Nhk=0,prev=None,
                 opt='d',fopt='w',ppopt='uwP',v=1,ssh=None):
@@ -82,10 +89,13 @@ class Multislice:
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
 
         #attributes
-        self.version     = '1.0'
+        self.version     = '1.1'
         self.name        = basename(name)                           #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.is_mulslice = mulslice
+        self.TDS         = TDS
+        self.T           = T
+        self.n_TDS       = n_TDS
         self.tail        = '_'+tail if tail else ''
         self.name        = self._set_name('n' in v)
         self.data        = self._get_datafiles(data)
@@ -127,7 +137,7 @@ class Multislice:
             for filename,deck in decks.items():
                 with open(datpath+filename,'w') as f : f.write(deck)
                 print(yellow+datpath+filename+black)
-        return decks
+        self.decks = decks
 
     def save(self):
         '''save this multislice object'''
@@ -193,7 +203,7 @@ class Multislice:
             real,imag = im[:,:N],im[:,N:];#print(real.max())
             im = real**2+imag**2
             im =im/im.max()
-        stddisp(labs=['$x$','$y$'],im=im,legOpt=0,imOpt='c',**kwargs)
+        dsp.stddisp(labs=['$x$','$y$'],im=im,legOpt=0,imOpt='c',**kwargs)
 
     def beam_vs_thickness(self,bOpt='',iBs=[],tol=1e-2,**kwargs):
         '''
@@ -218,10 +228,13 @@ class Multislice:
         beams = np.load(self._outf('beams'))
         return beams
 
-    def pattern(self,Iopt='Incsl',tol=1e-4,Nmax=None,**kwargs):
+    def pattern(self,Iopt='Incsl',out=0,tol=1e-4,Nmax=None,rings=[],**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
-        - Iopt : I(intensity), c(crop), n(normalize), s(fftshift)
+        - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale)
+        - Nmax : crop display beyond Nmax
+        - rings : list or array - of resolutions for rings to display
         - kwargs : see stddisp
+        returns : [qx,qy,I]
         '''
         im = np.loadtxt(self._outf('pattern'))
         if 'I' in Iopt :
@@ -244,10 +257,30 @@ class Multislice:
         if 'l' in Iopt :
             im[im<tol] = tol*1e-2
             im = np.log10(im)
+        ax,by = self.cell_params[:2]
         Nh,Nk = self.repeat[:2];
-        imP = [h/Nh,k/Nk,im]; #print(h.shape,im.shape)
-        stddisp(labs=['$h$','$k$'],im=imP,legOpt=0,**kwargs)
+        t = np.linspace(0,2*np.pi,100)
+        ct,st = np.cos(t),np.sin(t)
+        # rings = np.array(rings)
+        plts = [[r*ct,r*st,'k--',''] for r in rings]
+        imP = [h/Nh/ax,k/Nk/by,im] #print(h.shape,im.shape)
+        dsp.stddisp(plts,labs=['$q_x$','$q_y$'],im=imP,**kwargs)
+        if out : return imP
 
+    def azim_avg(self,out=0,**kwargs):
+        ''' Display the average azimuthal diffraction pattern intensities
+        '''
+        qx,qy,I = self.pattern(out=1,opt='')
+        #brute force
+        qr = np.round(np.sqrt(qx**2+qy**2)*1e10)/1e10
+        qr0 = np.unique(qr)#,return_index=1,return_inverse=1)
+        I0 = np.array([ I[np.where(qr==q)].mean() for q in qr0])
+        if out:
+            return qr0,I0
+        else:
+            plts = [[qr0,I0,'b-','']]
+            dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$','$I_q$'],**kwargs)
+             
     ########################################################################
     ###### print functions
     def print_datafiles(self,data=None):
@@ -414,7 +447,7 @@ class Multislice:
         hostpath = self._get_hostpath(hostpath)
         self.datpath = hostpath
         #scp after updating decks with new path
-        decks = self.make_decks(save=True,datpath=datpath)
+        self.make_decks(save=True,datpath=datpath)
         cmd  = 'cd %s && scp ' %(datpath)
         cmd += '%s ' %(' '.join(self.data))
         cmd += '%s ' %(' '.join(list(self.decks.keys())))
@@ -488,13 +521,16 @@ class Multislice:
         deck += "%f\n" %(self.slice_thick)      #slice thickness
         deck += "y\n"                           #record beams
         deck += "%s\n" %self._outf('beamstxt')  #filename
-        deck += "%d\n" %len(self.hk)            #     nbeams
-        for hk in self.hk :                     #     beam indices
-            deck += "%d %d\n" %(hk)
-        deck += "n\n"                           #thermal vibration
+        deck += "%d\n" %len(self.hk)            #   nbeams
+        for hk in self.hk :                     #   - beams -
+            deck += "%d %d\n" %(hk)             #   beam indices
+        deck += "%s\n" %(['n','y'][self.TDS])   #thermal vibration?
+        if self.TDS:                            #   - Params -
+            deck+='%.3f\n' %self.T              #   temperature
+            deck+="%d\n" %self.n_TDS            #   nb configurations
         deck += "n\n"                           #intensity cross section
-        deck += "y\n"                           #Diffraction pattern
-        deck += "%s\n" %self._outf('pattern')   #     filename
+        deck += "y\n"                           #diffraction pattern
+        deck += "%s\n" %self._outf('pattern')   #   filename
         return deck
 
     ########################################################################
@@ -563,18 +599,21 @@ def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='scp'):
     - pattern : Nx6 ndarray - Z,x,y,z,occ,wobble format
     - lat_vec : 3x3 ndarray - lattice vectors [a1,a2,a3]
     - n : beam direction axis
+    - dopt : p(print file)
     '''
     compound = basename(name)
-    cz = np.linalg.norm(n)
-    coords   = orient_crystal(pattern[:,1:4],n_u=n)
-    x,y,z = coords.T
-    ax,by = np.abs(x.min()-x.max()),np.abs(y.max()-y.min())
-    if 'c' in dopt:
-        idx,idy,idz = x<0,y<0,z<0
-        # coords[idx,0] += ax
-        # coords[idy,1] += by
-        coords[idz,2] += cz
-    pattern[:,1:4] = coords
+    ax,by,cz = np.diag(lat_vec)
+    # cz = np.linalg.norm(n)
+    # coords = orient_crystal(pattern[:,1:4],n_u=n)
+
+    # if 'c' in dopt:
+    #     x,y,z = coords.T
+    #     ax,by = np.abs(x.min()-x.max()),np.abs(y.max()-y.min())
+    #     idx,idy,idz = x<0,y<0,z<0
+    #     # coords[idx,0] += ax
+    #     # coords[idy,1] += by
+    #     coords[idz,2] += cz
+    # pattern[:,1:4] = coords
     #write to file
     if 's' in dopt :
         dir=''.join(np.array(n,dtype=str))
@@ -603,7 +642,7 @@ def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='scp'):
 #def : test
 ########################################################################
 def test_base(name,**kwargs):
-    multi=Multislice(name,tail='base',keV=200,
+    multi=Multislice(name,keV=200,
         repeat=[2,2,5],NxNy=128,slice_thick=1.3575,Nhk=3,
         **kwargs)
     return multi
@@ -613,3 +652,4 @@ if __name__ == '__main__':
     #multi = test_base(name,mulslice=False,opt='dsrp',fopt='',ppopt='I',ssh='',v=1)
     #multi = test_base(name,mulslice=False,fopt='f',opt='dsr',ppopt='',ssh='tarik-CCP4home',v='nctrdDR')
     #multi = test_base(name,mulslice=True,ssh=None,fopt='f',opt='dsr',v='nctrdDR')
+    multi = test_base(name,tail='TDS',mulslice=False,TDS=True,T=300,fopt='f',ppopt='wP',opt='dsrp',v='nctrdDR')

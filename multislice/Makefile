@@ -3,5 +3,5 @@ MD?=${DOC_DIR}/pyMultislice.md #&1 #STDOUT
 
 #slice_lib_main :
 #	g++ slicelib_main.cpp ${TEMSIM}/slicelib.o -I${TEMSIM} -o ${BIN}
-multislice_doc :
+doc_multislice :
 	pydocmd simple multislice++ >${MD}

@@ -2,11 +2,13 @@
 # assumes that FFTW already installed (see www.fftw.org)
 #  type "make all" to compile everthing
 #  type "make remove" to remove all of the compiled files.
+#ENABLE_THREADS?=1
 
 CC = g++ -O3
 DEL = rm  # unix
-FFTDIR=/home/tarik/Documents/fftw-3.3.8
-CCFLAGS= #-I${FFTDIR}/api -L${FFTDIR}/.libs -L${FFTDIR}/threads/.libs
+#FFTDIR=/home/tarik/Documents/fftw-3.3.8
+# FFTDIR=/home/tarik/Documents/git/github/fftw/fftw-3.3.8
+CCFLAGS=-I${FFTDIR}/api -L${FFTDIR}/.libs -L${FFTDIR}/threads/.libs
 #
 ODIR=../bin/obj
 BIN=../bin
@@ -14,7 +16,7 @@ _MYLIBS=slicelib.o floatTIFF.o cfpix.o
 
 # define libraries
 MYLIBS=$(patsubst %,$(ODIR)/%,$(_MYLIBS))
-LIBS=-lfftw3f -lfftw3f_threads -lm -lpthread
+LIBS=-lfftw3f -lm -lfftw3f_threads -lpthread
 WLIBS=${MYLIBS} ${LIBS}
 
 all:

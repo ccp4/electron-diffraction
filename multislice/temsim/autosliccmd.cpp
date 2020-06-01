@@ -351,6 +351,7 @@ int main()
     }
     ldiff_pattern = askYN("Do you want to compute the diffraction pattern");
     if( ldiff_pattern ==1 ){
+      cout << "Type name of diffraction pattern file:" << endl;
       cin >> filediff_pattern;
     }
     
@@ -586,7 +587,7 @@ int main()
       Save diffraction pattern 
     */
     if (ldiff_pattern){
-      //fp2.open( filediff_pattern.c_str() );
+      cout << "writing diffraction pattern to file ..." <<endl;
       FILE *fp2 = fopen(filediff_pattern.c_str(),"w");
       for( ix=0; ix<nx; ix++) {
 	for( iy=0; iy<ny; iy++) {

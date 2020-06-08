@@ -65,7 +65,7 @@ class Multislice:
     - `TDS` : bool - include thermal vibrations (as dictated by wobble parameter in .dat )
     - `T`   : Temperature in K if TDS is True
     - `nTDS` : Number of runs to average over
-    \n**OUTPUT options:**\n
+    \n**RUN/OUTPUT options:**\n
     - `v`  : verbose - str or bool(all if True) or int(verbose level)
         - n(naming pattern),c(cell params),t(thickness),r(run cmd)
         - d(data),D(Decks),R(full run cmd)
@@ -74,13 +74,14 @@ class Multislice:
         - 'w' is on  (default case) : the user will be asked to confirm whether he wants to rerun it,
         - 'w' is off (fopt='') : The simulation is not rerun
         - 'f' in fopt : The simulation is rerun
-    - `ppopt` : u(update),w(wait), I(image)B(beam)P(pattern)
+    - `ppopt` : u(update),w(wait), I(image) B(beam) P(pattern) A(azim_avg)
+    - `ssh` : ip address or alias of the machine on which to run the job
     '''
     def __init__(self,name,mulslice=False,tail='',data=None,
                 TDS=False,T=300,n_TDS=16,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,
                 hk=[(0,0)],Nhk=0,prev=None,
-                opt='d',fopt='w',ppopt='uwP',v=1,ssh=None):
+                opt='',fopt='w',ppopt='uwP',v=1,ssh=None):
         #output options
         if isinstance(v,bool) : v=['','nctrdD'][v]
         if isinstance(v,int) : v=''.join(['nctr','DR','d'][:min(v,3)])
@@ -90,7 +91,7 @@ class Multislice:
 
         #attributes
         self.version     = '1.1'
-        self.name        = basename(name)                           #;print('basename:',self.name)
+        self.name        = dsp.basename(name)                           #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.is_mulslice = mulslice
         self.TDS         = TDS
@@ -152,7 +153,7 @@ class Multislice:
         - ssh : name of the host to run the job
         '''
         run = True
-        if self.check_simu_state(v=0) == 'done' :
+        if self.check_simu_state(v=0,ssh_alias=ssh_alias) == 'done' :
             if v>0 : print(red+"Simulation already performed in the past."+black)
             if 'f' in fopt :
                 msg='Force re-running.'
@@ -188,9 +189,9 @@ class Multislice:
             if 'I' in ppopt : self.ssh_get(ssh_alias,'image')
             if 'B' in ppopt : self.ssh_get(ssh_alias,'beamstxt')
             if 'P' in ppopt : self.ssh_get(ssh_alias,'pattern')
-        if 'I' in ppopt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
-        if 'B' in ppopt : self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
-        if 'P' in ppopt : self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
+        if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
+        if 'B' in ppopt and opt : self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
+        if 'P' in ppopt and opt : self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
 
     ################ OUTPUT FUNCTIONS
     def image(self,opt='I',cmap='jet',**kwargs):
@@ -228,50 +229,77 @@ class Multislice:
         beams = np.load(self._outf('beams'))
         return beams
 
-    def pattern(self,Iopt='Incsl',out=0,tol=1e-4,Nmax=None,rings=[],**kwargs):
+    def save_pattern(self):
+        print('loading')
+        im = np.loadtxt(self._outf('pattern'))
+        print('saving')
+        real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
+        im = real**2+imag**2
+        im = np.fft.fftshift(im)
+
+        np.save(self._outf('patternnpy'),im,allow_pickle=True)
+        print(green+'file saved : ' +yellow+yellow+self._outf('patternnpy')+black)
+
+    def pattern(self,Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,rings=[],**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
-        - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale)
+        - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only)
         - Nmax : crop display beyond Nmax
         - rings : list or array - of resolutions for rings to display
         - kwargs : see stddisp
         returns : [qx,qy,I]
         '''
-        im = np.loadtxt(self._outf('pattern'))
+        im = np.load(self._outf('patternnpy')) ;print(im.shape)
+        ax,by = self.cell_params[:2]
+        Nh,Nk = self.repeat[:2];
+        Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
         if 'I' in Iopt :
             real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
             im = real**2+imag**2
-            Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
-            if 'n' in Iopt :
+            if 'n' in Iopt : #normalize
+                #print('normalizing')
                 im00 = im[0,0];im[0,0] = 0
                 mMax = im.max();im /= mMax
                 if 'l' in Iopt : im[0,0] = im00/mMax
             if 'c' in Iopt and not Nmax:
+                #print('croping')
                 idx = im[:Nx,:Ny]>im.max()*tol
                 h,k = np.meshgrid(np.arange(Nx),np.arange(Ny))
                 r = np.sqrt(h**2+k**2)
                 Nmax = ceil(r[idx].max()); #print('Pattern Nmax=%d > %E ' %(Nmax,tol))
+            if 's' in Iopt : im = np.fft.fftshift(im)   #;print('fftshift')
+            # if qmax:
+            #     Nmax =
             if not Nmax : Nmax = min(Nx,Ny)
-            if 's' in Iopt : im = np.fft.fftshift(im);
-        im = im[Nx-Nmax:Nx+Nmax,Ny-Nmax:Ny+Nmax]
-        h,k = np.meshgrid(np.arange(-Nmax,Nmax),np.arange(-Nmax,Nmax))
-        if 'l' in Iopt :
-            im[im<tol] = tol*1e-2
-            im = np.log10(im)
-        ax,by = self.cell_params[:2]
-        Nh,Nk = self.repeat[:2];
-        t = np.linspace(0,2*np.pi,100)
-        ct,st = np.cos(t),np.sin(t)
-        # rings = np.array(rings)
-        plts = [[r*ct,r*st,'k--',''] for r in rings]
-        imP = [h/Nh/ax,k/Nk/by,im] #print(h.shape,im.shape)
-        dsp.stddisp(plts,labs=['$q_x$','$q_y$'],im=imP,**kwargs)
-        if out : return imP
+            Nmax=min(Nmax,256)
+        #print('preparing')
+        if 'q' in Iopt:
+            im0 = im[Nx:Nx+Nmax,Ny:Ny+Nmax];del(im)
+            h,k = np.meshgrid(np.arange(Nmax),np.arange(Nmax))
+        else:
+            im0 = im[Nx-Nmax:Nx+Nmax,Ny-Nmax:Ny+Nmax];del(im)
+            h,k = np.meshgrid(np.arange(-Nmax,Nmax),np.arange(-Nmax,Nmax))
+        if 'l' in Iopt : #logscale the data
+            im0[im0<tol] = tol*1e-2
+            im0 = np.log10(im0)
+        if out :
+            #print('packaging')
+            return h/Nh/ax, k/Nk/by, im0
+        else:
+            N = [1,4]['q' in Iopt]
+            t = np.linspace(0,2*np.pi/N,100)
+            ct,st = np.cos(t),np.sin(t)
+            plts = [[r*ct,r*st,'g--',''] for r in rings]
+            print('displaying pattern...')
+            print(h.shape,im0.shape)
+            dsp.stddisp(plts,labs=['$q_x$','$q_y$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
 
-    def azim_avg(self,out=0,**kwargs):
+    def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities
+        - out : get data only
         '''
-        qx,qy,I = self.pattern(out=1,opt='')
+        qx,qy,I = self.pattern(out=1,opt='',tol=tol,Iopt=Iopt)
         #brute force
+        print('brute force averaging')
         qr = np.round(np.sqrt(qx**2+qy**2)*1e10)/1e10
         qr0 = np.unique(qr)#,return_index=1,return_inverse=1)
         I0 = np.array([ I[np.where(qr==q)].mean() for q in qr0])
@@ -280,7 +308,7 @@ class Multislice:
         else:
             plts = [[qr0,I0,'b-','']]
             dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$','$I_q$'],**kwargs)
-             
+
     ########################################################################
     ###### print functions
     def print_datafiles(self,data=None):
@@ -315,6 +343,13 @@ class Multislice:
         except FileNotFoundError:
             print(red+'logfile not created yet, run a simu first'+black)
             return 0
+
+    def wait_simu(self,ssh_alias='',t=1):
+        state = 0
+        while not state=='done':
+            state=self.check_simu_state(ssh_alias,v=0)
+            print(state)
+            time.sleep(t)
 
     def check_simu_state(self,ssh_alias=None,v=False):
         '''see completion state of a simulation '''
@@ -358,7 +393,7 @@ class Multislice:
         if not data : raise Exception(err_msg)
         if not isinstance(data,list) : data=[data]; #print(data[0].split('.')[-1])
         if not data[0].split('.')[-1]==dat_type : print(err_msg)# raise Exception(err_msg)
-        data = [basename(f) for f in data ]
+        data = [dsp.basename(f) for f in data ]
         return data
 
     def _set_filenames(self):
@@ -368,6 +403,7 @@ class Multislice:
                 'image'     : self.name+'.tif',
                 'imagesvg'  : self.name+'.svg',
                 'pattern'   : self.name+'_pattern.txt',
+                'patternnpy': self.name+'_pattern.npy',
                 'patternsvg': self.name+'_pattern.svg',
                 'beamstxt'  : self.name+'_beams.txt',
                 'beams'     : self.name+'_beams.npy',
@@ -593,37 +629,6 @@ def sweep_var(name,param,vals,df=None,ssh='',tail='',do_prev=0,**kwargs):
         df.to_pickle(name+'df.pkl')
         print(green+'Dataframe saved : '+yellow+name+'df.pkl'+black)
 
-def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='scp'):
-    '''Creates the.xyz file from a given compound and orientation
-    - name    : Full path to the file to save
-    - pattern : Nx6 ndarray - Z,x,y,z,occ,wobble format
-    - lat_vec : 3x3 ndarray - lattice vectors [a1,a2,a3]
-    - n : beam direction axis
-    - dopt : p(print file)
-    '''
-    compound = basename(name)
-    ax,by,cz = np.diag(lat_vec)
-    # cz = np.linalg.norm(n)
-    # coords = orient_crystal(pattern[:,1:4],n_u=n)
-
-    # if 'c' in dopt:
-    #     x,y,z = coords.T
-    #     ax,by = np.abs(x.min()-x.max()),np.abs(y.max()-y.min())
-    #     idx,idy,idz = x<0,y<0,z<0
-    #     # coords[idx,0] += ax
-    #     # coords[idy,1] += by
-    #     coords[idz,2] += cz
-    # pattern[:,1:4] = coords
-    #write to file
-    if 's' in dopt :
-        dir=''.join(np.array(n,dtype=str))
-        header = 'one unit cell of %s\n' %(compound)
-        header+= ' '.join([fmt]*3) %(ax,by,cz)
-        np.savetxt(name,pattern,footer='-1',header=header,fmt='%d '+' '.join([fmt]*5),comments='')
-        print(green+"coords file saved : \n"+yellow+name+black)
-        if 'p' in dopt :
-            with open(name,'r') as f : print(''.join(f.readlines()))
-    return pattern,[ax,by,cz]
 
 # def coords2grid(coords,cz):
 #     '''arrange coordinates so they fit on periodic grid

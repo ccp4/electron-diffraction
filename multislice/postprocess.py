@@ -5,8 +5,9 @@ import pandas as pd
 import numpy as np
 from utils import displayStandards as dsp
 from utils.glob_colors import*
-from scattering_factors import get_elec_atomic_factors,wavelength
-from structure_factor import structure_factor3D
+from scattering import scattering_factors as scat
+# import get_elec_atomic_factors,wavelength
+from scattering.structure_factor import structure_factor3D
 
 hosts = ['','brno','tarik-CCP4home']
 cpus  = dict(zip(hosts,['asus-$i_5^{(4cores)}$','brno-$i_7^{(8cores)}$','xps-$i_7^{(8cores)}$']))
@@ -97,7 +98,7 @@ def plot_beam_thickness(beams,rip='I',cm='Greens',**kwargs):
     dsp.stddisp(plts,lw=2,labs=['$thickness(\AA)$','$I_{hk}$'],**kwargs)#,xylims=[0,t.max(),0,5])
 
 def plot_fe(qmax=1,Nx=20,Vcell=1,**kwargs):
-    q0,fq_e = get_elec_atomic_factors(['Si'],q=np.linspace(0,qmax,1000))
+    q0,fq_e = scat.get_elec_atomic_factors(['Si'],q=np.linspace(0,qmax,1000))
     vg = fq_e[0]/Vcell
     vgmax = vg.max()
     Xq =np.arange(Nx)[:,None].dot(np.array([1,1])[None,:]).T/ax

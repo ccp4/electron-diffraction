@@ -12,7 +12,7 @@ def Li_xyz(path,n=[0,0,1],dopt=1,lfact=1.0,wobble=0,tail=''):
         [a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,wobble] for a in crys.atoms])
     # lat_params = tuple(lfact*np.array(crys.lattice_parameters[:3]))
     lat_params = lfact*np.array(crys.lattice_vectors)
-    coords,lat = mupy.make_xyz(file,pattern,lat_params,n,fmt='%.4f')
+    coords,lat = mupy.make_xyz(file,pattern,lat_params,n,fmt='%.4f',dopt='s')
     return file
 
 #########################################################################
@@ -73,20 +73,27 @@ def Li_gif(name):
     #dsp.im2gif(name+'pattern','svg')
 
 def Li_wobble(name,nvals=np.inf,**kwargs):
-    wobbles = [0.001,0.1,0.3,1,3]
-    if nnvals   = min(nvals,len(wobbles))
+    wobbles = [0.001,0.01,0.1]
+    nvals = min(nvals,len(wobbles))
     wobbles = np.array(wobbles)[:nvals]
     plts,cs = [],dsp.getCs('coolwarm',nvals)
+    tol,Iopt = 1e-5,'Incsl',
     for i,val in zip(range(nvals),wobbles):
         tail = str(i).zfill(int(wobbles.size/10)+1)
         data = Li_xyz(name,n=[0,0,1],dopt=1,wobble=val,tail='_'+tail)
         multi=mupy.Multislice(name,tail=tail,data=data,
-            mulslice=0,keV=100,TDS=True,n_TDS=15,
-            NxNy=512,slice_thick=1.5,Nhk=5,repeat=[2,2,2],
+            mulslice=0,keV=100,TDS=True,n_TDS=20,
+            NxNy=1024,slice_thick=1.5,Nhk=5,repeat=[8,8,100],
             **kwargs)
-        q,I = multi.azim_avg(out=1,opt='')
+        q,I = multi.azim_avg(out=1,opt='',Iopt=Iopt,tol=tol)
         plts+=[[q,I,cs[i],'w=%.3f' %val]]
-    dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$','$I_q$'],opt='p',lw=2)
+        multi.pattern(rings=[0.3,0.6,1,2],Iopt=Iopt,tol=tol,
+            imOpt='ch',cmap='binary',axPos=[0.17,0.13,0.75,0.75],lw=2,xylims=[0,3,0,3],
+            opt='sc',name='docs_fig/wobble_effect%d.png' %i,pOpt='tpX',
+            caxis = [-5,0])
+
+    dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$','$I_q$'],lw=2,fonts={'leg':20},
+        xylims=['x',0,4,-5,0],opt='sc',name='docs_fig/wobble_effectIavg.svg')
 
 ##########################################################################
 if __name__ == "__main__":
@@ -96,4 +103,4 @@ if __name__ == "__main__":
     # Li_patterns(name+'gif/',nzs=20, opt='drsp',fopt='',ppopt='w',v=1)
     # Li_gif(name+'gif/')
     # df = Li_latsize(name+'latsize/',nvals=3,opt='drsp',fopt='',ppopt='w',v=1)
-    Li_wobble(name+'wobble/',nvals=2,opt='drsp',fopt='',ppopt='w',v=1,ssh='local_london')
+    Li_wobble(name+'wobble/',nvals=3,opt='',fopt='',ppopt='wu',v=0)#,ssh='tarik-CCP4home')

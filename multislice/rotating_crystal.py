@@ -1,9 +1,12 @@
-from utils import displayStandards as dsp
+import utils.displayStandards as dsp
+import utils.handler3D as h3d
+from utils.glob_colors import*
+from crystals import Crystal
 from math import pi,sqrt
 import matplotlib.pyplot as plt
 import numpy as np
 
-
+cs = {1:unicolor(0.75),6:unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0)}
 
 def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True):
     ''' Rotate the object so that n becomes e_z [1] :\n
@@ -30,6 +33,46 @@ def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True):
             coords = R.dot(coords)
     return coords
 
+def import_cif(file,xyz,n=[0,0,1],rep=[1,1,1],dopt='s',lfact=1.0,tail=''):
+    crys    = Crystal.from_cif(file)
+    lat_vec = np.array(crys.lattice_vectors)
+    if sum(rep)>3 : crys = crys.supercell(rep[0],rep[1],rep[2])
+    pattern = np.array([[a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
+    make_xyz(xyz,pattern,lat_vec,n,fmt='%.4f',dopt=dopt)
+    return pattern #,lat_params #pattern,crys # file
+
+def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='scp'):
+    '''Creates the.xyz file from a given compound and orientation
+    - name    : Full path to the file to save
+    - pattern : Nx6 ndarray - Z,x,y,z,occ,wobble format
+    - lat_vec : 3x3 ndarray - lattice vectors [a1,a2,a3]
+    - n : beam direction axis
+    - dopt : p(print file)
+    '''
+    print(name)
+    compound = dsp.basename(name)
+    ax,by,cz = np.diag(lat_vec)
+    # cz = np.linalg.norm(n)
+    # coords = orient_crystal(pattern[:,1:4],n_u=n)
+
+    # if 'c' in dopt:
+    #     x,y,z = coords.T
+    #     ax,by = np.abs(x.min()-x.max()),np.abs(y.max()-y.min())
+    #     idx,idy,idz = x<0,y<0,z<0
+    #     # coords[idx,0] += ax
+    #     # coords[idy,1] += by
+    #     coords[idz,2] += cz
+    # pattern[:,1:4] = coords
+    #write to file
+    if 's' in dopt :
+        dir=''.join(np.array(n,dtype=str))
+        header = 'one unit cell of %s\n' %(compound)
+        header+= ' '.join([fmt]*3) %(ax,by,cz)
+        np.savetxt(name,pattern,footer='-1',header=header,fmt='%d '+' '.join([fmt]*5),comments='')
+        print(green+"coords file saved : \n"+yellow+name+black)
+        if 'p' in dopt :
+            with open(name,'r') as f : print(''.join(f.readlines()))
+    return pattern,[ax,by,cz]
 
 ##########################################################################
 ### def : utils
@@ -51,6 +94,61 @@ def get_cylinder(ti,tf,r0=1,h=1,npts=10,x0=[0,0,0]):
 ##########################################################################
 #def:figures
 ##########################################################################
+def get_vec(n,crys,bopt) :
+    if isinstance(n,int) : n = crys.lattice_vectors[n]
+    if bopt : n = np.array(n).dot(np.array(crys.lattice_vectors))
+    return n
+
+def get_unit_cell(cell_mesh,n):
+    alpha,lw,c = 0.1,2,'c'
+    x,y,z = cell_mesh
+    planes_coords,ncells = [], x.shape[0]
+    for i in range(ncells):
+        planes_coords+=[[x[i,:,:],y[i,:,:],z[i,:,:]],
+                        [x[:,i,:],y[:,i,:],z[:,i,:]],
+                        [x[:,:,i],y[:,:,i],z[:,:,i]]]
+    surfs = []
+    for plane_coords in planes_coords :
+        x,y,z  = plane_coords
+        p_shape = x.shape
+        coords = np.array([x.flatten(),y.flatten(),z.flatten()]);#print(coords.shape)
+        x,y,z  = orient_crystal(coords,n_u=n,T=False);
+        x,y,z  = np.reshape(x,p_shape),np.reshape(y,p_shape),np.reshape(z,p_shape)
+        surfs += [[x,y,z,c,alpha,lw,c]]
+    return surfs
+
+def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],**kwargs):
+    crys = Crystal.from_cif(file)
+    tail = ''.join(np.array(n,dtype=str))
+    n    = get_vec(n,crys,bopt)
+
+    #unit cells,lattice vectors,atom coordinates
+    cell_mesh   = crys.mesh(range(rep[0]+1),range(rep[1]+1),range(rep[2]+1))
+    surfs       = get_unit_cell(cell_mesh,n)
+    uvw         = orient_crystal(np.array(crys.lattice_vectors),n_u=n,T=True)
+    pattern     = import_cif(file,n,rep,dopt='',tail=tail)
+    E,X,Y,Z     = pattern[:,:4].T
+    scat        = [X,Y,Z, [cs[int(e)] for e in E]]
+    scat2=[]
+    # pattern2,lat_params = APAP_xyz(name,n,rep,dopt='')
+    # E2,X2,Y2,Z2 = pattern2[:,:4].T
+    # scat2       = [X2,Y2,Z2, [cs[int(e)] for e in E2]];#print(E2)
+
+    #display options
+    if x0==None : x0 = -1
+    if isinstance(x0,float) or isinstance(x0,int) : x0=np.array([x0]*3)
+    c1,c2,c3 = (X.min()+X.max())/2,(Y.min()+Y.max())/2,(Z.min()+Z.max())/2
+    w = 0.75*max(X.max()-X.min(),Y.max()-Y.min(),Z.max()-Z.min())
+    xylims=[c1-w/2,c1+w/2,c2-w/2,c2+w/2,c3-w/2,c3+w/2]
+    fig,ax=dsp.stddisp(scat=scat,ms=100,surfs=surfs,rc='3d',std=0)
+    show_trihedron(ax,uvw=uvw,x0=[0,0,0],cs=['r','g','b'],labs=['$a$','$b$','$c$'],lw=2,rc=0.1,h=0.2)
+    show_trihedron(ax,x0=x0,labs=['$x$','$y$','$z$'],lw=2,rc=0.1,h=0.2)
+    dsp.stddisp(ax=ax,ms=50,scat=scat2,xylims=xylims,axPos=[0,0,1,1],
+        pOpt='eXp',**kwargs)
+
+    hdl = h3d.handler_3d(fig,persp=False)
+
+
 def get_cubic_cell_mesh(lat_params,opt=0):
     a1,a2,a3 = lat_params
     #Cube faces
@@ -174,6 +272,9 @@ def show_diffraction_planes(r0=1,h=2,npts=10,**kwargs):
     W = 0.75*max(2*r0,h)
     xylims = [-W/2,W/2,-W/2,W/2,-W/2,W/2]
     dsp.standardDisplay(ax,xylims=xylims,axPos=[0,0,1,1],setPos=1,is_3d=1,gridOn=0,ticksOn=0,legOpt=0,**kwargs)
+
+
+
 
 ########################################################################
 # def : test

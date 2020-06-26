@@ -1,11 +1,11 @@
-from utils.displayStandards import* # stddisp
-from scattering_factors import*
+import utils.displayStandards as dsp
+from . import scattering_factors as scatf
 import numpy as np
 from math import pi
 
 __all__=['structure_factor3D','plot_structure3D','get_miller3D',
         'get_pendulossung']
-        
+
 def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     '''Computes structure factor in 3D from :
     - `pattern` : Nx4 array - N atoms with each row : x,y,z,Z
@@ -22,7 +22,7 @@ def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     b1,b2,b3 = lat_vec
     k_x,k_y,k_z = hx*b1[0]+ky*b2[0]+lz*b3[0],hx*b1[1]+ky*b2[1]+lz*b3[1],hx*b1[2]+ky*b2[2]+lz*b3[2]
     q = np.sqrt(k_x**2+k_y**2+k_z**2)/(2*pi)
-    q,fq = get_elec_atomic_factors(atoms,q)
+    q,fq = scatf.get_elec_atomic_factors(atoms,q)
     if 'q' in v:qmax=q.max();print('qmax=%.4f A^-1\nmax_res=%.4f A' %(qmax,1/qmax))
     #structure factor
     Fhkl,n_atoms = np.zeros(hx.shape,dtype=complex),len(atoms)
@@ -74,7 +74,7 @@ def get_pendulossung(name='Si',miller=[0,0,0],keV=200,opt='p'):
     Vcell    = crys.volume
     # compute Pendullosung
     h,k,l = miller
-    Ug,K  = np.abs(Fhkl[h,k,l])/Vcell,1/wavelength(keV)
+    Ug,K  = np.abs(Fhkl[h,k,l])/Vcell,1/scatf.wavelength(keV)
     xi  = K/Ug
     if 'p' in opt:
         print(green+"\tPendullosung thickness "+name+'[%d%d%d]' %(h,k,l)+black)
@@ -84,15 +84,15 @@ def get_pendulossung(name='Si',miller=[0,0,0],keV=200,opt='p'):
 ##########################################################################
 ###def : display
 ##########################################################################
-def plot_structure3D(hkl,Fhkl,**kwargs):
+def plot_structure3D(hkl,Fhkl,log=0,**kwargs):
     '''scatter plot of the intensity'''
     hx,ky,lz = hkl
     hx,ky,lz = hx.flatten(),ky.flatten(),lz.flatten()
     S        = np.abs(Fhkl.flatten())**2
-    c        = np.log10(S+1)
+    if log : S = np.log10(S+1)
     N = hx.max()
     lims = [0,N,0,N,0,N]
-    stddisp(scat=[hx,ky,lz,c],imOpt='c',rc='3d',legOpt=0,xylims=lims,**kwargs)
+    dsp.stddisp(scat=[hx,ky,lz,S],rc='3d',xylims=lims,**kwargs)
 
 def plot2Dcutplane(Shkl,n='100',title='auto',**kwargs):
     '''Not working for arbitrary cut yet '''
@@ -100,7 +100,7 @@ def plot2Dcutplane(Shkl,n='100',title='auto',**kwargs):
     if title=='auto' : title='Silicon([%s]) $S_{hk}$' %n
     if   n=='100' : Scut = Shkl[0,:,:]
     elif n=='110' : Scut = Shkl[np.identity(N,dtype=bool),:]
-    stddisp(im=Scut,imOpt='c',legOpt=0,title=title,**kwargs)
+    dsp.stddisp(im=Scut,imOpt='c',legOpt=0,title=title,**kwargs)
 
 def plot1Dcutline(Shkl,u='001',lat_vec=None,dopt='fq',**kwargs):
     '''
@@ -122,9 +122,9 @@ def plot1Dcutline(Shkl,u='001',lat_vec=None,dopt='fq',**kwargs):
         #k_x,k_y,k_z = hx*b1[0]+ky*b2[0]+lz*b3[0],hx*b1[1]+ky*b2[1]+lz*b3[1],hx*b1[2]+ky*b2[2]+lz*b3[2]
         #q = np.sqrt(k_x**2+k_y**2+k_z**2)/(2*pi)
         qz = np.linspace(0,N,1000)*b3[2]/(2*pi)
-        qz,fq = get_elec_atomic_factors([14],qz)
+        qz,fq = scatf.get_elec_atomic_factors([14],qz)
         plts += [[qz,64*fq[0]**2,'g--','$64f_e^2$'],[qz,32*fq[0]**2,'c--','$32f_e^2$']]
-    stddisp(plts,labs=[labx,'$S_q(A^2)$'],**kwargs)
+    dsp.stddisp(plts,labs=[labx,'$S_q(A^2)$'],**kwargs)
 
 ##########################################################################
 ##### def: misc

@@ -4,6 +4,10 @@
 */figures
 */docs_fig
 
+nearBragg/*.img
+nearBragg/*.bin
+multislice/data_2D
+
 ## Python
 */__pycache__
 *.egg-info

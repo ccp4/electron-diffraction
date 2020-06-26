@@ -19,5 +19,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['matplotlib','numpy','scipy','colorama','pandas'],
+    #install_requires=['matplotlib','numpy','scipy','colorama','pandas'],
 )

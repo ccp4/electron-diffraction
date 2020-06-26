@@ -1051,7 +1051,7 @@ exit(9);
 
 					/* calculate how many radians (2*pi*cycles) from source to detector point */
 					phase = twoPI*(source_to_atom_path+atom_to_pixel_path)/lambda + phsft[i];
-
+					//printf("%d %g\n",i,phase);
 					if(far_source){
 					    source_to_atom_path=1.0;
 					}

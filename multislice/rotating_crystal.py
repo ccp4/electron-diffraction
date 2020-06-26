@@ -1,13 +1,83 @@
-import utils.displayStandards as dsp
-import utils.handler3D as h3d
-from utils.glob_colors import*
-from crystals import Crystal
-from math import pi,sqrt
 import matplotlib.pyplot as plt
 import numpy as np
+from math import pi,sqrt,gcd
+from matplotlib.patches import Rectangle
+from crystals import Crystal
+from utils.glob_colors import*
+import utils.displayStandards as dsp
+import utils.handler3D as h3d
 
-cs = {1:unicolor(0.75),6:unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0)}
+cs = {1:unicolor(0.75),3:(1,0,0),6:unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0)}
 
+wbs = np.array([1,3,6,7,8,10])*0.01
+wobbles = dict(zip([1,3,6,7,8,16],wbs))
+Rot = lambda a:np.array([[np.cos(a),0,np.sin(a)],[0,1,0],[-np.sin(a),0,np.cos(a)]])
+
+def rotate_xyz(file,nx,nz,Nx=40,Nz=5,name='',opt=''):
+    '''Generates .xyz files corresponding to individual rotation
+    - file : path to cif file (.xyz files will be put in the same folder )
+    - Nrot : number of rotation to perform within 0,pi/2
+    '''
+    crys = file
+    if isinstance(file,str):
+        crys = Crystal.from_cif(file)
+        if not name : name = file.replace('.cif','')
+
+    a1,a2,a3    = np.array(crys.lattice_vectors)
+    ax1,by2,cz3 = np.array(crys.lattice_parameters[:3])
+    nxz   = int(cz3/ax1)
+    #int(nx.max()+nxz*nz.max()), int(nx.max()/nxz+nz.max())
+    xy0   = (0,(Nz-nz.max())*cz3)
+    print('super cell calculation ...')
+    crys0   = crys.supercell(Nx,1,Nz)
+    pattern = np.array([
+        [a.atomic_number]+list(a.coords_cartesian)+[a.occupancy,wobbles[a.atomic_number]] for a in crys0.atoms])
+    coords0 = np.array([a.coords_cartesian for a in crys0.atoms])
+
+    files = []
+    Cs = [cs[E] for E in pattern[:,0]]
+    for i1,i2 in zip(nx,nz):
+        # i1,i2 = i,Nrot-i; n0 = gcd(i1,i2)
+        # i1,i2 = i1/n0,i2/n0;#print(i1,i2)
+        cz = i1*a1+i2*a3; #print(cz)
+        ax = np.array([cz[1],-cz[0]]); #print(cz)
+        c,angle = np.linalg.norm(cz),np.arctan(cz[0]/cz[2])
+        if not i1%i2*nxz:
+            n0 = i1/gcd(i1,i2*nxz)
+            if not n0%2 : n0/=2
+            a = np.linalg.norm([i2*nxz/i1,1])*cz3*n0
+        else:
+            a = np.linalg.norm([i2*nxz,i1])*cz3
+
+        # a = np.linalg.norm([i2*nxz,i1])*cz3
+
+        print(green+'i1=%d,i2=%d,angle=%.2f' %(i1,i2,angle*180/np.pi)+black)
+        rect=Rectangle(xy0,1.0*a,1.0*c,angle=-angle*180/np.pi,edgecolor='k',linewidth=2,alpha=0.1)
+        print('finding points ...')
+        idc = rect.contains_points(coords0[:,[0,2]],radius=0.001)
+        print('done')
+        if opt:
+            x,z = coords0[:,[0,2]].T;
+            x0,z0 = (coords0[idc,:])[:,[0,2]].T
+            X,Z = np.hstack([x,x0]),np.hstack([z,z0])
+            S = np.array([10]*x.size+[30]*x0.size)
+            C = Cs+list(np.array(Cs)[idc,:])
+            dsp.stddisp(scat=[X,Z,S,C],patches=[rect],equal=1,figsize='12',
+                xyTicks=[ax1,cz3],pOpt='tGeX',xylims=[0,40*ax1,-10*cz3,10*cz3])
+            plt.show()
+
+        n = (i1,0,i2)
+        xyz          = name+'%d%d%d.xyz' %n
+        lat_vec      = [a,a2[1],c]#np.array([Nrot*(a3+a1),a2,Nrot*(a3-a1)])#
+        cc = coords0[idc,:]
+        cc[:,2]-=xy0[1]
+        coords  = Rot(-angle).dot(cc.T).T
+        pattern[idc,1:4] = coords
+        # make_xyz(xyz,pattern[idc,:],np.diag(lat_vec),n,fmt='%.4f',dopt='s')
+        files+=[xyz] #dsp.basename(xyz)]
+    return files
+##########################################################################
+# orient crystal along n_u
 def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True):
     ''' Rotate the object so that n becomes e_z [1] :\n
     - coords : 3xN (or Nx3 array if T=True)
@@ -33,23 +103,22 @@ def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True):
             coords = R.dot(coords)
     return coords
 
-def import_cif(file,xyz,n=[0,0,1],rep=[1,1,1],dopt='s',lfact=1.0,tail=''):
+def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],dopt='s',lfact=1.0,tail=''):
     crys    = Crystal.from_cif(file)
     lat_vec = np.array(crys.lattice_vectors)
     if sum(rep)>3 : crys = crys.supercell(rep[0],rep[1],rep[2])
     pattern = np.array([[a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
-    make_xyz(xyz,pattern,lat_vec,n,fmt='%.4f',dopt=dopt)
+    if xyz:make_xyz(xyz,pattern,lat_vec,n,fmt='%.4f',dopt=dopt)
     return pattern #,lat_params #pattern,crys # file
 
-def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='scp'):
+def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='s'):
     '''Creates the.xyz file from a given compound and orientation
     - name    : Full path to the file to save
     - pattern : Nx6 ndarray - Z,x,y,z,occ,wobble format
     - lat_vec : 3x3 ndarray - lattice vectors [a1,a2,a3]
     - n : beam direction axis
-    - dopt : p(print file)
+    - dopt : p(print file),s(save)
     '''
-    print(name)
     compound = dsp.basename(name)
     ax,by,cz = np.diag(lat_vec)
     # cz = np.linalg.norm(n)
@@ -74,26 +143,31 @@ def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='scp'):
             with open(name,'r') as f : print(''.join(f.readlines()))
     return pattern,[ax,by,cz]
 
-##########################################################################
-### def : utils
-def get_plane(n=[1,0,0],u=[0,1,0],w=1,h=1,x0=[0,0,0]):
-    x,y = np.meshgrid([-w/2,w/2],[-h/2,h/2])
-    u1,u2 = u,np.cross(n,u)
-    Xp = x*u1[0] + y*u2[0] + x0[0]
-    Yp = x*u1[1] + y*u2[1] + x0[1]
-    Zp = x*u1[2] + y*u2[2] + x0[2]
-    return Xp,Yp,Zp
 
-def get_cylinder(ti,tf,r0=1,h=1,npts=10,x0=[0,0,0]):
-    t,z,h2 = np.linspace(ti,tf,npts),np.array([-1,1])[:,None],h/2
-    Xc = r0*np.tile(np.cos(t),[2,1])  + x0[0]
-    Yc = r0*np.tile(np.sin(t),[2,1])  + x0[1]
-    Zc = h2*np.tile(z,[1,npts]) + x0[2]
-    return Xc,Yc,Zc
 
 ##########################################################################
-#def:figures
+#unit cell display
 ##########################################################################
+def show_grid(file,opt='',**kwargs):
+    with open(file,'r') as f:l=list(map(lambda s:s.strip().split(' '),f.readlines()))
+    pattern = np.array(l[2:-1],dtype=float)
+    a1,a2,a3 = np.array(l[1],dtype=float)
+    #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
+    if opt:
+        Z,x,y,z = pattern[:,:4].T
+        Z = np.array(Z,dtype=int)
+        C = [cs[E] for E in Z]
+        pps = [Rectangle((0,0),a1,a3,linewidth=2,edgecolor='b',alpha=0.1)]
+
+        fig,ax = dsp.stddisp(labs=['$x$','$z$'],patches=pps,scat=[x,z,C],ms=50,
+            opt=opt,**kwargs)
+    return [a1,a2,a3],pattern
+    # a,b,angle=a3,a1,beta
+    # lat_vec = lattice.get_lattice_vec('oblique',a=a,b=b,alpha=angle,v=0)
+    # lattice.plot_lattice(lat_vec,opts='',nh=3,nk=3,
+    #     ax=ax,labs=['$z$','$x$'],lw=2,
+    #     pOpt='tG',pad=1,xyTicks=[1.5,5.0],xylims=[-6,15,0,21])#,xyTicksm=1.0,xylims=[0,100,0,100])
+
 def get_vec(n,crys,bopt) :
     if isinstance(n,int) : n = crys.lattice_vectors[n]
     if bopt : n = np.array(n).dot(np.array(crys.lattice_vectors))
@@ -118,6 +192,7 @@ def get_unit_cell(cell_mesh,n):
     return surfs
 
 def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],**kwargs):
+    '''Show unit cell and coords from cif file '''
     crys = Crystal.from_cif(file)
     tail = ''.join(np.array(n,dtype=str))
     n    = get_vec(n,crys,bopt)
@@ -126,7 +201,7 @@ def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],**kwargs):
     cell_mesh   = crys.mesh(range(rep[0]+1),range(rep[1]+1),range(rep[2]+1))
     surfs       = get_unit_cell(cell_mesh,n)
     uvw         = orient_crystal(np.array(crys.lattice_vectors),n_u=n,T=True)
-    pattern     = import_cif(file,n,rep,dopt='',tail=tail)
+    pattern     = import_cif(file,n=n,rep=rep,dopt='',tail=tail)
     E,X,Y,Z     = pattern[:,:4].T
     scat        = [X,Y,Z, [cs[int(e)] for e in E]]
     scat2=[]
@@ -149,6 +224,23 @@ def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],**kwargs):
     hdl = h3d.handler_3d(fig,persp=False)
 
 
+def show_unit_cell(ax,n=[0,0,1],a=0.2,c='b',lw=2,lat_params=[1,1,1]):
+    '''Orthorombic unit cell from lattice parameters  '''
+    Xfaces = get_cubic_cell_mesh(lat_params)
+    #chnage cube orientation and plot
+    for X,i in zip(Xfaces,range(len(Xfaces))) :
+        x,y,z = X
+        coords = np.array([x,y,z]).reshape(3,4).T
+        coords = orient_crystal(coords,n_u=n)
+        x,y,z  = coords.T.reshape(3,2,2)
+        Xfaces[i] = [x,y,z]
+        ax.plot_surface(x,y,z,color=c,alpha=a+(i==0)*0.2,linewidth=lw,edgecolor=c)
+    #cube diagonals
+    (x0,x1),(y0,y1),(z0,z1) = np.array(Xfaces[0])[:,:,0]
+    (x2,x3),(y2,y3),(z2,z3) = np.array(Xfaces[3])[:,:,1]
+    ax.plot([x0,x3],[y0,y3],[z0,z3],'--',color=dsp.unicolor(0.5))
+    ax.plot([x1,x2],[y1,y2],[z1,z2],'--',color=dsp.unicolor(0.5))
+
 def get_cubic_cell_mesh(lat_params,opt=0):
     a1,a2,a3 = lat_params
     #Cube faces
@@ -167,51 +259,7 @@ def get_cubic_cell_mesh(lat_params,opt=0):
                   [x01,y01,z01],[x11,y11,z11],[x21,y21,z21]]
 
     return Xfaces
-def show_unit_cell(ax,n=[0,0,1],a=0.2,c='b',lw=2,lat_params=[1,1,1]):
-    Xfaces = get_cubic_cell_mesh(lat_params)
-    #chnage cube orientation and plot
-    for X,i in zip(Xfaces,range(len(Xfaces))) :
-        x,y,z = X
-        coords = np.array([x,y,z]).reshape(3,4).T
-        coords = orient_crystal(coords,n_u=n)
-        x,y,z  = coords.T.reshape(3,2,2)
-        Xfaces[i] = [x,y,z]
-        ax.plot_surface(x,y,z,color=c,alpha=a+(i==0)*0.2,linewidth=lw,edgecolor=c)
-    #cube diagonals
-    (x0,x1),(y0,y1),(z0,z1) = np.array(Xfaces[0])[:,:,0]
-    (x2,x3),(y2,y3),(z2,z3) = np.array(Xfaces[3])[:,:,1]
-    ax.plot([x0,x3],[y0,y3],[z0,z3],'--',color=dsp.unicolor(0.5))
-    ax.plot([x1,x2],[y1,y2],[z1,z2],'--',color=dsp.unicolor(0.5))
 
-# def show_trihedron(ax,x0=[0,0,0],cs=None,labs=None,lw=2,ll=1.0,rc=0.1,h=0.2):
-#     '''
-#     x0 : position of trihedron
-#     ll,rc,h : length,radius and height af arrow/cones
-#     cs,labs : colors and labels of cones (default black and None)
-#     '''
-#     txts,x0=[],np.array(x0)
-#     if not cs : cs=['k']*3
-#     if labs :
-#         xtxt = x0 + 1.1*ll*np.diag([1,1,1]);#print(xtxt)
-#         for i in range(3):
-#             xt0,yt0,zt0 = xtxt[i,:]
-#             txts += [[xt0,yt0,zt0,labs[i],cs[i]]]
-#     cx,cy,cz = cs
-#     u = np.linspace(0,2*np.pi,15)
-#     v = np.linspace(0,np.pi/2,2)
-#     x = rc*np.outer(np.cos(u),np.sin(v))
-#     y = rc*np.outer(np.sin(u),np.sin(v))
-#     z = h*np.outer(np.ones(u.shape),np.cos(v))
-#     (xlx,xly,xlz) = (np.array([[0,ll],[0,0],[0,0]]).T + x0).T
-#     (ylx,yly,ylz) = (np.array([[0,0],[0,ll],[0,0]]).T + x0).T
-#     (zlx,zly,zlz) = (np.array([[0,0],[0,0],[0,ll]]).T + x0).T
-#     plots = [[xlx,xly,xlz,cx],
-#              [ylx,yly,ylz,cy],
-#              [zlx,zly,zlz,cz],]
-#     surfs = [[x0[0]+z+ll    ,x0[1]+x    ,x0[2]+y    ,cx,None,lw,cx],
-#              [x0[0]+x       ,x0[1]+z+ll ,x0[2]+y    ,cy,1,lw,cy],
-#              [x0[0]+x       ,x0[1]+y    ,x0[2]+z+ll ,cz,1,lw,cz],]
-#     dsp.stddisp(ax=ax,texts=txts,plots=plots,surfs=surfs,lw=lw,std=0)
 
 def show_trihedron(ax,uvw=None,x0=[0,0,0],cs=None,labs=None,lw=2,rc=0.1,h=0.2):
     '''
@@ -235,8 +283,8 @@ def show_trihedron(ax,uvw=None,x0=[0,0,0],cs=None,labs=None,lw=2,rc=0.1,h=0.2):
         surfs += [[x,y,z,cu,None,lw,cu]]
     dsp.stddisp(ax=ax,texts=txts,plots=plots,surfs=surfs,lw=lw,std=0)
 
-
 def get_arrow_3d(n,x0,rc=0.1,h=0.2):
+    '''for trihedron'''
     nu,nv = 15,2; #print(u)
     shape = (nu,nv)
     u = np.linspace(0,2*np.pi,nu)
@@ -254,7 +302,10 @@ def get_arrow_3d(n,x0,rc=0.1,h=0.2):
     return [x+x0[0]+n[0],y+x0[1]+n[1],z+x0[2]+n[2]],[xl,yl,zl]
 
 
+##########################################################################
+# misc
 def show_diffraction_planes(r0=1,h=2,npts=10,**kwargs):
+    '''Generates the rotation figure'''
     n10,n01,n11,u = [1,0],[0,1],np.array([1,-1])/sqrt(2),[0,0,1]
     Xc0,Yc0,Zc0=get_cylinder(0,pi/2 ,r0,h,npts)
     Xc1,Yc1,Zc1=get_cylinder(pi,3*pi/2,r0,h,npts)
@@ -273,6 +324,20 @@ def show_diffraction_planes(r0=1,h=2,npts=10,**kwargs):
     xylims = [-W/2,W/2,-W/2,W/2,-W/2,W/2]
     dsp.standardDisplay(ax,xylims=xylims,axPos=[0,0,1,1],setPos=1,is_3d=1,gridOn=0,ticksOn=0,legOpt=0,**kwargs)
 
+def get_plane(n=[1,0,0],u=[0,1,0],w=1,h=1,x0=[0,0,0]):
+    x,y = np.meshgrid([-w/2,w/2],[-h/2,h/2])
+    u1,u2 = u,np.cross(n,u)
+    Xp = x*u1[0] + y*u2[0] + x0[0]
+    Yp = x*u1[1] + y*u2[1] + x0[1]
+    Zp = x*u1[2] + y*u2[2] + x0[2]
+    return Xp,Yp,Zp
+
+def get_cylinder(ti,tf,r0=1,h=1,npts=10,x0=[0,0,0]):
+    t,z,h2 = np.linspace(ti,tf,npts),np.array([-1,1])[:,None],h/2
+    Xc = r0*np.tile(np.cos(t),[2,1])  + x0[0]
+    Yc = r0*np.tile(np.sin(t),[2,1])  + x0[1]
+    Zc = h2*np.tile(z,[1,npts]) + x0[2]
+    return Xc,Yc,Zc
 
 
 
@@ -285,7 +350,7 @@ def bcc_coords():
     coords = np.concatenate((coords,[xc]),axis=0)
     return coords
 
-def test_orient(n=[1,1,1],**kwargs):
+def _test_orient(n=[1,1,1],**kwargs):
     coords = bcc_coords()
     coords = orient_crystal(coords,n)
     scat    = coords.T.tolist()
@@ -318,9 +383,9 @@ def _test_get_arrow():
 
 if __name__ == "__main__":
     plt.close('all')
-    #_test_get_arrow()
     #show_diffraction_planes(name='figures/cylinder.png',figopt='t2', opt='p')
-    #test_orient(n=[0,0,1],name='docs_fig/orient_crystal001.png',figopt='2',view=[10,-30],opt='p')#;dsp.crop_fig('docs_fig/orient_crystal001.png',[800,800,600,500])
-    #test_orient(n=[1,1,0],name='docs_fig/orient_crystal110.png',figopt='2',view=[10,-30],opt='p')#;dsp.crop_fig('docs_fig/orient_crystal110.png',[800,800,300,400])
-    #test_orient(n=[1,1,1],name='docs_fig/orient_crystal111.png',figopt='2',view=[10,-30],opt='p')#;dsp.crop_fig('docs_fig/orient_crystal111.png',[800,800,450,350])
+    #_test_get_arrow()
+    #_test_orient(n=[0,0,1],name='docs_fig/orient_crystal001.png',figopt='2',view=[10,-30],opt='p')#;dsp.crop_fig('docs_fig/orient_crystal001.png',[800,800,600,500])
+    #_test_orient(n=[1,1,0],name='docs_fig/orient_crystal110.png',figopt='2',view=[10,-30],opt='p')#;dsp.crop_fig('docs_fig/orient_crystal110.png',[800,800,300,400])
+    #_test_orient(n=[1,1,1],name='docs_fig/orient_crystal111.png',figopt='2',view=[10,-30],opt='p')#;dsp.crop_fig('docs_fig/orient_crystal111.png',[800,800,450,350])
     _test_trihedron()

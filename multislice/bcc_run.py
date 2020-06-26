@@ -2,8 +2,11 @@ from utils import*
 from utils import displayStandards as dsp
 import multislice as mupy
 from crystals import Crystal
-from rotating_crystal import orient_crystal,show_unit_cell
+import rotating_crystal as rcc
 from postprocess import*
+import importlib as imp
+imp.reload(rcc)
+
 
 def Li_xyz(path,n=[0,0,1],dopt=1,lfact=1.0,wobble=0,tail=''):
     file    = path+'Li%s%s.xyz' %(''.join(np.array(n,dtype=str)),tail)
@@ -12,7 +15,7 @@ def Li_xyz(path,n=[0,0,1],dopt=1,lfact=1.0,wobble=0,tail=''):
         [a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,wobble] for a in crys.atoms])
     # lat_params = tuple(lfact*np.array(crys.lattice_parameters[:3]))
     lat_params = lfact*np.array(crys.lattice_vectors)
-    coords,lat = mupy.make_xyz(file,pattern,lat_params,n,fmt='%.4f',dopt='s')
+    coords,lat = rcc.make_xyz(file,pattern,lat_params,n,fmt='%.4f',dopt='s')
     return file
 
 #########################################################################
@@ -95,6 +98,11 @@ def Li_wobble(name,nvals=np.inf,**kwargs):
     dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$','$I_q$'],lw=2,fonts={'leg':20},
         xylims=['x',0,4,-5,0],opt='sc',name='docs_fig/wobble_effectIavg.svg')
 
+def Li_rots():
+    crys = Crystal.from_database('Li')
+    files = rcc.rotate_xyz(crys,Nrot=8,name='dat/Lithium/rots/',opt='p')
+    for file in files[:4] : rcc.show_grid(file,title=file,equal=1)#,xyTicks=3.49,xylims=[0,100,0,100])
+
 ##########################################################################
 if __name__ == "__main__":
     plt.close('all')
@@ -104,3 +112,4 @@ if __name__ == "__main__":
     # Li_gif(name+'gif/')
     # df = Li_latsize(name+'latsize/',nvals=3,opt='drsp',fopt='',ppopt='w',v=1)
     Li_wobble(name+'wobble/',nvals=3,opt='',fopt='',ppopt='wu',v=0)#,ssh='tarik-CCP4home')
+    # Li_rots()

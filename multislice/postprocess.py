@@ -25,6 +25,7 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
     - Obeam : include origin
     '''
     hk    = open(file).readline().rstrip().split('=  ')[1].split(' ');#print(hk)
+    #print(hk)
     beams = np.loadtxt(file,skiprows=3).T
     if isinstance(slice_thick,list) :
         idx,beams = beams[0,:],beams[1:,:]
@@ -59,10 +60,11 @@ def load_multi_obj(filename):
     with open(filename,'rb') as f : multi = pickle.load(f)
     return multi
 
+
 def get_info(log_file):
     '''compute zmax,I,cpuTime and wallTime'''
     with open(log_file,'r') as f : log_lines=f.readlines()
-    log_lines = log_lines[-6:-4] + log_lines[-2:]
+    log_lines = log_lines[-7:-5] + log_lines[-2:]
     info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
     return np.array(info,dtype=float)
 

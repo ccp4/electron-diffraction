@@ -15,21 +15,18 @@ forcing to repostprocess in case it was already done in an older simulation :
 multi.beam_vs_thickness(bOpt='f')
 ```
 '''
-#from utils.displayStandards import*
-from utils.glob_colors import*
+import pickle,socket,time
+import pandas as pd
+import numpy as np
+from math import ceil,nan
 from subprocess import Popen #,check_output
 from glob import glob as lsfiles
 from os.path import dirname,realpath,exists
 from string import ascii_uppercase as SLICES #ascii_letters
 from string import ascii_letters
-from math import ceil,nan
-import pickle,socket,time
-import pandas as pd
-import numpy as np
-import postprocess as pp
+from utils.glob_colors import*
 import utils.displayStandards as dsp
-# from .rotating_crystal import orient_crystal
-from rotating_crystal import orient_crystal
+import postprocess as pp
 
 ssh_hosts = {
     'local_london':'BG-X550',
@@ -56,6 +53,7 @@ class Multislice:
     \n**MULTISLICE simulation parameters :**\n
     - `mulslice` : False(autoslic), True(mulslice)=>periodic
     - `keV` : float - wavelength in keV
+    - `tilt` : 2-list - crystal tilt tx,ty (mrad)
     - `repeat` : 3-int-list - super cell size in the x,y,z directions
     - `NxNy` : 2-int-list or int : sampling in x and y (same sampling in x and y if only int provided)
     - `slice_thick` : float - slice thickness (A)
@@ -78,7 +76,7 @@ class Multislice:
     - `ssh` : ip address or alias of the machine on which to run the job
     '''
     def __init__(self,name,mulslice=False,tail='',data=None,
-                TDS=False,T=300,n_TDS=16,
+                tilt=[0,0],TDS=False,T=300,n_TDS=16,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,
                 hk=[(0,0)],Nhk=0,prev=None,
                 opt='',fopt='w',ppopt='uwP',v=1,ssh=None):
@@ -94,6 +92,7 @@ class Multislice:
         self.name        = dsp.basename(name)                           #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.is_mulslice = mulslice
+        self.tilt        = tuple(tilt)
         self.TDS         = TDS
         self.T           = T
         self.n_TDS       = n_TDS
@@ -188,7 +187,7 @@ class Multislice:
         if ssh_alias and 'u' in ppopt:
             if 'I' in ppopt : self.ssh_get(ssh_alias,'image')
             if 'B' in ppopt : self.ssh_get(ssh_alias,'beamstxt')
-            if 'P' in ppopt : self.ssh_get(ssh_alias,'pattern')
+            if 'P' in ppopt : self.ssh_get(ssh_alias,'patternnpy')
         if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
         if 'B' in ppopt and opt : self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
         if 'P' in ppopt and opt : self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
@@ -235,7 +234,7 @@ class Multislice:
         print('saving')
         real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
         im = real**2+imag**2
-        im = np.fft.fftshift(im)
+        #im = np.fft.fftshift(im)
 
         np.save(self._outf('patternnpy'),im,allow_pickle=True)
         print(green+'file saved : ' +yellow+yellow+self._outf('patternnpy')+black)
@@ -253,8 +252,8 @@ class Multislice:
         Nh,Nk = self.repeat[:2];
         Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
         if 'I' in Iopt :
-            real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
-            im = real**2+imag**2
+            # real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
+            # im = real**2+imag**2
             if 'n' in Iopt : #normalize
                 #print('normalizing')
                 im00 = im[0,0];im[0,0] = 0
@@ -532,7 +531,7 @@ class Multislice:
         deck += "n\n"                           #start previous run
         deck += "%.2f\n" %self.keV              #wavelength
         deck += "0 0\n"                         #crystal tilt
-        deck += "0 0\n"                         #beam tilt
+        deck += "%.4f %.4f \n" %self.tilt       #beam tilt
         deck += "y\n"                           #record beams
         deck += "%s\n" %(self._outf('beamstxt'))#     filename
         deck += "%d\n" %len(self.hk)            #     nbeams
@@ -553,7 +552,7 @@ class Multislice:
         deck += prev_run                        #start previous run
         deck += "%.4f\n" %self.keV              #wavelength
         deck += "%d %d\n" %self.NxNy            #sampling
-        deck += "0 0\n"                         #crystal tilt
+        deck += "%.4f %.4f \n" %self.tilt       #beam tilt
         deck += "%f\n" %(self.slice_thick)      #slice thickness
         deck += "y\n"                           #record beams
         deck += "%s\n" %self._outf('beamstxt')  #filename

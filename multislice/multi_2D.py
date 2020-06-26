@@ -11,7 +11,7 @@ import utils.glob_colors as colors
 
 
 class multi2D():
-    '''
+    '''multislice 2D for quick testing
     - pattern,ax,bz : x,z,f
     - Nx : increase supercell size
     - dz : slice thickness
@@ -122,7 +122,6 @@ class multi2D():
         return dsp.stddisp(im=im,labs=[r'$x(\AA)$',r'$z(\AA)$'],
         **kwargs)
 
-
     ###### Privates
     def _set_transmission_function(self):
         Nx = self.Nx
@@ -153,7 +152,7 @@ class multi2D():
     def propagate(self,nz,iZs=1,iZv=1):
         nzq,z0 = int(nz/iZs),0
         if self.z.size : z0=self.z.max()
-        self.z  = np.hstack([self.z,z0+np.arange(nzq)*self.dz*iZs ])
+        self.z  = np.hstack([self.z,z0+self.dz+np.arange(nzq)*self.dz*iZs ])
         self.psi_xz = np.vstack([self.psi_xz,np.zeros((nzq,self.nx))])
         self.psi_qz = np.vstack([self.psi_qz,np.zeros((nzq,self.nx))])
         # self.T=fft.fftshfft(self.T)
@@ -169,7 +168,7 @@ class multi2D():
                 Iq2 = np.sum(np.abs(self.Psi_q/self.nx)**2)/self.dq #parseval's theorem of the DFT
                 msg+='i=%-3d I=%.4f, Iq=%.4f ' %(i,Ix2,Iq2)
             if not i%iZs:
-                msg+='z=%.1f A' %(self.z[self.iz])
+                msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
                 self.psi_xz[self.iz,:] = np.abs(self.Psi_x)**2
                 self.psi_qz[self.iz,:] = np.abs(self.Psi_q)**2
                 self.iz+=1

@@ -16,14 +16,15 @@ class multi2D():
     - Nx : increase supercell size
     - dz : slice thickness
     - nz : number of slices
-    - ppopt:T(Transmission)P(propagator)Q(Psi_q)X(Psi_x)B(beams)Z(Psi_xz)
+    - ppopt:T(Transmission)P(propagator)Q(Psi_q)X(Psi_x)B(beams)Z(Psi_xz)Y(Psi_qz)
     - iZs,iZv : frequency of save and verbose
     '''
     def __init__(self,
             pattern,ax,bz,
             keV=200,Nx=1,
-            dz=1,nz=1,
+            dz=1,nz=1,copt=1,
             iZs=1,iZv=1,ppopt=''):
+        self.version = 0.1
         self.pattern = pattern
         self.keV     = keV
         self.Nx      = Nx
@@ -39,7 +40,7 @@ class multi2D():
         self._set_transmission_function()
         self._set_propagator()
         self.set_Psi0()
-        self.propagate(nz,iZs,iZv)
+        self.propagate(nz,iZs,iZv,copt)
         #display
         if 'T' in ppopt:self.Tz_show()
         if 'P' in ppopt:self.Pq_show()
@@ -47,22 +48,31 @@ class multi2D():
         if 'X' in ppopt:self.Xz_show()
         if 'B' in ppopt:self.Bz_show()
         if 'Z' in ppopt:self.Xxz_show()
+        if 'Y' in ppopt:self.Qxz_show()
 
     def save(self,file):
         with open(file,'wb') as out :
             pickle.dump(self, out, pickle.HIGHEST_PROTOCOL)
-        print(colors.green+"object saved\n"+colors.yellow+file+colors.black)
+        print(colors.green+"object saved : \n"+colors.yellow+file+colors.black)
 
     ###################################################################
     ####### display
-    def Tz_show(self,**kwargs):
-        plts = [[self.x,self.Vz,'g',r'$V_z(kV\AA)$'],
-                [self.x,self.T.real,'b','$re(T)$'],
-                [self.x,self.T.imag,'r','$im(T)$']]
-        return dsp.stddisp(plts,labs=[r'$x(\AA)$',''],title='Projected potential $V_z$, Transmission function $T$',
-            **kwargs)
+    ###################################################################
+    def Tz_show(self,iSz=slice(0,None,1),**kwargs):
+        '''Show Transmission function '''
+        if isinstance(iSz,int):iSz=[iSz]
+        if isinstance(iSz,slice):iSz=list(np.arange(self.ns)[iSz])
+        if isinstance(iSz,list):N=len(iSz)
+        cs1,cs2,cs3 = dsp.getCs('Greens',N),dsp.getCs('Blues',N),dsp.getCs('Reds',N)
+        plts = [[self.x,self.Vz[iSz[i],:].T ,cs1[i]] for i in range(N)]
+        plts+= [[self.x,self.T.real[iSz[i],:].T,cs2[i]] for i in range(N)]
+        plts+= [[self.x,self.T.imag[iSz[i],:].T,cs3[i]] for i in range(N)]
+        legElt={r'$V_z(kV\AA)$':'g-','$re(T)$':'b-','$im(T)$':'r-'}
+        return dsp.stddisp(plts,labs=[r'$x(\AA)$',''],#title='Projected potential $V_z$, Transmission function $T$',
+            legElt=legElt,**kwargs)
 
     def Pq_show(self,**kwargs):
+        '''Show Propagator function in q space '''
         q  = fft.fftshift(self.q)
         Pq = fft.fftshift(self.Pq)
         plts = [[q,Pq.real,'b','$re$'],
@@ -72,6 +82,7 @@ class multi2D():
             **kwargs)
 
     def Xz_show(self,iZs=1,cmap='jet',**kwargs):
+        '''Show wave propagation for slices iZs '''
         if isinstance(iZs,int):iZs=slice(0,self.z.size,iZs)
         z  = self.z[iZs]
         Px = self.psi_xz[iZs,:]
@@ -82,6 +93,7 @@ class multi2D():
             **kwargs)
 
     def Qz_show(self,iZs=1,cmap='jet',**kwargs):
+        '''Show wave propagation in q space for slices iZs '''
         if isinstance(iZs,int):iZs=slice(0,self.z.size,iZs)
         z   = self.z[iZs]
         Pqs = self.psi_qz[iZs,:]
@@ -97,6 +109,7 @@ class multi2D():
             **kwargs)
 
     def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',**kwargs):
+        '''Show selected beam iBs as function of thickness '''
         Ib = self.psi_qz #np.abs()**2
         if isinstance(iBs,str):
             N   = int(self.nx/2)
@@ -117,22 +130,41 @@ class multi2D():
         **kwargs)
 
     def Xxz_show(self,**kwargs):
+        '''Show 2D wave propagation solution'''
         x,z = np.meshgrid(self.x,self.z)
         im = [x,z,self.psi_xz]
         return dsp.stddisp(im=im,labs=[r'$x(\AA)$',r'$z(\AA)$'],
         **kwargs)
+    def Qxz_show(self,**kwargs):
+        '''Show 2D wave propagation solution'''
+        q,z = np.meshgrid(self.q,self.z)
+        im = [q,z,self.psi_qz]
+        return dsp.stddisp(im=im,labs=[r'$q(\AA^{-1})$',r'$z(\AA)$'],
+        **kwargs)
 
-    ###### Privates
+    ##################################################################
+    ###### main computations
+    ##################################################################
     def _set_transmission_function(self):
-        Nx = self.Nx
         x,z,f = self.pattern
-        Vz = 1.*np.array([simps(f[i,:],z) for i in range(f.shape[0])])
-        T  = np.exp(1J*self.sig*Vz)
+        nx = x.size
+        ns = int(np.round(self.bz/self.dz))
+        self.dz = self.bz/ns;
+        Vz = np.zeros((ns,nx))
+        iZs = np.arange(0,ns+1)*int(z.size/ns)
+        for i_s in range(ns):
+            s=slice(iZs[i_s],iZs[i_s+1])
+            Vz[i_s,:] = 1.25*np.array([simps(f[s,i],z[s]) for i in range(nx)])
+        print('Slice thickness and slices per cell:\ndz=%.2f \nnzs=%d\n' %(self.dz,ns))
 
+        T  = np.exp(1J*self.sig*Vz)
+        #repeat pattern
+        Nx = self.Nx
         self.x  = np.hstack([x + self.ax*i for i in range(Nx)])
-        self.Vz = np.hstack([Vz]*Nx)
-        self.T  = np.hstack([T]*Nx)
+        self.Vz = np.vstack([Vz]*Nx)
+        self.T  = np.vstack([T]*Nx)
         self.nx = x.size
+        self.ns = ns
 
     def _set_propagator(self):
         self.dx = self.x[1]-self.x[0]
@@ -142,14 +174,15 @@ class multi2D():
         self.nq = int(1/3*self.nx) #prevent aliasing
 
     def set_Psi0(self):
-        Psi  = np.ones(self.T.shape,dtype=complex)
+        Psi  = np.ones(self.x.shape,dtype=complex)
         self.Psi_x = Psi/np.sqrt(np.sum(np.abs(Psi)**2)*self.dx)
         self.psi_xz = np.zeros((0,self.nx))
         self.psi_qz = np.zeros((0,self.nx))
         self.z  = np.array([])
         self.iz = 0
 
-    def propagate(self,nz,iZs=1,iZv=1):
+    def propagate(self,nz,iZs=1,iZv=1,copt=1):
+        '''Propgate over nz slices and save every iZs slices'''
         nzq,z0 = int(nz/iZs),0
         if self.z.size : z0=self.z.max()
         self.z  = np.hstack([self.z,z0+self.dz+np.arange(nzq)*self.dz*iZs ])
@@ -157,16 +190,19 @@ class multi2D():
         self.psi_qz = np.vstack([self.psi_qz,np.zeros((nzq,self.nx))])
         # self.T=fft.fftshfft(self.T)
         for i in range(nz):
-            self.Psi_q = fft.fft(self.T*self.Psi_x)   #periodic assumption
-            self.Psi_q[self.nq:-self.nq] = 0          #prevent aliasing
+            i_s=i%self.ns
+            #print(self.T[i_s,:].shape,self.Psi_x.shape)
+            self.Psi_q = fft.fft(self.T[i_s,:]*self.Psi_x) #periodic assumption
+            self.Psi_q[self.nq:-self.nq] = 0               #prevent aliasing
             self.Psi_x = fft.ifft(self.Pq*self.Psi_q)
             # self.Psi_x = fft.fftshift(fft.ifft(self.Pq*self.Psi_q))
             #save and print out
             msg=''
+
             if not i%iZv:
                 Ix2 = np.sum(np.abs(self.Psi_x)**2)*self.dx
                 Iq2 = np.sum(np.abs(self.Psi_q/self.nx)**2)/self.dq #parseval's theorem of the DFT
-                msg+='i=%-3d I=%.4f, Iq=%.4f ' %(i,Ix2,Iq2)
+                msg+='i=%-3d,is=%-2d I=%.4f, Iq=%.4f ' %(i,i_s,Ix2,Iq2)
             if not i%iZs:
                 msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
                 self.psi_xz[self.iz,:] = np.abs(self.Psi_x)**2
@@ -174,17 +210,27 @@ class multi2D():
                 self.iz+=1
             if msg:print(colors.green+msg+colors.black)
 
+
+def load(filename):
+    '''load a saved Multislice object'''
+    with open(filename,'rb') as f : multi = pickle.load(f)
+    return multi
+
+##################################################################
+###### Base test
+##################################################################
 if __name__=='__main__':
     import wallpp.plane_group as pg
     import importlib as imp
     imp.reload(pg)
     ndeg = 2**8
-    pptype,a,b,angle = 'p1',20,10,90
-    pattern = np.array([[10,5,3]])
+    pptype,a,b,angle = 'p1',20,6,90
+    pattern = np.array([[10,2,3],[5,4,3]])
 
     #get the potential from wallpaper library
     p1      = pg.Wallpaper(pptype,a,b,angle,pattern,ndeg=ndeg)
     pattern = p1.get_potential_grid()
     mp1 = multi2D(pattern,a,b,keV=200,
-            Nx=1,dz=b,nz=100,ppopt='Z',#XQZTP
+            Nx=1,dz=b/2,nz=2,ppopt='',#XQZTP
             iZs=1,iZv=1)
+    mp1.Tz_show(slice(0,None,1))

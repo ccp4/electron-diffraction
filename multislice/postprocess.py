@@ -60,23 +60,31 @@ def load_multi_obj(filename):
     with open(filename,'rb') as f : multi = pickle.load(f)
     return multi
 
-
 def get_info(log_file):
+    '''compute zmax,I,cpuTime and wallTime'''
+    with open(log_file,'r') as f : log_lines=f.readlines()
+    log_lines = log_lines[-2:]
+    info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
+    return np.array(info,dtype=float)
+
+def get_info_cpu(log_file):
     '''compute zmax,I,cpuTime and wallTime'''
     with open(log_file,'r') as f : log_lines=f.readlines()
     log_lines = log_lines[-7:-5] + log_lines[-2:]
     info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
     return np.array(info,dtype=float)
 
-def update_df_info(df_path):
+def update_df_info(df_path,hostpath=None):
     df = pd.read_pickle(df_path)
     datpath = os.path.dirname(df_path)+'/'
     for name in df.index:
         multi = load_multi_obj(datpath+name);#print(name)
-        state = multi.check_simu_state(ssh_alias=df.loc[name].host,v=0)
+        state = multi.check_simu_state(ssh_alias=df.loc[name].host,v=0,hostpath=hostpath)
         df.loc[name]['state'] = state
+        info = get_info(multi._outf('log'))
+        df.loc[name][info_cols[:2]] = info
         if state=='done':
-            info = get_info(multi._outf('log'))
+            info = get_info_cpu(multi._outf('log'))
             df.loc[name][info_cols] = info
     df.to_pickle(df_path);
     print(green+'DataFrame updated and saved : \n' +yellow+df_path+black)

@@ -19,24 +19,26 @@ import pickle,socket,time
 import pandas as pd
 import numpy as np
 from math import ceil,nan
-from subprocess import Popen #,check_output
+from subprocess import Popen,check_output,PIPE
 from glob import glob as lsfiles
 from os.path import dirname,realpath,exists
 from string import ascii_uppercase as SLICES #ascii_letters
 from string import ascii_letters
 from utils.glob_colors import*
 import utils.displayStandards as dsp
-import postprocess as pp
+from . import postprocess as pp
 
 ssh_hosts = {
     'local_london':'BG-X550',
     'tarik-CCP4stfc':'tarik-CCP4','tarik-CCP4home':'tarik-CCP4',
-    'brno':'brno'}
+    'brno':'brno',
+    'badb':'badb'}
 
 temsim_hosts={
     'BG-X550'   :'/home/ronan/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
     'tarik-CCP4':'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
     'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
+    'badb'      :'/home/lii26466/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
 }
 
 
@@ -74,12 +76,14 @@ class Multislice:
         - 'f' in fopt : The simulation is rerun
     - `ppopt` : u(update),w(wait), I(image) B(beam) P(pattern) A(azim_avg)
     - `ssh` : ip address or alias of the machine on which to run the job
+    - `hostpath` : path to data on host
     '''
     def __init__(self,name,mulslice=False,tail='',data=None,
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,
                 hk=[(0,0)],Nhk=0,prev=None,
-                opt='',fopt='w',ppopt='uwP',v=1,ssh=None):
+                opt='',fopt='w',ppopt='uwP',v=1,
+                ssh=None,hostpath='',cluster=False):
         #output options
         if isinstance(v,bool) : v=['','nctrdD'][v]
         if isinstance(v,int) : v=''.join(['nctr','DR','d'][:min(v,3)])
@@ -88,7 +92,7 @@ class Multislice:
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
 
         #attributes
-        self.version     = '1.1'
+        self.version     = '1.2'
         self.name        = dsp.basename(name)                           #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.is_mulslice = mulslice
@@ -116,8 +120,8 @@ class Multislice:
         if save_obj : self.save()
         if 'd' in v : self.print_datafiles()
         if 'D' in v : self.print_decks()
-        if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh)
-        if do_pp : self.postprocess(ppopt,ssh)
+        if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster)
+        if do_pp : self.postprocess(ppopt,ssh,hostpath=hostpath)
 
     ########################################################################
     ##### Public functions
@@ -146,13 +150,13 @@ class Multislice:
             pickle.dump(self, out, pickle.HIGHEST_PROTOCOL)
         print(green+"object saved\n"+yellow+file+black)
 
-    def run(self,v=1,fopt='w',ssh_alias=None,hostpath=None):
+    def run(self,v=1,fopt='w',ssh_alias=None,hostpath=None,cluster=False):
         '''run the simulation with temsim
         - fopt : f(force rerun), w(warn ask rerun already done)
         - ssh : name of the host to run the job
         '''
         run = True
-        if self.check_simu_state(v=0,ssh_alias=ssh_alias) == 'done' :
+        if self.check_simu_state(v=0,ssh_alias='') == 'done' :
             if v>0 : print(red+"Simulation already performed in the past."+black)
             if 'f' in fopt :
                 msg='Force re-running.'
@@ -166,32 +170,38 @@ class Multislice:
         p = None
         if run:
             if ssh_alias :
-                cmd = self._get_job_ssh(ssh_alias,v=v>2)
+                cmd = self._get_job_ssh(ssh_alias,hostpath=hostpath,v=v>2,cluster=cluster)
+                #time.sleep(1)
+                #self.check_simu_state(v=0,ssh_alias=ssh_alias,hostpath=hostpath)
             else :
-                cmd = self._get_job()
+                self._get_job()
+                cmd = 'bash %s' %self._outf('job')
             p = Popen(cmd,shell=True)
             if v>0 : print(green+self.name+" job submitted"+black)
             if v>1 : print(magenta+cmd+black)
         return p
 
-    def postprocess(self,ppopt='uwP',ssh_alias='',tol=1e-4,figpath=None,opt='p'):
+    def postprocess(self,ppopt='uwP',ssh_alias='',tol=1e-4,figpath=None,opt='p',hostpath=''):
         '''Performs postprocessing with predefined options : \n
         - ppopt:u(update), w(wait till done) I(image), B(beam) P(pattern)
         - figpath : Directory to place the figures if saving with automatic naming (default datpath)
         '''
         if not figpath : figpath = self.datpath
         time.sleep(0.1)
-        state = self.check_simu_state(ssh_alias=ssh_alias)
-        if not state== 'done' and 'w' in ppopt:
-            self.p.wait()
+        state = self.check_simu_state(ssh_alias=ssh_alias,hostpath=hostpath)
+        if not state == 'done' and 'w' in ppopt:
+            self.wait_simu(ssh_alias,1,hostpath)
         if ssh_alias and 'u' in ppopt:
-            if 'I' in ppopt : self.ssh_get(ssh_alias,'image')
-            if 'B' in ppopt : self.ssh_get(ssh_alias,'beamstxt')
-            if 'P' in ppopt : self.ssh_get(ssh_alias,'patternnpy')
+            if 'I' in ppopt : self.ssh_get(ssh_alias,'image'    ,hostpath)
+            if 'B' in ppopt : self.ssh_get(ssh_alias,'beamstxt' ,hostpath)
+            if 'P' in ppopt : self.ssh_get(ssh_alias,'pattern'  ,hostpath)
         if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
         if 'B' in ppopt and opt : self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
-        if 'P' in ppopt and opt : self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
+        if 'P' in ppopt and opt :
+            self.save_pattern()
+            self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
 
+    ###################################################################
     ################ OUTPUT FUNCTIONS
     def image(self,opt='I',cmap='jet',**kwargs):
         '''Displays the 2D image out of simulation
@@ -258,7 +268,10 @@ class Multislice:
                 #print('normalizing')
                 im00 = im[0,0];im[0,0] = 0
                 mMax = im.max();im /= mMax
-                if 'l' in Iopt : im[0,0] = im00/mMax
+                if 'l' in Iopt :
+                    im[0,0] = im00/mMax
+                else:
+                    im[0,0] = 1
             if 'c' in Iopt and not Nmax:
                 #print('croping')
                 idx = im[:Nx,:Ny]>im.max()*tol
@@ -269,7 +282,7 @@ class Multislice:
             # if qmax:
             #     Nmax =
             if not Nmax : Nmax = min(Nx,Ny)
-            Nmax=min(Nmax,256)
+            Nmax = min(Nmax,256,Nx,Ny)
         #print('preparing')
         if 'q' in Iopt:
             im0 = im[Nx:Nx+Nmax,Ny:Ny+Nmax];del(im)
@@ -278,9 +291,21 @@ class Multislice:
             im0 = im[Nx-Nmax:Nx+Nmax,Ny-Nmax:Ny+Nmax];del(im)
             h,k = np.meshgrid(np.arange(-Nmax,Nmax),np.arange(-Nmax,Nmax))
         if 'l' in Iopt : #logscale the data
+            if 'g' in Iopt:
+                i,j = np.where(im0>10*tol)
             im0[im0<tol] = tol*1e-2
+            if 'g' in Iopt:
+                x,y = np.meshgrid(range(-5,6),range(-5,6))
+                Pb = np.exp(-6*(x**2+y**2)**1)
+                # Pb = 1/(x**2+y**2+0.01)**10
+                for i0,j0 in zip(i,j):
+                    im00 = im0[i0,j0]
+                    im0[i0+x,j0+y] += im0[i0,j0]*Pb
+                    im0[i0,j0] = im00
+                    im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
             im0 = np.log10(im0)
         if out :
+
             #print('packaging')
             return h/Nh/ax, k/Nk/by, im0
         else:
@@ -290,7 +315,7 @@ class Multislice:
             plts = [[r*ct,r*st,'g--',''] for r in rings]
             print('displaying pattern...')
             print(h.shape,im0.shape)
-            dsp.stddisp(plts,labs=['$q_x$','$q_y$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
+            dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities
@@ -343,16 +368,20 @@ class Multislice:
             print(red+'logfile not created yet, run a simu first'+black)
             return 0
 
-    def wait_simu(self,ssh_alias='',t=1):
+    def wait_simu(self,ssh_alias='',t=1,hostpath=''):
         state = 0
         while not state=='done':
-            state=self.check_simu_state(ssh_alias,v=0)
+            state=self.check_simu_state(ssh_alias,v=0,hostpath=hostpath)
             print(state)
             time.sleep(t)
 
-    def check_simu_state(self,ssh_alias=None,v=False):
+    def check_simu_state(self,ssh_alias=None,v=False,hostpath=''):
         '''see completion state of a simulation '''
-        if ssh_alias : self.ssh_get(ssh_alias,'log')
+        if ssh_alias :
+            e = self.ssh_get(ssh_alias,'log',hostpath=hostpath)
+            if e:
+                print(red+e+black)
+                if 'No such file' in e:return 'not started'
         try:
             with open(self._outf('log'),'r') as f :
                 lines = f.readlines()  #print(self._outf('log')) #f.readlines())
@@ -407,6 +436,7 @@ class Multislice:
                 'beamstxt'  : self.name+'_beams.txt',
                 'beams'     : self.name+'_beams.npy',
                 'beamssvg'  : self.name+'_beams.svg',
+                'job'       : self.name+'.sh',
                 }
         if self.is_mulslice:
             for dat,i in zip(self.data,self.slices):
@@ -457,42 +487,57 @@ class Multislice:
 
     ########################################################################
     #### Job
-    def _get_job(self,temsim=None,ssh_opt=0):
+    def _get_job(self,temsim=None,cluster=False,datpath=None):
         logfile     = self.outf['log'] #self._outf('log')
         simu_deck   = self.outf['simu_deck'] #self._outf('simu_deck')
         prog        = ['autoslic','mulslice'][self.is_mulslice]
         if not temsim : temsim = temsim_hosts[socket.gethostname()]
         header = self._version_header()
         #write the cmd
-        cmd = 'cd %s &&\n' %self.datpath
-        if ssh_opt :
-            cmd += 'printf \\"%s\\" > %s && \n' %(header,logfile) #overwrite logfile
-        else :
-            cmd += 'printf "%s" > %s && \n' %(header,logfile) #overwrite logfile
+        job = "#!/bin/bash\n"
+        if cluster:job += "#$ -j y\n#$ -cwd\n#$ -V -w e\n"
+        job += '\ncd %s \n' %self.datpath
+        job += 'printf "%s" > %s \n' %(header,logfile) #overwrite logfile
         if self.is_mulslice:
             for i in self.slices :
                 deck = self.outf['slice_deck%s' %i]
-                cmd += 'cat %s | %s >> %s &&\n' %(deck,temsim+'atompot',logfile)
-        cmd += 'cat %s | %s >> %s' %(simu_deck,temsim+prog,logfile)
-        return cmd
+                job += 'cat %s | %s >> %s \n' %(deck,temsim+'atompot',logfile)
+        job += 'cat %s | %s >> %s\n' %(simu_deck,temsim+prog,logfile)
+        #save job
+        if not datpath:datpath=self.datpath
+        with open(datpath+self.outf['job'],'w') as f : f.write(job)
+        print(yellow+datpath+self.outf['job']+black)
 
-    def _get_job_ssh(self,ssh_alias,hostpath=None,v=False):
+    def _get_job_ssh(self,ssh_alias,hostpath=None,v=False,cluster=False):
         #save local datpath
-        datpath = self.datpath
+        datpath  = self.datpath
         hostpath = self._get_hostpath(hostpath)
         self.datpath = hostpath
-        #scp after updating decks with new path
+
+        #save updated deck and job
+        host    = ssh_hosts[ssh_alias]
+        temsim  = temsim_hosts[host]
+        self._get_job(temsim,cluster,datpath)
         self.make_decks(save=True,datpath=datpath)
+
+        #create directory on remote if does not exist
+        cmd = 'ssh %s "if [ ! -d %s ]; then mkdir %s;echo %s created;fi"' %(ssh_alias,hostpath,hostpath,hostpath)
+        print(blue+check_output(cmd,shell=True).decode()+black)
+        #copy files over to remote
         cmd  = 'cd %s && scp ' %(datpath)
         cmd += '%s ' %(' '.join(self.data))
         cmd += '%s ' %(' '.join(list(self.decks.keys())))
-        cmd += '%s:%s'  %(ssh_alias,hostpath)
-        p = Popen(cmd,shell=True)
-        p.wait()
-        #get job cmd
-        host   = ssh_hosts[ssh_alias]
-        temsim = temsim_hosts[host]
-        cmd = self._get_job(temsim,ssh_opt=1)
+        cmd += '%s ' %(self.outf['job'])
+        cmd += '%s:%s' %(ssh_alias,hostpath)
+        # check_output(cmd,shell=True).decode()
+        p = Popen(cmd,shell=True);p.wait()
+
+        # submit job command (qsub for clusters)
+        if cluster:
+            cmd = 'source /etc/bashrc && qsub -S /bin/bash '
+        else :
+            cmd = 'bash '
+        cmd += '%s' %(hostpath+self.outf['job'])
         cmd = 'ssh %s "%s"' %(ssh_alias,cmd)
         #restore
         self.datpath = datpath
@@ -503,12 +548,15 @@ class Multislice:
         if not dest_path : dest_path = self.datpath
         hostpath = self._get_hostpath(hostpath)
         cmd = 'scp %s:%s %s' %(ssh_alias,hostpath+self.outf[file],dest_path)
-        p = Popen(cmd,shell=True)
+        p = Popen(cmd,shell=True,stdout=PIPE,stderr=PIPE)
         p.wait()
-
+        o,e = p.communicate()
+        print(o.decode())
+        return e.decode()
 
     ########################################################################
     #### decks
+    ########################################################################
     def _atompot_deck(self,i):
         # TODO (prevent mulslice from adding the extension automatically for this case )
         dat_file = self._outf('slice_data%s' %i)
@@ -581,7 +629,7 @@ author : Tarik Ronan Drevon
 e-mail : tarik.drevon@stfc.ac.uk
 ------------------------------------------------------------------------------
 ------------------------------------------------------------------------------
-        ''' %(self.version,time.ctime())
+''' %(self.version,time.ctime())
         return header
     def _print_header(self,msg,w=70):
         head='#'*w

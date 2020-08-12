@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<!--
+    Web page written by David Eck, http://math.hws.edu/eck/index.html
+    You can do anything you like with this web page and with the code, but
+    if you use a substantial portion of it, you should include attribution.
+    (Added freehand drawing tool, June 2017.)
+-->
+<html><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<meta charset="UTF-8">
+<title>Wallpaper Symmetry</title>
+<style type="text/css">
+h2, h3 {
+    text-align: center;
+    color: white;
+    font-weight: bold;
+}
+a:link {
+    color: #CCCCFF;
+}
+a:visited {
+    color: #DDDDDD;
+}
+a:active {
+    color: #FFCCCC;
+}
+body {
+    background-color: gray;
+    margin: 0px;
+}
+#canvas  {
+    margin:  0px 10px 10px 10px;
+    padding: 0px;
+    display:block;
+    background-color: white;
+}
+#bb {
+    margin: 0;
+    padding: 0;
+    clear: both;
+}
+input[name="rotations"] {
+    margin-left: 20px;
+}
+</style>
+<script type="text/javascript">
+
+"use strict";
+
+var starting = true;
+
+var canvas, graphics;
+var OSC, OSG; // off-screen canvas and graphics
+
+var items = [];
+var itemCount = 0;
+var dragItem = null;
+
+var translation1, translation2, angle;
+
+var groupNum = 1;
+
+var currentColor = "#000000";
+var currentTool = 0;
+var currentLineWidth = 3;
+var currentLineCap = "round";
+
+var clearedItems = null;
+
+var FREEHAND_TOOL = 5;
+
+var colors = ["#000000", "#FF0000", "#00BB00", "#0000FF", "#00BBBB", "#DD00DD",
+                     "#FFFF00", "#DDDDDD", "#999999", "#555555"];
+
+function drawAll() { 
+    OSG.fillStyle = "#FFFFFF";
+    OSG.fillRect(0,0,canvas.width,canvas.height);
+    translation1 = Number(document.getElementById("translation1").value.trim());
+    if (isNaN(translation1) || translation1 < 30 || translation1 > 400) {
+        document.getElementById("error").innerHTML = "Translation must be a number, 30 to 400.";
+        return;
+    }
+    if (groupNum == 1 || groupNum == 5) {
+        angle = Number(document.getElementById("angle").value.trim());
+        if (isNaN(angle) || angle < 10 || angle > 170) {
+            document.getElementById("error").innerHTML = "Angle must be a number, 10 to 170";
+            return;
+        }
+    }
+    if (groupNum < 10) {
+        translation2 = Number(document.getElementById("translation2").value.trim());
+        if (isNaN(translation2) || translation2 < 30 || translation2 > 400) {
+            document.getElementById("error").innerHTML = "2nd Translation must be a number, 30 to 400.";
+            return;
+        }
+    }
+    document.getElementById("error").innerHTML = "&nbsp;";
+    for (var i = 0; i < itemCount; i++) {
+        drawItem(OSG,items[i]);
+    }
+    graphics.drawImage(OSC,0,0);
+    if (document.getElementById("showGridCB").checked) {
+        drawGrid(graphics);
+    }
+}
+
+function draw() {
+    graphics.drawImage(OSC,0,0);
+    if (dragItem != null) { 
+        drawItem(graphics,dragItem);
+    }
+    if (document.getElementById("showGridCB").checked) {
+        drawGrid(graphics);
+    }
+}
+
+function drawItemToOSC(item) {
+    drawItem(OSG,item);
+    graphics.drawImage(OSC,0,0);
+    if (document.getElementById("showGridCB").checked) {
+        drawGrid(graphics);
+    }
+}
+
+function drawItem(graphics,item) {  
+    if (item.type == FREEHAND_TOOL) {
+        for (var i = 0; i < item.lines.length; i++) {
+            drawItem(graphics,item.lines[i]);
+        }
+        return;
+    }
+    if (item.type > 2) {
+        graphics.fillStyle = item.color;
+    }
+    else {
+        graphics.strokeStyle = item.color;
+        graphics.lineWidth = item.lineWidth;
+        graphics.lineCap = item.lineCap;
+    }
+    var transY;
+    var hOffset;
+    if (groupNum == 1 || groupNum == 5) {
+        transY = translation2 * Math.sin(angle/180*Math.PI);
+        hOffset = Math.cos(angle/180*Math.PI);
+    }
+    else if (groupNum < 10) {
+        transY = translation2;
+        hOffset = 0;
+    }
+    else {
+        transY = translation1;
+        hOffset = 0;
+    }
+    var a,b,i;
+    switch (groupNum) {
+        case 1:
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            break;
+        case 2: // pg
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,item.x1+translation1/2,item.x2+translation1/2,-item.y1,-item.y2);  // horizontal glide reflection
+            break;
+        case 3: // pm
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,item.y1,item.y2);  // horizontal reflextion
+            break;
+        case 4: //cm
+            a = translation1/2;
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,item.y1+transY/2,item.y2+transY/2); // vertical glide reflection
+            drawBasicItem(graphics,item.type,a+item.x1,a+item.x2,item.y1+transY/2,item.y2+transY/2);
+            drawBasicItem(graphics,item.type,a-item.x1,a-item.x2,item.y1,item.y2); 
+            break;
+        case 5: //p2
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,-item.y1,-item.y2); // 180 rotation
+            break;
+        case 6: // pgg
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,item.x1+translation1/2,item.x2+translation1/2,-item.y1,-item.y2);  // horizontal glide reflection
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,item.y1+transY/2,item.y2+transY/2); // vertical glide reflection
+            drawBasicItem(graphics,item.type,-item.x1+translation1/2,-item.x2+translation1/2,-(item.y1+transY/2),-(item.y2+transY/2)); // double glide reflection
+            break;
+        case 7: // pmm
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,-item.y1,-item.y2); // 180 rotation
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,item.y1,item.y2);  // horizontal reflextion
+            drawBasicItem(graphics,item.type,item.x1,item.x2,-item.y1,-item.y2);  // vertical reflection
+            break;
+        case 8: // cmm
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,item.y1,item.y2);
+            drawBasicItem(graphics,item.type,item.x1,item.x2,-item.y1,-item.y2);
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,-item.y1,-item.y2);
+            a = translation1/2;
+            b = transY/2;
+            drawBasicItem(graphics,item.type,item.x1+a,item.x2+a,item.y1+b,item.y2+b);
+            drawBasicItem(graphics,item.type,-item.x1+a,-item.x2+a,item.y1+b,item.y2+b);
+            drawBasicItem(graphics,item.type,item.x1+a,item.x2+a,-item.y1+b,-item.y2+b);
+            drawBasicItem(graphics,item.type,-item.x1+a,-item.x2+a,-item.y1+b,-item.y2+b);
+            break;
+        case 9: // pmg
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,-item.y1,-item.y2); // 180 rotation
+            drawBasicItem(graphics,item.type,item.x1+translation1/2,item.x2+translation1/2,-item.y1,-item.y2);  // horizontal glide reflection
+            drawBasicItem(graphics,item.type,-(item.x1+translation1/2),-(item.x2+translation1/2),item.y1,item.y2);  // horizontal glide reflection
+            break;
+        case 10: // p4
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,-item.y1,-item.y2); // 180 rotation
+            drawBasicItem(graphics,item.type,item.y1,item.y2,-item.x1,-item.x2); // -90 rot.
+            drawBasicItem(graphics,item.type,-item.y1,-item.y2,item.x1,item.x2); // 90 rot.
+            break;
+        case 11: // p4m
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,-item.y1,-item.y2); // 180 rotation
+            drawBasicItem(graphics,item.type,item.y1,item.y2,-item.x1,-item.x2); // -90 rot.
+            drawBasicItem(graphics,item.type,-item.y1,-item.y2,item.x1,item.x2); // 90 rot.
+            
+            drawBasicItem(graphics,item.type,item.x1,item.x2,-item.y1,-item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,item.y1,item.y2); // 180 rotation
+            drawBasicItem(graphics,item.type,-item.y1,-item.y2,-item.x1,-item.x2); // -90 rot.
+            drawBasicItem(graphics,item.type,item.y1,item.y2,item.x1,item.x2); // 90 rot.
+            
+            break;
+        case 12: // p4g
+            drawBasicItem(graphics,item.type,item.x1,item.x2,item.y1,item.y2);  // Untransformed item
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,-item.y1,-item.y2); // 180 rotation
+            drawBasicItem(graphics,item.type,item.y1,item.y2,-item.x1,-item.x2); // -90 rot.
+            drawBasicItem(graphics,item.type,-item.y1,-item.y2,item.x1,item.x2); // 90 rot.
+            
+            drawBasicItem(graphics,item.type,translation1/2-item.x1,translation1/2-item.x2,translation1/2-item.y1,translation1/2-item.y2);  
+            drawBasicItem(graphics,item.type,translation1/2+item.x1,translation1/2+item.x2,translation1/2+item.y1,translation1/2+item.y2); 
+            drawBasicItem(graphics,item.type,translation1/2-item.y1,translation1/2-item.y2,translation1/2+item.x1,translation1/2+item.x2); 
+            drawBasicItem(graphics,item.type,translation1/2+item.y1,translation1/2+item.y2,translation1/2-item.x1,translation1/2-item.x2); 
+            
+            drawBasicItem(graphics,item.type,translation1/2-item.x1,translation1/2-item.x2,item.y1,item.y2);  
+            drawBasicItem(graphics,item.type,translation1/2+item.x1,translation1/2+item.x2,-item.y1,-item.y2); 
+            drawBasicItem(graphics,item.type,translation1/2-item.y1,translation1/2-item.y2,-item.x1,-item.x2); 
+            drawBasicItem(graphics,item.type,translation1/2+item.y1,translation1/2+item.y2,item.x1,item.x2); 
+            
+            drawBasicItem(graphics,item.type,item.x1,item.x2,translation1/2-item.y1,translation1/2-item.y2);  
+            drawBasicItem(graphics,item.type,-item.x1,-item.x2,translation1/2+item.y1,translation1/2+item.y2); 
+            drawBasicItem(graphics,item.type,item.y1,item.y2,translation1/2+item.x1,translation1/2+item.x2); 
+            drawBasicItem(graphics,item.type,-item.y1,-item.y2,translation1/2-item.x1,translation1/2-item.x2); 
+            
+            break;
+        case 13: // p3
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,0);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,2*Math.PI/3);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,-2*Math.PI/3);
+            break;
+        case 14: // p3m1
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,0);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,2*Math.PI/3);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,-2*Math.PI/3);
+            drawBasicItemHex(graphics,item.type,-item.x1,-item.x2,item.y1,item.y2,0);
+            drawBasicItemHex(graphics,item.type,-item.x1,-item.x2,item.y1,item.y2,2*Math.PI/3);
+            drawBasicItemHex(graphics,item.type,-item.x1,-item.x2,item.y1,item.y2,-2*Math.PI/3);
+            break;
+        case 15: // p31m
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,0);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,2*Math.PI/3);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,-2*Math.PI/3);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,-item.y1,-item.y2,0);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,-item.y1,-item.y2,2*Math.PI/3);
+            drawBasicItemHex(graphics,item.type,item.x1,item.x2,-item.y1,-item.y2,-2*Math.PI/3);
+            break;
+        case 16: // p6
+            for (i = 0; i < 6; i++) {
+                drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,i*Math.PI/3);
+            }
+            break;
+        case 17: // p6m
+            for (i = 0; i < 6; i++) {
+                drawBasicItemHex(graphics,item.type,item.x1,item.x2,item.y1,item.y2,i*Math.PI/3);
+                drawBasicItemHex(graphics,item.type,-item.x1,-item.x2,item.y1,item.y2,i*Math.PI/3);
+            }
+            break;
+    }
+    function drawBasicItem(graphics,type,x1,x2,y1,y2) {
+        var minX = Math.min(x1,x2) - 10;
+        var maxX = Math.max(x1,x2) + 10;
+        var minY = Math.min(y1,y2) - 10;
+        var maxY = Math.max(y1,y2) + 10;
+        var startY = -transY * Math.floor(maxY/transY);
+        var startX = -translation1 * Math.floor( maxX/translation1 );
+        var ty = startY;
+        while (ty+minY < canvas.height) {
+            graphics.save();
+            graphics.translate(0,ty);
+            var tx = startX;
+            if (Math.abs(hOffset) > 1e-6) {
+                tx -= hOffset * ty;
+                while (tx+maxX < 0)
+                    tx += translation1;
+                while (tx+maxX > translation1)
+                    tx -= translation1;
+            }
+            while (tx+minX < canvas.width) {
+                graphics.save();
+                graphics.translate(tx,0);
+                if (type == 0)
+                    graphics.strokeLine(x1, y1, x2, y2);
+                else if (type == 1)
+                    graphics.strokeRectFromCorners(x1, y1, x2, y2);
+                else if (type == 2)
+                    graphics.strokeOval(x1, y1, x2, y2);
+                else if (type == 3)
+                    graphics.fillRectFromCorners(x1, y1, x2, y2);
+                else 
+                    graphics.fillOval(x1, y1, x2, y2);
+                graphics.restore();
+                tx += translation1;
+            }
+            graphics.restore();
+            ty += transY;
+        }
+    }
+    function drawBasicItemHex(graphics,type,x1,x2,y1,y2,theta) {
+        var s = Math.sin(theta);
+        var c = Math.cos(theta);
+        var xc = (x1+x2)/2;
+        var yc = (y1+y2)/2;
+        var radius = Math.sqrt( (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2) ) / 2;
+        
+        var temp = c*xc-s*yc; // do rotation of center
+        yc = s*xc+c*yc;
+        xc = temp;
+
+        var minX = xc - radius - 10;
+        var maxX = xc + radius + 10;
+        var minY = yc - radius - 10;
+        var maxY = yc + radius + 10;
+        var trans = translation1;
+        var transH = trans * 2/ Math.sqrt(3);
+        var startY = -trans * Math.floor(maxY/trans);
+        var startX = -transH * Math.floor(maxX/transH);
+        var ty = startY;
+        var hOffset = -Math.sqrt(3);
+        while (ty+minY < canvas.height) {
+            graphics.save();
+            graphics.translate(0,ty);
+            var tx = startX;
+            tx -= hOffset * ty;
+            while (tx+maxX < 0)
+                tx += transH;
+            while (tx+maxX > transH)
+                tx -= transH;
+            while (tx+minX < canvas.width) {
+                graphics.save();
+                graphics.translate(tx,0);
+                graphics.rotate(theta);
+                if (type == 0)
+                    graphics.strokeLine(x1, y1, x2, y2);
+                else if (type == 1)
+                    graphics.strokeRectFromCorners(x1, y1, x2, y2);
+                else if (type == 2)
+                    graphics.strokeOval(x1, y1, x2, y2);
+                else if (type == 3)
+                    graphics.fillRectFromCorners(x1, y1, x2, y2);
+                else 
+                    graphics.fillOval(x1, y1, x2, y2);
+                graphics.restore();
+                tx += transH;
+            }
+            graphics.restore();
+            ty += trans;
+        }
+    }
+}
+    
+function drawGrid(graphics) { 
+    graphics.save();
+    graphics.lineWidth = 1;
+    graphics.lineCap = "butt";
+    graphics.globalAlpha = 0.5;
+    for (var i = 0; i < 2; i++) {
+        graphics.save();
+        if (i == 1) {
+            graphics.strokeStyle = "black";
+            graphics.translate(0.5,0.5);
+        }
+        else {
+            graphics.strokeStyle = "white";
+            graphics.translate(-0.5,-0.5);
+        }
+        var y,dy;
+        var w = canvas.width;
+        var h = canvas.height;
+        if (groupNum < 10) {
+            if (angle != 90 && (groupNum == 1 || groupNum == 5)) 
+                dy = translation2 * Math.sin(angle/180*Math.PI);
+            else
+                dy = translation2;
+        }
+        else {
+            dy = translation1;
+        }
+        y = dy;
+        while (y < h) {
+            graphics.strokeLine(0,y,w,y);
+            y += dy;
+        }
+        var x,dx;
+        if (groupNum < 13 && (angle == 90 || groupNum != 1 && groupNum != 5)) {
+            x = dx = translation1;
+            while (x < w) {
+                graphics.strokeLine(x,0,x,h);
+                x += dx;
+            }
+        }
+        else if (groupNum < 13) {
+            var offset = -h*Math.cos(angle/180*Math.PI);
+            dx = translation1;
+            if (offset > 0) {
+                x = 0;
+                while (x + offset > dx)
+                    x -= dx;
+                while (x < w) {
+                    graphics.strokeLine(x,0,x+offset,h);
+                    x += dx;
+                }
+            }
+            else {
+                x = dx;
+                while (x + offset < w) {
+                    graphics.strokeLine(x,0,x+offset,h);
+                    x += dx;
+                }
+            }
+        }
+        else {
+            var offset = h/Math.sqrt(3);
+            dx = translation1*2/Math.sqrt(3);
+            x = 0;
+            while (x + offset > dx)
+                x -= dx;
+            while (x < w) {
+                graphics.strokeLine(x,0,x+offset,h);
+                x += dx;
+            }
+            offset = -offset;
+            x = dx;
+            while (x + offset < w) {
+                graphics.strokeLine(x,0,x+offset,h);
+                x += dx;
+            }
+        }
+        graphics.restore();
+    }
+    graphics.restore();
+}
+
+function undo() {
+    if (clearedItems != null) {
+        items = clearedItems;
+        itemCount = items.length;
+        drawAll();
+        document.getElementById("undo").disabled = false;
+        document.getElementById("redo").disabled = true;
+        clearedItems = null;
+    }
+    else if (itemCount > 0) {
+        itemCount--;
+        drawAll();
+        if (itemCount == 0)
+            document.getElementById("undo").disabled = true;
+        document.getElementById("redo").disabled = false;
+    }
+}
+
+function redo() {
+    if (itemCount < items.length) {
+        itemCount++;
+        drawAll();
+        if (itemCount == items.length)
+            document.getElementById("redo").disabled = true;
+        document.getElementById("undo").disabled = false;
+    }
+}
+
+function clearDrawing() {
+    if (items.length == 0)
+        return;
+    if (itemCount > 0) {
+        if (items.length > itemCount)
+            items.splice(itemCount,items.length-itemCount);
+        clearedItems = items;
+    }
+    else {
+        clearedItems = null;
+    }
+    items = [];
+    itemCount = 0;
+    drawAll();
+    document.getElementById("redo").disabled = true;
+    document.getElementById("undo").disabled = clearedItems == null;
+}
+
+function selectColor(color) {
+    currentColor = colors[color];
+}
+
+function selectLineWidth(lineWidth) {
+    currentLineWidth = Number(lineWidth);
+    if (currentTool == FREEHAND_TOOL || currentLineWidth >= 3) {
+        currentLineCap = "round";
+    }
+    else {
+        currentLineCap = "butt";
+    }
+}
+
+function selectTool(tool) {
+    currentTool = tool;
+    if (currentTool == FREEHAND_TOOL || currentLineWidth >= 3) {
+        currentLineCap = "round";
+    }
+    else {
+        currentLineCap = "butt";
+    }
+}
+
+function selectGroup(num) {
+    num = Number(num);
+    if (num == groupNum)
+        return;
+    groupNum = num;
+    if (num == 1 || num == 5) {
+        document.getElementById("angleholder").style.display = "inline";
+    }
+    else {
+        document.getElementById("angleholder").style.display = "none";
+    }
+    if (num < 10) {
+        document.getElementById("trans2holder").style.display = "inline";
+    }
+    else {
+        document.getElementById("trans2holder").style.display = "none";
+    }
+    drawAll();
+}
+
+function installMouser(theCanvas) {
+    function convertX(clientX) {
+        return clientX - theCanvas.getBoundingClientRect().left;
+    }
+    function convertY(clientY) {
+        return clientY - theCanvas.getBoundingClientRect().top;
+    }
+    function doMouseDrag(evt){
+        if (dragItem == null)
+           return;
+        dragItem.x2 = convertX(evt.clientX);
+        dragItem.y2 = convertY(evt.clientY);
+        if (currentTool == FREEHAND_TOOL) {
+            var segment = {};
+            segment.type = 0;
+            segment.color = currentColor;
+            segment.lineWidth = currentLineWidth;
+            segment.lineCap = currentLineCap;
+            segment.x1 = dragItem.x1;
+            segment.x2 = dragItem.x2;
+            segment.y1 = dragItem.y1;
+            segment.y2 = dragItem.y2;
+            dragItem.lines.push(segment);
+            drawItemToOSC(segment);
+            dragItem.x1 = segment.x2;
+            dragItem.y1 = segment.y2;
+        }
+        else {
+            draw();
+        }
+        evt.preventDefault();
+    }
+    function doMouseUp(evt){
+        if (dragItem == null)
+            return;
+        theCanvas.removeEventListener("mousemove", doMouseDrag);
+        document.removeEventListener("mouseup", doMouseUp);
+        if ( (currentTool == FREEHAND_TOOL && dragItem.lines.length > 0)
+                    || (currentTool == 0 && (dragItem.x1 != dragItem.x2 || dragItem.y1 != dragItem.y2))
+                    || (currentTool > 0 && currentTool < FREEHAND_TOOL && dragItem.x1 != dragItem.x2 && dragItem.y1 != dragItem.y2)) {
+            if (itemCount < items.length)
+                items.splice(itemCount,items.length-itemCount);
+            items.push(dragItem);
+            itemCount = items.length;
+            document.getElementById("undo").disabled = false;
+            document.getElementById("redo").disabled = true;
+            clearedItems = null;
+            if (currentTool != FREEHAND_TOOL) {
+               drawItemToOSC(dragItem);
+            }
+        }
+        dragItem = null;
+        evt.preventDefault();
+    }
+    function doMouseDown(evt){
+        if (starting) {
+            drawAll();
+            starting = false;
+        }
+        if (dragItem != null || evt.button > 0)
+           return;
+        theCanvas.addEventListener("mousemove", doMouseDrag);
+        document.addEventListener("mouseup", doMouseUp);
+        dragItem = {};
+        dragItem.type = currentTool;
+        dragItem.color = currentColor;
+        dragItem.lineWidth = currentLineWidth;
+        dragItem.lineCap = currentLineCap;
+        dragItem.x1 = dragItem.x2 = convertX(evt.clientX);
+        dragItem.y1 = dragItem.y2 = convertY(evt.clientY);
+        if (currentTool == FREEHAND_TOOL) {
+            dragItem.lines = [];
+        }
+        evt.preventDefault();
+    }
+    theCanvas.addEventListener("mousedown", doMouseDown);
+}
+
+function installTouchHandler(theCanvas) {
+    function convertX(clientX) {
+        return clientX - theCanvas.getBoundingClientRect().left;
+    }
+    function convertY(clientY) {
+        return clientY - theCanvas.getBoundingClientRect().top;
+    }
+    function doTouchMove(evt){
+        if (dragItem == null)
+           return;
+        if (evt.touches.length != 1) {
+           doTouchEnd(evt);
+           return;
+        }
+        dragItem.x2 = convertX(evt.touches[0].clientX);
+        dragItem.y2 = convertY(evt.touches[0].clientY);
+        if (currentTool == FREEHAND_TOOL) {
+            var segment = {};
+            segment.type = 0;
+            segment.color = currentColor;
+            segment.lineWidth = currentLineWidth;
+            segment.lineCap = currentLineCap;
+            segment.x1 = dragItem.x1;
+            segment.x2 = dragItem.x2;
+            segment.y1 = dragItem.y1;
+            segment.y2 = dragItem.y2;
+            dragItem.lines.push(segment);
+            drawItemToOSC(segment);
+            dragItem.x1 = segment.x2;
+            dragItem.y1 = segment.y2;
+        }
+        else {
+            draw();
+        }
+        evt.preventDefault();
+    }
+    function doTouchEnd(evt){
+        if (dragItem == null)
+            return;
+        theCanvas.removeEventListener("touchmove",doTouchMove);
+        theCanvas.removeEventListener("touchend",doTouchEnd);
+        theCanvas.removeEventListener("touchcancel",doTouchCancel);
+        if ( (currentTool == FREEHAND_TOOL && dragItem.lines.length > 0)
+                    ||(currentTool == 0 && (dragItem.x1 != dragItem.x2 || dragItem.y1 != dragItem.y2))
+                    || (currentTool > 0 && currentTool < FREEHAND_TOOL && dragItem.x1 != dragItem.x2 && dragItem.y1 != dragItem.y2)) {
+            if (itemCount < items.length)
+                items.splice(itemCount,items.length-itemCount);
+            items.push(dragItem);
+            itemCount = items.length;
+            document.getElementById("undo").disabled = false;
+            document.getElementById("redo").disabled = true;
+            clearedItems = null;
+            if (currentTool != FREEHAND_TOOL) {
+               drawItemToOSC(dragItem);
+            }
+        }
+        dragItem = null;
+        evt.preventDefault();
+    }
+    function doTouchStart(evt){
+        if (starting) {
+            drawAll();
+            starting = false;
+        }
+        if (evt.touches.length != 1) {
+           doTouchEnd(evt);
+           return;
+        }
+        evt.preventDefault();
+        if (dragItem != null) {
+            doTouchEnd();
+        }
+        theCanvas.addEventListener("touchmove",doTouchMove);
+        theCanvas.addEventListener("touchend",doTouchEnd);
+        theCanvas.addEventListener("touchcancel",doTouchCancel);
+        dragItem = {};
+        dragItem.type = currentTool;
+        dragItem.color = currentColor;
+        dragItem.lineWidth = currentLineWidth;
+        dragItem.lineCap = currentLineCap;
+        dragItem.x1 = dragItem.x2 = convertX(evt.touches[0].clientX);
+        dragItem.y1 = dragItem.y2 = convertY(evt.touches[0].clientY);
+        if (currentTool == FREEHAND_TOOL) {
+            dragItem.lines = [];
+        }
+    }
+    function doTouchCancel() {
+        if (touchCancelFunc) {
+            touchCancelFunc();
+        }
+    }
+    theCanvas.addEventListener("touchstart", doTouchStart);
+}
+
+
+function addExtraFunctionsToGraphics(graphics) {
+    graphics.strokeLine = function(x1,y1,x2,y2) {
+       graphics.beginPath();
+       graphics.moveTo(x1,y1);
+       graphics.lineTo(x2,y2);
+       graphics.stroke();
+    }
+   graphics.fillOval = function(x1,y1,x2,y2) {
+       var x,y,horizontalRadius,verticalRadius;
+       x = Math.min(x1,x2);
+       y = Math.min(y1,y2);
+       horizontalRadius = (Math.max(x1,x2) - x) / 2;
+       verticalRadius = (Math.max(y1,y2) - y) / 2;
+       x += horizontalRadius;
+       y += verticalRadius;
+       graphics.save();
+       graphics.translate(x,y);
+       graphics.scale(horizontalRadius,verticalRadius);
+       graphics.beginPath();
+       graphics.arc(0,0,1,0,2*Math.PI,false);
+       graphics.restore();
+       graphics.fill();
+    }
+    graphics.strokeOval = function(x1,y1,x2,y2) {
+       var x,y,horizontalRadius,verticalRadius;
+       x = Math.min(x1,x2);
+       y = Math.min(y1,y2);
+       horizontalRadius = (Math.max(x1,x2) - x) / 2;
+       verticalRadius = (Math.max(y1,y2) - y) / 2;
+       x += horizontalRadius;
+       y += verticalRadius;
+       graphics.save();
+       graphics.translate(x,y);
+       graphics.scale(horizontalRadius,verticalRadius);
+       graphics.beginPath();
+       graphics.arc(0,0,1,0,2*Math.PI,false);
+       graphics.restore();
+       graphics.stroke();
+    }
+    graphics.fillRectFromCorners = function(x1,y1,x2,y2) {
+       var x,y,width,height;
+       x = Math.min(x1,x2);
+       y = Math.min(y1,y2);
+       width = Math.max(x1,x2) - x;
+       height = Math.max(y1,y2) - y;
+       graphics.fillRect(x,y,width,height);
+    }
+    graphics.strokeRectFromCorners = function(x1,y1,x2,y2) {
+       var x,y,width,height;
+       x = Math.min(x1,x2);
+       y = Math.min(y1,y2);
+       width = Math.max(x1,x2) - x;
+       height = Math.max(y1,y2) - y;
+       graphics.strokeRect(x,y,width,height);
+    }
+}
+
+
+function init() {
+
+    try {
+        canvas = document.getElementById("canvas");
+        graphics = canvas.getContext("2d");
+        addExtraFunctionsToGraphics(graphics);
+        OSC = document.createElement("canvas");
+        OSC.width = canvas.width;
+        OSC.height = canvas.height;
+        OSG = OSC.getContext("2d");
+        addExtraFunctionsToGraphics(OSG);
+        OSG.fillStyle = "white";
+        OSG.fillRect(0,0,canvas.width,canvas.height);
+    }
+    catch (e) {
+        document.getElementById("bb").innerHTML =
+              "Sorry, could not create the graphics context that is required for this page.";
+        return;
+    }
+
+    document.getElementById("g1").checked = true;
+    document.getElementById("t" + currentTool).checked = true;
+    document.getElementById("lw" + currentLineWidth).checked = true;
+    document.getElementById("c0").checked = true;
+    document.getElementById("undo").disabled = true;
+    document.getElementById("redo").disabled = true;
+    document.getElementById("translation1").value = "150";
+    document.getElementById("translation2").value = "100";
+    document.getElementById("angle").value = "90";
+    document.getElementById("showGridCB").checked = false;
+    installMouser(canvas);
+    installTouchHandler(canvas);
+    drawAll();  // ??? Show Grid won't draw grid if it's the first thing done, unless this is here -- WHY ???
+    graphics.font = "14pt Serif";
+    graphics.fillStyle = "black";
+    graphics.fillText("Drag with left-mouse button in white area.", 15,30);
+    graphics.fillText("(Or use your finger on a touch screen.)", 15, 48);
+}
+
+</script>
+</head>
+<body onload="init()">
+
+<noscript>
+<h2 style="color:#900">Sorry, this page requires JavaScript</h2>
+</noscript>
+
+
+<h2>Wallpaper Symmetry</h2>
+
+
+<h3>(<a href="http://math.hws.edu/eck/js/symmetry/symmetry-info.html">Click here</a> for info and instructions.)</h3>
+
+
+<table cellspacing="5" cellpadding="5" border="0" align="center">
+<tbody><tr>
+<td colspan="3" bgcolor="#DDDDDD">
+    <label for="translation1">Translation Amount:</label> <input type="text" size="3" id="translation1" value="150">
+    <span id="trans2holder" style="margin-left: 0.5cm; display: none;">
+        <label for="translation2">2nd Translation:</label> <input type="text" size="3" id="translation2" value="100">
+    </span>
+    <span id="angleholder" style="margin-left: 0.5cm; display: none;">
+        <label for="angle">Angle:</label> <input type="text" size="3" id="angle" value="90">
+    </span>
+    <button style="margin-left:0.2cm" onclick="drawAll()">Apply</button>
+    <span id="error" style="margin-left:.5cm; color:#900000">&nbsp;</span>
+</td>
+</tr>
+<tr>
+<td valign="top" bgcolor="#DDDDDD">
+<p>
+<b>Symmetry Group:</b><br><br>
+<input type="radio" name="group" value="1" id="g1" onclick="selectGroup(this.value)"> <label for="g1">p1</label><br>
+<input type="radio" name="group" value="2" id="g2" onclick="selectGroup(this.value)"> <label for="g2">pg</label><br>
+<input type="radio" name="group" value="3" id="g3" onclick="selectGroup(this.value)"> <label for="g3">pm</label><br>
+<input type="radio" name="group" value="4" id="g4" onclick="selectGroup(this.value)"> <label for="g4">cm</label><br><br>
+<input type="radio" name="group" value="5" id="g5" onclick="selectGroup(this.value)"> <label for="g5">p2</label><br>
+<input type="radio" name="group" value="6" id="g6" onclick="selectGroup(this.value)"> <label for="g6">pgg</label><br>
+<input type="radio" name="group" value="7" id="g7" onclick="selectGroup(this.value)"> <label for="g7">pmm</label><br>
+<input type="radio" name="group" value="8" id="g8" onclick="selectGroup(this.value)"> <label for="g8">cmm</label><br>
+<input type="radio" name="group" value="9" id="g9" onclick="selectGroup(this.value)"> <label for="g9">pmg</label><br><br>
+<input type="radio" name="group" value="10" id="g10" onclick="selectGroup(this.value)"> <label for="g10">p4</label><br>
+<input type="radio" name="group" value="11" id="g11" onclick="selectGroup(this.value)"> <label for="g11">p4m</label><br>
+<input type="radio" name="group" value="12" id="g12" onclick="selectGroup(this.value)"> <label for="g12">p4g</label><br><br>
+<input type="radio" name="group" value="13" id="g13" onclick="selectGroup(this.value)"> <label for="g13">p3</label><br>
+<input type="radio" name="group" value="14" id="g14" onclick="selectGroup(this.value)"> <label for="g14">p3m1</label><br>
+<input type="radio" name="group" value="15" id="g15" onclick="selectGroup(this.value)" checked="checked"> <label for="g15">p31m</label><br><br>
+<input type="radio" name="group" value="16" id="g16" onclick="selectGroup(this.value)"> <label for="g16">p6</label><br>
+<input type="radio" name="group" value="17" id="g17" onclick="selectGroup(this.value)"> <label for="g17">p6m</label>
+</p>
+</td>
+<td valign="top">
+<canvas id="canvas" width="600" height="600"><p style="color:red">Sorry. This web page requires canvas graphics,<br>
+which your web browser does not support.</p></canvas>
+<p id="bb" align="center">
+<button id="undo" onclick="undo()">Undo</button>
+   <button id="redo" onclick="redo()" disabled="disabled">Redo</button>
+   <button id="clear" onclick="clearDrawing()">Clear</button>
+   <input type="checkbox" onchange="draw()" id="showGridCB" style="margin-left:10px"><label for="showGridCB" style="color:white">Show&nbsp;Grid</label>
+</p>
+</td>
+<td valign="top" bgcolor="#DDDDDD">
+<b>Tool:</b><br>
+<input type="radio" name="tool" value="0" id="t0" onclick="selectTool(this.value)"> <label for="t0">Line</label><br>
+<input type="radio" name="tool" value="1" id="t1" onclick="selectTool(this.value)"> <label for="t1">Rectangle</label><br>
+<input type="radio" name="tool" value="2" id="t2" onclick="selectTool(this.value)"> <label for="t2">Oval</label><br>
+<input type="radio" name="tool" value="3" id="t3" onclick="selectTool(this.value)"> <label for="t3">Filled Rect</label><br>
+<input type="radio" name="tool" value="4" id="t4" onclick="selectTool(this.value)" checked="checked"> <label for="t4">Filled Oval</label><br>
+<input type="radio" name="tool" value="5" id="t5" onclick="selectTool(this.value)"> <label for="t5" title="Note: Freehand drawing significantly increases time for Undo / Redo / Change-of-Group">Freehand</label><br>
+<p></p>
+<p>
+<b>Line Width:</b><br>
+<input type="radio" name="linewidth" value="1" id="lw1" onclick="selectLineWidth(this.value)"> <label for="lw1">1</label><br>
+<input type="radio" name="linewidth" value="2" id="lw2" onclick="selectLineWidth(this.value)"> <label for="lw2">2</label><br>
+<input type="radio" name="linewidth" value="3" id="lw3" onclick="selectLineWidth(this.value)" checked="checked"> <label for="lw3">3</label><br>
+<input type="radio" name="linewidth" value="4" id="lw4" onclick="selectLineWidth(this.value)"> <label for="lw4">4</label><br>
+<input type="radio" name="linewidth" value="5" id="lw5" onclick="selectLineWidth(this.value)"> <label for="lw5">5</label><br>
+<input type="radio" name="linewidth" value="10" id="lw10" onclick="selectLineWidth(this.value)"> <label for="lw10">10</label><br>
+<input type="radio" name="linewidth" value="20" id="lw20" onclick="selectLineWidth(this.value)"> <label for="lw20">20</label><br>
+</p>
+<p>
+<b>Color:</b><br>
+<input type="radio" name="color" value="0" id="c0" onclick="selectColor(this.value)" checked="checked"> <label for="c0">Black</label><br>
+<input type="radio" name="color" value="1" id="c1" onclick="selectColor(this.value)"> <label for="c1">Red</label><br>
+<input type="radio" name="color" value="2" id="c2" onclick="selectColor(this.value)"> <label for="c2">Green</label><br>
+<input type="radio" name="color" value="3" id="c3" onclick="selectColor(this.value)"> <label for="c3">Blue</label><br>
+<input type="radio" name="color" value="4" id="c4" onclick="selectColor(this.value)"> <label for="c4">Cyan</label><br>
+<input type="radio" name="color" value="5" id="c5" onclick="selectColor(this.value)"> <label for="c5">Magenta</label><br>
+<input type="radio" name="color" value="6" id="c6" onclick="selectColor(this.value)"> <label for="c6">Yellow</label><br>
+<input type="radio" name="color" value="7" id="c7" onclick="selectColor(this.value)"> <label for="c7">Light Gray</label><br>
+<input type="radio" name="color" value="8" id="c8" onclick="selectColor(this.value)"> <label for="c8">Gray</label><br>
+<input type="radio" name="color" value="9" id="c9" onclick="selectColor(this.value)"> <label for="c9">Dark Gray</label><br>
+</p>
+</td>
+</tr>
+</tbody></table>
+
+
+
+</body></html>

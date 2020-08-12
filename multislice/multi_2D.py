@@ -1,7 +1,7 @@
 import pickle
 import numpy as np
 import scipy.fftpack as fft
-from scipy.integrate import nquad,simps,quad
+from scipy.integrate import nquad,trapz,quad
 import utils.displayStandards as dsp
 import utils.physicsConstants as cst
 import utils.glob_colors as colors
@@ -10,7 +10,7 @@ import utils.glob_colors as colors
 # import utils.FourierUtils as fu
 
 
-class multi2D():
+class Multi2D():
     '''multislice 2D for quick testing
     - pattern,ax,bz : x,z,f
     - Nx : increase supercell size
@@ -18,11 +18,12 @@ class multi2D():
     - nz : number of slices
     - ppopt:T(Transmission)P(propagator)Q(Psi_q)X(Psi_x)B(beams)Z(Psi_xz)Y(Psi_qz)
     - iZs,iZv : frequency of save and verbose
+    - copt: crop option with propagator
     '''
     def __init__(self,
             pattern,ax,bz,
             keV=200,Nx=1,
-            dz=1,nz=1,copt=1,
+            dz=1,nz=1,copt=1,eps=1,
             iZs=1,iZv=1,ppopt=''):
         self.version = 0.1
         self.pattern = pattern
@@ -37,7 +38,7 @@ class multi2D():
         self.sig = cst.keV2sigma(keV)
         self.k0 = 1/self.lam
         #Computations
-        self._set_transmission_function()
+        self._set_transmission_function(eps)
         self._set_propagator()
         self.set_Psi0()
         self.propagate(nz,iZs,iZv,copt)
@@ -110,7 +111,8 @@ class multi2D():
 
     def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',**kwargs):
         '''Show selected beam iBs as function of thickness '''
-        Ib = self.psi_qz #np.abs()**2
+        # Ib = self.psi_qz #np.abs()**2
+        Ib = self.psi_qz/self.nx**2/self.dq
         if isinstance(iBs,str):
             N   = int(self.nx/2)
             iHs = fft.fftshift(np.arange(-N,N))
@@ -125,27 +127,32 @@ class multi2D():
         Ib   = Ib[:,iBs]
         h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
         cs   = dsp.getCs(cmap,iBs.size)
-        plts = [[self.z,Ib[:,i],cs[i],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
+        plts = [[self.z,Ib[:,i],[cs[i],'-'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
         return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],
         **kwargs)
 
-    def Xxz_show(self,**kwargs):
+    def Xxz_show(self,iZs=1,iXs=1,**kwargs):
         '''Show 2D wave propagation solution'''
+        if isinstance(iZs,int):iZs=slice(0,-1,iZs)
+        if isinstance(iXs,int):iZs=slice(0,-1,iXs)
         x,z = np.meshgrid(self.x,self.z)
-        im = [x,z,self.psi_xz]
+        im = [x[iZs,:],z[iZs,:],self.psi_xz[iZs,:]]
         return dsp.stddisp(im=im,labs=[r'$x(\AA)$',r'$z(\AA)$'],
         **kwargs)
+
     def Qxz_show(self,**kwargs):
         '''Show 2D wave propagation solution'''
         q,z = np.meshgrid(self.q,self.z)
         im = [q,z,self.psi_qz]
         return dsp.stddisp(im=im,labs=[r'$q(\AA^{-1})$',r'$z(\AA)$'],
         **kwargs)
+    def getI(self):return self.psi_qz[-1,:]
+    def getQ(self):return self.q,self.psi_qz[-1,:]
 
     ##################################################################
     ###### main computations
     ##################################################################
-    def _set_transmission_function(self):
+    def _set_transmission_function(self,eps=1):
         x,z,f = self.pattern
         nx = x.size
         ns = int(np.round(self.bz/self.dz))
@@ -154,16 +161,16 @@ class multi2D():
         iZs = np.arange(0,ns+1)*int(z.size/ns)
         for i_s in range(ns):
             s=slice(iZs[i_s],iZs[i_s+1])
-            Vz[i_s,:] = 1.25*np.array([simps(f[s,i],z[s]) for i in range(nx)])
+            Vz[i_s,:] = eps*np.array([trapz(f[s,i],z[s]) for i in range(nx)])
         print('Slice thickness and slices per cell:\ndz=%.2f \nnzs=%d\n' %(self.dz,ns))
 
         T  = np.exp(1J*self.sig*Vz)
         #repeat pattern
         Nx = self.Nx
         self.x  = np.hstack([x + self.ax*i for i in range(Nx)])
-        self.Vz = np.vstack([Vz]*Nx)
-        self.T  = np.vstack([T]*Nx)
-        self.nx = x.size
+        self.Vz = np.hstack([Vz]*Nx)
+        self.T  = np.hstack([T]*Nx)             #;print(self.T.shape)
+        self.nx = self.x.size                   #;print(self.nx)
         self.ns = ns
 
     def _set_propagator(self):
@@ -209,6 +216,7 @@ class multi2D():
                 self.psi_qz[self.iz,:] = np.abs(self.Psi_q)**2
                 self.iz+=1
             if msg:print(colors.green+msg+colors.black)
+
 
 
 def load(filename):

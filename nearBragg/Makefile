@@ -1,6 +1,7 @@
-
 nearBragg :
-	gcc -O -o bin/nearBragg nearBragg.c -lm -static
+	gcc -O  -o bin/nearBragg nearBragg.c -lm -static
+neardbg :
+	gcc -O -g -o bin/nearBragg_g nearBragg.c -lm -static
 run :
 	./bin/nearBragg -file dat/atoms.txt -lambda 1.0
 	convert -depth 16 -type Grayscale -colorspace GRAY -endian LSB \

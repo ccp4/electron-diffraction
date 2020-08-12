@@ -19,8 +19,8 @@ dispersion in percent
 #include <string.h>
 #include <math.h>
 
-#define PI 3.14159265358979
-#define twoPI 6.28318530717959
+#define PI 3.141592653589793
+#define twoPI 6.283185307179586
 double RTD = 180.0/PI;
 
 /* rotate a 3-vector in space applied in order phix,phiy,phiz*/
@@ -53,6 +53,8 @@ char *floatfilename = "floatimage.bin\0";
 char *sinfilename = "sinimage.bin\0";
 char *cosfilename = "cosimage.bin\0";
 char *intfilename = "intimage.img\0";
+char *Ifilename = "I.txt\0";
+
 FILE *outfile = NULL;
 
 int main(int argc, char** argv)
@@ -361,6 +363,10 @@ int main(int argc, char** argv)
             if(strstr(argv[i], "-intfile") && (argc > (i+1)))
             {
                 intfilename = argv[i+1];
+            }
+            if(strstr(argv[i], "-Ifilename") && (argc > (i+1)))
+            {
+                Ifilename = argv[i+1];
             }
             if(strstr(argv[i], "-scale") && (argc > (i+1)))
             {
@@ -1047,7 +1053,7 @@ exit(9);
 					}else{
 					    source_to_atom_path = sqrt((source_X-atomX[i])*(source_X-atomX[i])+(source_Y-atomY[i])*(source_Y-atomY[i])+(source_Z-atomZ[i])*(source_Z-atomZ[i]));
 					}
-					atom_to_pixel_path  = sqrt((pixel_X-atomX[i])*(pixel_X-atomX[i])+(pixel_Y-atomY[i])*(pixel_Y-atomY[i])+(pixel_Z-atomZ[i])*(pixel_Z-atomZ[i]));
+					atom_to_pixel_path  = sqrt((pixel_X-atomX[i])*(pixel_X-atomX[i])+0*(pixel_Y-atomY[i])*(pixel_Y-atomY[i])+(pixel_Z-atomZ[i])*(pixel_Z-atomZ[i]));
 
 					/* calculate how many radians (2*pi*cycles) from source to detector point */
 					phase = twoPI*(source_to_atom_path+atom_to_pixel_path)/lambda + phsft[i];
@@ -1083,7 +1089,7 @@ exit(9);
 					Fb += DWF*sin(phase)/source_to_atom_path/atom_to_pixel_path;
 					if( debug && printout && ((xpixel==printout_xpixel && ypixel==printout_ypixel) || printout_xpixel < 0) )
 					{
-					    printf("%d  %g %g %g -> %g %g %g\n",i,atomX[i],atomY[i],atomZ[i],phase,Fa,Fb);
+					  printf("%d  %g %g %g -> %g %g %g %g\n",i,atomX[i],atomY[i],atomZ[i],phase,cos(phase),Fa,Fb);
 					}
 				    }
 				    /* end of atom loop */
@@ -1141,7 +1147,7 @@ exit(9);
 	    /* accumulate the intensity image */
 	    /* in units of F^2*omega if fluence was not specified */
 	    /* or in photons/pixel if fluence was speficied */
-	    floatimage[j] += I/steps*omega_Rsqr_pixel*fluence*r_e_sqr;
+	    floatimage[j] += I ;///steps*omega_Rsqr_pixel*fluence*r_e_sqr;
 
 	    if(floatimage[j] > max_I) {
 	        max_I = floatimage[j];
@@ -1195,6 +1201,20 @@ exit(9);
     fwrite(floatimage,sizeof(float),pixels,outfile);
     fclose(outfile);
 
+    FILE* fu = fopen(Ifilename,"wb");
+    j = 0;
+    for(ypixel=0;ypixel<ypixels;++ypixel){
+      for(xpixel=0;xpixel<xpixels;++xpixel){
+        if(xpixel < roi_xmin || xpixel > roi_xmax || ypixel < roi_ymin || ypixel > roi_ymax) {
+	  ++j; continue;
+	}
+	fprintf(fu,"%g ", floatimage[j]);
+	++j;
+      }
+      fprintf(fu,"\n");
+    }    
+    fclose(fu);
+    
     /* no point in writing these if they are all zero? */
     if( coherent )
     {

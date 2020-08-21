@@ -1,0 +1,27 @@
+site_name: "plane_group"
+
+generate:
+- lattice.md:
+   - src.lattice+
+- plane_group.md:
+   - src.plane_group++
+
+pages:
+- Home: index.md << README.md
+- plane group : plane_group.md
+- lattice : lattice.md
+
+###
+#docs_dir: docs/src 
+gens_dir: docs
+site_dir: site
+theme:    readthedocs
+loader:   pydocmd.loader.PythonLoader
+preprocessor: pydocmd.preprocessor.Preprocessor
+headers: html
+
+# Additional search path for your Python module. If you use Pydocmd from a
+# subdirectory of your project (eg. docs/), you may want to add the parent
+# directory here.
+#additional_search_paths:
+# - src.

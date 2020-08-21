@@ -18,6 +18,7 @@ def get_lattice_vec(lat_type='',wallpp_type=None,a=1,b=1,alpha=90,v=0) :
     ''' Computes lattice vectors from :
         - a,b,angle : lattice parameters
         - lat_type  : lattice type  [hex,square,rect,oblique]'''
+    pi = np.pi
     if wallpp_type : lat_type = wallpp_lat[wallpp_type]
     if lat_type == 'hex' :
         lattice_vec = np.array([[1,0],[cos(pi/3),sin(pi/3)]])*a
@@ -49,23 +50,24 @@ def get_miller(lattice_vec,nh,nk,ax=None):
 
 def reciprocal_lattice_2D(a1,a2):
     Rot90 = np.array([[0,1],[-1,0]])
-    b1 = 2*pi*Rot90.dot(a2)/(a1.dot(Rot90.dot(a2)))
-    b2 = 2*pi*Rot90.dot(a1)/(a2.dot(Rot90.dot(a1)))
+    b1 = Rot90.dot(a2)/(a1.dot(Rot90.dot(a2)))#*2*np.pi
+    b2 = Rot90.dot(a1)/(a2.dot(Rot90.dot(a1)))#*2*np.pi
     return b1,b2
 
 
 # Display
-def plot_lattice(lattice_vec,nh=3,nk=3,opts='th',**kwargs) :
+def plot_lattice(lattice_vec,nh=3,nk=3,hOpt=True,**kwargs) :
     '''Plot lattice grid :
     - nh,nk : number of cells along each direction
-    - opts : h(additional lines for hexagonal), p(plot), t(ticks), e(equal) '''
+    - hOpt : additional lines for hexagonal
+    '''
     gridcolor=(0.75,0.75,0.75)
     a,b=lattice_vec
     n_h,n_k = np.arange(nh+1),np.arange(nk+1)
     line_h = [h*a + np.array([[0,0],nk*b]) for h in range(nh+1)]
     line_k = [k*b + np.array([[0,0],nh*a]) for k in range(nk+1)]
     plts = [[xy[:,0],xy[:,1],gridcolor,''] for xy in line_h+line_k]
-    if 'h' in opts :
+    if hOpt :
         P = (a+b)
         n,m,nn,nm = a,b,nh,nk
         if nk>nh : n,m,nn,nm = b,a,nk,nh

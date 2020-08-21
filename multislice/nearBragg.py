@@ -5,11 +5,12 @@ import utils.displayStandards as dsp
 import utils.glob_colors as colors
 
 nearBragg_bin=dsp.get_figpath(__file__,'/../nearBragg/bin/')+'nearBragg' #;print(nearBragg_bin)
-dtype = np.float64
+dtype = np.float128
 
 Cs = [colors.unicolor(0.75),(1,0,0),colors.unicolor(0.25),(0,0,1),(1,0,0),(1,1,0)]
 Zs = [1,3,6,7,8,16]
-Ai = np.array([1,2,2,2,3])*0.25
+# Ai = np.array([1,2,2,2,3])*0.25
+Ai = np.array([0.1,0.25,0.26,0.27,1.5])
 # Ai =(10-0.5*np.arange(len(Zs)))/8
 # self.fj = lambda ti,j:np.sqrt(np.pi)/A[i]*np.exp(-(np.pi*Ai[j]*q)**2)
 
@@ -45,7 +46,7 @@ class NearBragg():
         if fjopt==0 :
             self.fj = lambda ti,j:np.ones(ti.shape)
         elif fjopt==1 :
-            self.fj = lambda ti,j:np.exp(-(np.pi*Ai[j]*(np.sin(ti*2)/self.lam))**2)#*eps*np.sqrt(np.pi)/Ai[j]*
+            self.fj = lambda ti,j:np.exp(-(np.pi*Ai[j]*(np.sin(ti)/self.lam))**2)#*eps*np.sqrt(np.pi)/Ai[j]*
         #compute
         if method=='Greens'or  method=='G'  : self._Greens()
         elif method=='Fresnel'              : self._Fresnel()
@@ -143,6 +144,7 @@ class NearBragg():
         self.cmd(opts='sr',path=path,file='atoms.txt')
 
     def _Fraunhofer(self):
+        print(colors.green+'... Running nearBragg Fraunhofer ...'+colors.black)
         for i in range(self.npx) :
             tij  = np.abs(self.x0s[i]-self.x)/(self.z0-self.z)
             R_ij = self.z + np.sqrt((self.x0s[i]-self.x)**2+(self.z0-self.z)**2)
@@ -159,14 +161,16 @@ class NearBragg():
                 self.fj(tij,self.Za)*np.exp(2*np.pi*1J*Rij/self.lam)/(R_ij*cst.A)))**2
 
     def _Greens(self):
+        print(colors.green+'... Running nearBragg Greens ...'+colors.black)
         for i in range(self.npx) :
             tij  = np.abs(self.x0s[i]-self.x)/(self.z0-self.z)
             R_ij = self.z + np.sqrt((self.x0s[i]-self.x)**2+(self.z0-self.z)**2)
             # Rij  = R_ij
             self.I[i] = np.abs(np.sum(
-            self.fj(tij,self.Za)*np.exp(2*np.pi*1J*R_ij/self.lam)/(R_ij*cst.A)))**2
+                self.fj(tij,self.Za)*np.exp(2*np.pi*1J*R_ij/self.lam)/(R_ij*cst.A)))**2
 
     def _Dual_beams(self):
+        print(colors.green+'... Running nearBragg Dual Beams ...'+colors.black)
         for i in range(self.npx) :
             tij  = np.abs(self.x0s[i]-self.x)/(self.z0-self.z)
             R_ij = self.z + np.sqrt((self.x0s[i]-self.x)**2+(self.z0-self.z)**2)

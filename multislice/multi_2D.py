@@ -13,19 +13,20 @@ import utils.glob_colors as colors
 class Multi2D():
     '''multislice 2D for quick testing
     - pattern,ax,bz : x,z,f
+    - tilt : beam tilt (deg)
     - Nx : increase supercell size
     - dz : slice thickness
     - nz : number of slices
-    - ppopt:T(Transmission)P(propagator)Q(Psi_q)X(Psi_x)B(beams)Z(Psi_xz)Y(Psi_qz)
     - iZs,iZv : frequency of save and verbose
+    - ppopt:T(Transmission)P(propagator)Q(Psi_q)X(Psi_x)B(beams)Z(Psi_xz)Y(Psi_qz)
     - copt: crop option with propagator
     '''
     def __init__(self,
             pattern,ax,bz,
-            keV=200,Nx=1,
+            keV=200,Nx=1,tilt=0,
             dz=1,nz=1,copt=1,eps=1,
             iZs=1,iZv=1,ppopt=''):
-        self.version = 0.1
+        self.version = 0.2
         self.pattern = pattern
         self.keV     = keV
         self.Nx      = Nx
@@ -34,10 +35,13 @@ class Multi2D():
         self.bz      = bz
         # self.az,self.bx =
         #energy dependent
-        self.lam = cst.keV2lam(keV)
-        self.sig = cst.keV2sigma(keV)
-        self.k0 = 1/self.lam
+        self.lam  = cst.keV2lam(keV)
+        self.sig  = cst.keV2sigma(keV)
+        self.k0   = 1/self.lam
+        self.eps  = eps
+        self.tilt = tilt
         #Computations
+        print(colors.red+'\t\t 2D multislice simulation'+colors.black)
         self._set_transmission_function(eps)
         self._set_propagator()
         self.set_Psi0()
@@ -98,7 +102,7 @@ class Multi2D():
         if isinstance(iZs,int):iZs=slice(0,self.z.size,iZs)
         z   = self.z[iZs]
         Pqs = self.psi_qz[iZs,:]
-        Pqs[:,0]=0# do not show central beam
+        # Pqs[:,0]=0# do not show central beam
         # q   = self.q
         # Pqs = [Pqs[i,:] for i in range(z.size)]
         q   = fft.fftshift(self.q)
@@ -109,27 +113,31 @@ class Multi2D():
             imOpt='hc',caxis=[z.min(),z.max()],cmap=cmap,
             **kwargs)
 
-    def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',**kwargs):
+    def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',out=0,**kwargs):
         '''Show selected beam iBs as function of thickness '''
         # Ib = self.psi_qz #np.abs()**2
-        Ib = self.psi_qz/self.nx**2/self.dq
-        if isinstance(iBs,str):
-            N   = int(self.nx/2)
-            iHs = fft.fftshift(np.arange(-N,N))
-            if not 'a' in iBs:
-                Im  = Ib[:,1:].max()    #;print(Im)
-                Imax = Ib.max(axis=0)   #;print(Imax)
-                iHs = iHs[Imax>Im*tol]
-            iBs=iHs['O' not in iBs:]
+        Ib = self.getB(iBs,tol)
+        # Ib = self.psi_qz/self.nx**2/self.dq
+        # if isinstance(iBs,str):
+        #     N   = int(self.nx/2)
+        #     iHs = fft.fftshift(np.arange(-N,N))
+        #     if not 'a' in iBs:
+        #         Im  = Ib[:,1:].max()    #;print(Im)
+        #         Imax = Ib.max(axis=0)   #;print(Imax)
+        #         iHs = iHs[Imax>Im*tol]
+        #     iBs=iHs['O' not in iBs:]
+        #
+        # if isinstance(iBs,list):iBs=np.array(iBs)
+        # Ib   = Ib[:,iBs]
 
-        if isinstance(iBs,list):iBs=np.array(iBs)
-
-        Ib   = Ib[:,iBs]
-        h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
-        cs   = dsp.getCs(cmap,iBs.size)
-        plts = [[self.z,Ib[:,i],[cs[i],'-'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
-        return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],
-        **kwargs)
+        if out:
+            return Ib.T
+        else :
+            h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
+            cs   = dsp.getCs(cmap,iBs.size)
+            plts = [[self.z,Ib[:,i],[cs[i],'-'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
+            return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],
+            **kwargs)
 
     def Xxz_show(self,iZs=1,iXs=1,**kwargs):
         '''Show 2D wave propagation solution'''
@@ -146,8 +154,23 @@ class Multi2D():
         im = [q,z,self.psi_qz]
         return dsp.stddisp(im=im,labs=[r'$q(\AA^{-1})$',r'$z(\AA)$'],
         **kwargs)
+
+    def getQ(self):return self.q
     def getI(self):return self.psi_qz[-1,:]
-    def getQ(self):return self.q,self.psi_qz[-1,:]
+    def getB(self,iBs='O',tol=1e-3):
+        Ib = self.psi_qz/self.nx**2/self.dq
+        if isinstance(iBs,str):
+            N   = int(self.nx/2)
+            iHs = fft.fftshift(np.arange(-N,N))
+            if not 'a' in iBs:
+                Im  = Ib[:,1:].max()    #;print(Im)
+                Imax = Ib.max(axis=0)   #;print(Imax)
+                iHs = iHs[Imax>Im*tol]
+            iBs=iHs['O' not in iBs:]
+        if isinstance(iBs,list):iBs=np.array(iBs)
+        return Ib[:,iBs]
+
+
 
     ##################################################################
     ###### main computations
@@ -159,10 +182,11 @@ class Multi2D():
         self.dz = self.bz/ns;
         Vz = np.zeros((ns,nx))
         iZs = np.arange(0,ns+1)*int(z.size/ns)
+        print(colors.blue+'...integrating projected potential...'+colors.black)
         for i_s in range(ns):
             s=slice(iZs[i_s],iZs[i_s+1])
             Vz[i_s,:] = eps*np.array([trapz(f[s,i],z[s]) for i in range(nx)])
-        print('Slice thickness and slices per cell:\ndz=%.2f \nnzs=%d\n' %(self.dz,ns))
+        print('Slice thickness and number of slices per cell:dz=%.2fA, nzs=%d\n' %(self.dz,ns))
 
         T  = np.exp(1J*self.sig*Vz)
         #repeat pattern
@@ -177,7 +201,12 @@ class Multi2D():
         self.dx = self.x[1]-self.x[0]
         self.q  = fft.fftfreq(self.nx,self.dx)
         self.dq = self.q[1]-self.q[0]
-        self.Pq = np.exp(1J*np.pi*self.dz*self.q**2/self.k0)
+        if self.tilt: #isinstance(tilt,np.ndarray) or isinstance(tilt,list):
+            kx = self.k0*np.sin(self.tilt*np.pi/180)
+            self.Pq = np.exp(-1J*np.pi*self.dz*(self.q+kx)**2/self.k0)
+            # self.Pq = np.exp(-1J*(np.pi*self.dz/self.k0*self.q**2-2*self.q*np.arctan(self.tilt*np.pi/180))
+        else:
+            self.Pq = np.exp(-1J*np.pi*self.dz*self.q**2/self.k0)
         self.nq = int(1/3*self.nx) #prevent aliasing
 
     def set_Psi0(self):
@@ -205,13 +234,12 @@ class Multi2D():
             # self.Psi_x = fft.fftshift(fft.ifft(self.Pq*self.Psi_q))
             #save and print out
             msg=''
-
             if not i%iZv:
                 Ix2 = np.sum(np.abs(self.Psi_x)**2)*self.dx
                 Iq2 = np.sum(np.abs(self.Psi_q/self.nx)**2)/self.dq #parseval's theorem of the DFT
                 msg+='i=%-3d,is=%-2d I=%.4f, Iq=%.4f ' %(i,i_s,Ix2,Iq2)
             if not i%iZs:
-                msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
+                if msg : msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
                 self.psi_xz[self.iz,:] = np.abs(self.Psi_x)**2
                 self.psi_qz[self.iz,:] = np.abs(self.Psi_q)**2
                 self.iz+=1

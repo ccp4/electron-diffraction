@@ -5,14 +5,14 @@ import setuptools
 
 setuptools.setup(
     name="ED",
-    version="0.0.2",
+    version="0.0.3",
     author="Tarik Ronan Drevon",
     author_email="ronandrevon@gmail.com",
-    description="scattering utilities",
+    description="Electron diffraction utilities",
     long_description='', #long_description,
     long_description_content_type="",
     url="",
-    packages=['scattering','multislice','wallpp'],#setuptools.find_packages(),
+    packages=['multislice','scattering','wallpp'],#setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License ",

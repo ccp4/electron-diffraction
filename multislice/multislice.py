@@ -249,11 +249,12 @@ class Multislice:
         np.save(self._outf('patternnpy'),im,allow_pickle=True)
         print(green+'file saved : ' +yellow+yellow+self._outf('patternnpy')+black)
 
-    def pattern(self,Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,rings=[],**kwargs):
+    def pattern(self,Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
-        - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only)
+        - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) g(good)
         - Nmax : crop display beyond Nmax
         - rings : list or array - of resolutions for rings to display
+        - gs     : broadening parameter
         - kwargs : see stddisp
         returns : [qx,qy,I]
         '''
@@ -261,6 +262,7 @@ class Multislice:
         ax,by = self.cell_params[:2]
         Nh,Nk = self.repeat[:2];
         Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
+        if Nmax : Nmax = min(Nmax,Nx,Ny)
         if 'I' in Iopt :
             # real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
             # im = real**2+imag**2
@@ -278,25 +280,26 @@ class Multislice:
                 h,k = np.meshgrid(np.arange(Nx),np.arange(Ny))
                 r = np.sqrt(h**2+k**2)
                 Nmax = ceil(r[idx].max()); #print('Pattern Nmax=%d > %E ' %(Nmax,tol))
+                Nmax = min(Nmax,256)#;print(Nx,Ny,Nmax)
+            if not Nmax : Nmax = min(256,Nx,Ny)
+
             if 's' in Iopt : im = np.fft.fftshift(im)   #;print('fftshift')
             # if qmax:
             #     Nmax =
-            if not Nmax : Nmax = min(Nx,Ny)
-            Nmax = min(Nmax,256,Nx,Ny)
         #print('preparing')
         if 'q' in Iopt:
             im0 = im[Nx:Nx+Nmax,Ny:Ny+Nmax];del(im)
             h,k = np.meshgrid(np.arange(Nmax),np.arange(Nmax))
         else:
-            im0 = im[Nx-Nmax:Nx+Nmax,Ny-Nmax:Ny+Nmax];del(im)
+            im0 = im[Nx-Nmax:Nx+Nmax,Ny-Nmax:Ny+Nmax];del(im)#;print(im0.shape)
             h,k = np.meshgrid(np.arange(-Nmax,Nmax),np.arange(-Nmax,Nmax))
         if 'l' in Iopt : #logscale the data
             if 'g' in Iopt:
-                i,j = np.where(im0>10*tol)
+                i,j = np.where(im0>10*tol) #index of spots
             im0[im0<tol] = tol*1e-2
             if 'g' in Iopt:
                 x,y = np.meshgrid(range(-5,6),range(-5,6))
-                Pb = np.exp(-6*(x**2+y**2)**1)
+                Pb = np.exp(-gs*(x**2+y**2)**2)
                 # Pb = 1/(x**2+y**2+0.01)**10
                 for i0,j0 in zip(i,j):
                     im00 = im0[i0,j0]
@@ -305,7 +308,6 @@ class Multislice:
                     im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
             im0 = np.log10(im0)
         if out :
-
             #print('packaging')
             return h/Nh/ax, k/Nk/by, im0
         else:
@@ -548,10 +550,10 @@ class Multislice:
         if not dest_path : dest_path = self.datpath
         hostpath = self._get_hostpath(hostpath)
         cmd = 'scp %s:%s %s' %(ssh_alias,hostpath+self.outf[file],dest_path)
-        p = Popen(cmd,shell=True,stdout=PIPE,stderr=PIPE)
+        p = Popen(cmd,shell=True,stderr=PIPE)#stdout=PIPE
         p.wait()
         o,e = p.communicate()
-        print(o.decode())
+        # print(o.decode())
         return e.decode()
 
     ########################################################################
@@ -660,6 +662,8 @@ def sweep_var(name,param,vals,df=None,ssh='',tail='',do_prev=0,**kwargs):
     - kwargs : see help(Multislice)
     '''
     do_df,save = isinstance(df,pd.core.frame.DataFrame),0
+    dfname = 'df.pkl'
+    if isinstance(df,str):dfname,df=df,1
     if isinstance(df,int):
         if df : df,do_df,save = pd.DataFrame(columns=[param,'host','state']+pp.info_cols),1,1
     nvals,prev = len(vals),None
@@ -673,8 +677,8 @@ def sweep_var(name,param,vals,df=None,ssh='',tail='',do_prev=0,**kwargs):
             df.loc[multi.outf['obj']] = [nan]*len(df.columns)
             df.loc[multi.outf['obj']][[param,'host','state']] = [val,ssh,'start']
     if save :
-        df.to_pickle(name+'df.pkl')
-        print(green+'Dataframe saved : '+yellow+name+'df.pkl'+black)
+        df.to_pickle(name+dfname)
+        print(green+'Dataframe saved : '+yellow+name+dfname+black)
 
 
 # def coords2grid(coords,cz):

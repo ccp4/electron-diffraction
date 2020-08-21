@@ -4,7 +4,6 @@ import multislice as mupy
 import rotating crystal as rcc
 
 
-
 def sweep_var(name,param,vals,df=None,ssh='',tail='',do_prev=0,**kwargs):
     '''
     runs a set of similar simulations with one varying parameter

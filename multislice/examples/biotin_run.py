@@ -15,15 +15,15 @@ file = path+'biotin.cif'
 
 # rcc.show_cell(file,x0=-1)
 
-def create_xyz(opts='gp'):
+def create_xyz(opts='gps'):
     nz = np.array([1,2,1,1,1,1,1,1 ,1,1 ])#,1)
     nx = np.array([0,1,1,2,3,4,6,8 ,12,24])#,1,7,12,24])
     angles = np.arctan(nx/(4*nz))*180/np.pi
+    data = ['biotin%d0%d.xyz' %(n,m) for n,m in zip(nx,nz)]
     if opts:
         # rcc.import_cif(file,path+'biotin001.xyz')
         Nx,Nz=[(1,1),(30,5)]['g' in opts]
         rcc.rotate_xyz(file,nx,nz,Nx=Nx,Nz=Nz,opt=opts)
-    data = ['biotin%d0%d.xyz' %(n,m) for n,m in zip(nx,nz)]
     for dat,a in zip(data,angles) : rcc.show_grid(path+dat,title=dat+' %.1f' %a)
     print('angles:',angles)
     return data,angles
@@ -76,37 +76,50 @@ def run_simus(thick=5000,nts=91,ssh=''):
         # multi.print_log()
         # multi.postprocess(ppopt='uwP',ssh_alias='tarik-CCP4home')
 
+def run_tilts(**kwargs):
+    tx = np.linspace(0,1,10)#deg
+    tilts = [[0,t*np.pi/180*1000] for t in tx]
+    mupy.sweep_var(path+'tilts/','tilt',tilts,df='df.pkl',do_prev=0,**kwargs)
+
 
 def update_patterns(dfname='df.pkl',ssh='',hostpath=''):
     df = pp.update_df_info(path+dfname,hostpath=hostpath)
     for dat in df.index:
-        multi=pp.load_multi_obj(path+dat)
+        multi=pp.load_multi_obj(path+dsp.dirname(dfname)+dat)
         multi.ssh_get(ssh,'pattern',hostpath=hostpath)
         multi.save_pattern()
     return df
 
-def get_figs():
-    df = pd.read_pickle(path+'df.pkl')
+def get_figs(dfname='df.pkl'):
+    df = pd.read_pickle(path+dfname)
     cs = dsp.getCs('Blues',3)#,dsp.getCs('Reds'),dsp.getCs('Greens')
     plts = [[],[],[]]
-    pad = int(np.log10(df.index.size))+1
+    #pad = int(np.log10(df.index.size))+1
     for i,dat in enumerate(df.index):
-        multi=pp.load_multi_obj(path+dat)
-        multi.pattern(tol=1e-6,Iopt='Ins',caxis=[0,1],Nmax=100,
-            cmap='binary',imOpt='hc',pOpt='t',rings=[0.1,0.2],#,1],
-            opt='ps',name=path+'figures/%s_pattern.png' %dat.replace('.pkl',''))
+        multi=pp.load_multi_obj(path+dsp.dirname(dfname)+dat)
+        multi.pattern(tol=1e-4,Iopt='Insgl',gs=0.25,caxis=[-6.3,0],Nmax=500,
+            cmap='binary',imOpt='hc',#rings=[0.1,0.2],#,1],,
+            pOpt='Xt',xyTicks=1,xylims=[-3,3.01,-3,3.01],#xylims=[-2,2.01,-2,2.01],
+            opt='s',name=path+'figures/%s_pattern.png' %dat.replace('.pkl',''))
         # multi.beam_vs_thickness()
-    #     for j in range(len(hk)):plts[j]+=[[t,I[j,:],cs[i],'']]
+    #     for j in range(len(hk)):plts[jq]+=[[t,I[j,:],cs[i],'']]
     # for j in range(3):
     #     dsp.stddisp(plts[j],title='hk=%s' %hk[j],
     #         imOpt='ch',cmap='Blues',caxis=[0,90],pOpt='tG')
 
 
-# data,angles = create_xyz(opts='')
+data,angles = create_xyz(opts='ps')
 # lats  = np.array([rcc.show_grid(path+dat,opt='')[0] for dat in data])
 # multi = run_main(thick=2000,ssh='badb',hostpath='/data3/lii26466/multislice/biotin/')
 
 # multi = run_simus(thick=100,nts=3,ssh='')#'tarik-CCP4home')
-df = pp.update_df_info(path+'df0.pkl',hostpath='/data3/lii26466/multislice/biotin/')
+# multi = run_tilts(keV=200,mulslice=False,
+#     NxNy=2048,slice_thick=1.0,Nhk=5,repeat=[2,1,10],
+#     opt='dsr',fopt='f',v=1,
+#     ssh='badb',cluster=1,hostpath='/data3/lii26466/multislice/biotin/tilts/')
+# df = update_patterns('tilts/df.pkl',ssh='badb',hostpath='/data3/lii26466/multislice/biotin/tilts/')
+# get_figs(dfname='tilts/df.pkl')
+
+# df = pp.update_df_info(path+'df0.pkl',hostpath='/data3/lii26466/multislice/biotin/')
 # df = update_patterns('df0.pkl',ssh='badb',hostpath='/data3/lii26466/multislice/biotin/')
-# get_figs()
+# get_figs(dfname='df0.pkl')

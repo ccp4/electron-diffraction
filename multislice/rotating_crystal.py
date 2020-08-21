@@ -13,7 +13,7 @@ wbs = np.array([1,3,6,7,8,10])*0.01
 wobbles = dict(zip([1,3,6,7,8,16],wbs))
 Rot = lambda a:np.array([[np.cos(a),0,np.sin(a)],[0,1,0],[-np.sin(a),0,np.cos(a)]])
 
-def rotate_xyz(file,nx,nz,Nx=40,Nz=5,name='',opt=''):
+def rotate_xyz(file,nx,nz,Nx=40,Nz=5,name='',opt='',**kwargs):
     '''Generates .xyz files corresponding to individual rotation
     - file : path to cif file (.xyz files will be put in the same folder )
     - Nrot : number of rotation to perform within 0,pi/2
@@ -48,7 +48,6 @@ def rotate_xyz(file,nx,nz,Nx=40,Nz=5,name='',opt=''):
             a = np.linalg.norm([i2*nxz/i1,1])*cz3*n0
         else:
             a = np.linalg.norm([i2*nxz,i1])*cz3
-
         # a = np.linalg.norm([i2*nxz,i1])*cz3
 
         print(green+'i1=%d,i2=%d,angle=%.2f' %(i1,i2,angle*180/np.pi)+black)
@@ -56,19 +55,22 @@ def rotate_xyz(file,nx,nz,Nx=40,Nz=5,name='',opt=''):
         print('finding points ...')
         idc = rect.contains_points(coords0[:,[0,2]],radius=0.001)
         print('done')
+        n   = (i1,0,i2)
+        xyz = name+'%d%d%d.xyz' %n
         if opt:
+            path = dsp.dirname(name)
+
             x,z = coords0[:,[0,2]].T;
             x0,z0 = (coords0[idc,:])[:,[0,2]].T
             X,Z = np.hstack([x,x0]),np.hstack([z,z0])
             S = np.array([10]*x.size+[30]*x0.size)
             C = Cs+list(np.array(Cs)[idc,:])
             dsp.stddisp(scat=[X,Z,S,C],patches=[rect],equal=1,figsize='12',
-                xyTicks=[ax1,cz3],pOpt='tGeX',xylims=[0,40*ax1,-10*cz3,10*cz3])
+                xyTicks=[ax1,cz3],pOpt='tGeX',xylims=[0,40*ax1,-10*cz3,10*cz3],
+                opt=opt,name=path+'figures/'+dsp.basename(xyz).replace('xyz','png'))
             plt.show()
 
-        n = (i1,0,i2)
-        xyz          = name+'%d%d%d.xyz' %n
-        lat_vec      = [a,a2[1],c]#np.array([Nrot*(a3+a1),a2,Nrot*(a3-a1)])#
+        lat_vec = [a,a2[1],c]#np.array([Nrot*(a3+a1),a2,Nrot*(a3-a1)])#
         cc = coords0[idc,:]
         cc[:,2]-=xy0[1]
         coords  = Rot(-angle).dot(cc.T).T

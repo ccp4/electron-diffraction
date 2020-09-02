@@ -5,6 +5,7 @@ from scipy.integrate import nquad,trapz,quad
 import utils.displayStandards as dsp
 import utils.physicsConstants as cst
 import utils.glob_colors as colors
+import wallpp.lattice as lat
 # from scipy.signal import fftconvolve
 # from scipy.interpolate import interp1d
 # import utils.FourierUtils as fu
@@ -17,15 +18,15 @@ class Multi2D():
     - Nx : increase supercell size
     - dz : slice thickness
     - nz : number of slices
-    - iZs,iZv : frequency of save and verbose
+    - iZs,iZv,v : frequency of save and verbose frequency,verbose option
     - ppopt:T(Transmission)P(propagator)Q(Psi_q)X(Psi_x)B(beams)Z(Psi_xz)Y(Psi_qz)
     - copt: crop option with propagator
     '''
     def __init__(self,
             pattern,ax,bz,
             keV=200,Nx=1,tilt=0,
-            dz=1,nz=1,copt=1,eps=1,
-            iZs=1,iZv=1,ppopt=''):
+            dz=1,nz=1,copt=1,eps=1,sg=-1,
+            iZs=1,iZv=1,v=1,ppopt=''):
         self.version = 0.2
         self.pattern = pattern
         self.keV     = keV
@@ -41,11 +42,11 @@ class Multi2D():
         self.eps  = eps
         self.tilt = tilt
         #Computations
-        print(colors.red+'\t\t 2D multislice simulation'+colors.black)
-        self._set_transmission_function(eps)
-        self._set_propagator()
+        if v:print(colors.red+'\t\t 2D multislice simulation '+colors.black)
+        self._set_transmission_function(eps,v)
+        self._set_propagator(sg,copt)
         self.set_Psi0()
-        self.propagate(nz,iZs,iZv,copt)
+        self.propagate(nz,iZs,iZv,v)
         #display
         if 'T' in ppopt:self.Tz_show()
         if 'P' in ppopt:self.Pq_show()
@@ -61,7 +62,7 @@ class Multi2D():
         print(colors.green+"object saved : \n"+colors.yellow+file+colors.black)
 
     ###################################################################
-    ####### display
+    #### display
     ###################################################################
     def Tz_show(self,iSz=slice(0,None,1),**kwargs):
         '''Show Transmission function '''
@@ -97,18 +98,26 @@ class Multi2D():
             imOpt='hc',caxis=[z.min(),z.max()],cmap=cmap,
             **kwargs)
 
-    def Qz_show(self,iZs=1,cmap='jet',**kwargs):
-        '''Show wave propagation in q space for slices iZs '''
-        if isinstance(iZs,int):iZs=slice(0,self.z.size,iZs)
+    def Qz_show(self,iZs=1,opts='',cmap='jet',**kwargs):
+        '''Show wave propagation in q space for slices iZs
+        - opts : O(include Origin), N(Normalize Origin), S(Shape normalize)
+        '''
+        if isinstance(iZs,int):iZs=slice(0,iZs,self.z.size)
+        # if isinstance(iZs,list):iZs=slice(0,iZs,self.z.size)
+        Pqs = np.zeros((self.psi_qz[iZs,:].shape))
         z   = self.z[iZs]
-        Pqs = self.psi_qz[iZs,:]
-        # Pqs[:,0]=0# do not show central beam
-        # q   = self.q
-        # Pqs = [Pqs[i,:] for i in range(z.size)]
+        Pqs = self.psi_qz[iZs,:].copy()
+        if 'S' in opts:
+            if 'O' not in opts:Pqs[:,0]=0# do not show central beam
+            for i in range(z.size) : Pqs[i,:]/=np.sum(Pqs[i,:])
+        else:
+            if 'N' in opts:
+                for i in range(z.size) : Pqs[i,:]/=Pqs[i,0]
+            if 'O' not in opts:Pqs[:,0]=0# do not show central beam
         q   = fft.fftshift(self.q)
         Pqs = [fft.fftshift(Pqs[i,:]) for i in range(z.size)]
         cs  = dsp.getCs(cmap,z.size)
-        plts = [[q,Pqs[i],cs[i]] for i in range(z.size)]
+        plts = [[self.q,Pqs[i],cs[i]] for i in range(z.size)]
         return dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$',r'$|\Psi(q)|^2$'],
             imOpt='hc',caxis=[z.min(),z.max()],cmap=cmap,
             **kwargs)
@@ -139,6 +148,38 @@ class Multi2D():
             return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],
             **kwargs)
 
+    def Ewald_show(self,deg=10,nh=20,nk=10,relrod=0,**kwargs):
+        ''' Displays the Ewald sphere and the reciprocal lattice
+        - deg : extent of the ewald sphere in degrees
+        - nh,nk : number of reciprocal nodes
+        '''
+        # Ewald circle
+        K  = self.k0
+        dt = deg*np.pi/180
+        t  = 3*np.pi/2+dt*np.linspace(-1,1,1000)
+        # reciprocal lattice
+        a1,a2 = lat.get_lattice_vec(lat_type='rect',a=self.ax,b=self.bz)
+        b1,b2 = lat.reciprocal_lattice_2D(a1,a2)
+        h,k = np.meshgrid(np.arange(-nh,nh+1),np.arange(nk))
+        X = h*b1[0]+k*b2[0]
+        Z = h*b1[1]+k*b2[1]
+        #tilt
+        rot = lambda t:np.array([[np.cos(t),np.sin(t)],[-np.sin(t),np.cos(t)]])
+        theta = self.tilt*np.pi/180
+        X,Z  = rot(-theta).dot(np.stack([X.flatten(),Z.flatten()]))
+        plts = []
+        if relrod:
+            H    = Nz*bz
+            zeta = np.linspace(0,0.25/bz,100)
+            Fz   = lambda i : 1/(1.1*self.ax)*np.sinc(zeta*H)**2+i/self.ax
+            plts +=[[Fz(i),zeta,'b--',''] for i in range(nh)]
+        plts += [[K*np.cos(t),K*np.sin(t)+K,'r','']]
+        scat  = [X,Z,15,'k']
+        # ax1 = np.sqrt(1**2+10**2)*ax
+        # bz1 = ax1
+        dsp.stddisp(plts,scat=scat,labs=[r'$k_x(\AA^{-1})$',r'$k_z(\AA^{-1})$'],
+            **kwargs)#lw=2,xylims=[0,3,0,3])#,xyTicks=[1/ax1,1/bz1])
+
     def Xxz_show(self,iZs=1,iXs=1,**kwargs):
         '''Show 2D wave propagation solution'''
         if isinstance(iZs,int):iZs=slice(0,-1,iZs)
@@ -148,10 +189,13 @@ class Multi2D():
         return dsp.stddisp(im=im,labs=[r'$x(\AA)$',r'$z(\AA)$'],
         **kwargs)
 
-    def Qxz_show(self,**kwargs):
+    def Qxz_show(self,iZs=1,**kwargs):
         '''Show 2D wave propagation solution'''
-        q,z = np.meshgrid(self.q,self.z)
-        im = [q,z,self.psi_qz]
+        iZs = slice(0,-1,iZs)
+        q,z = np.meshgrid(self.q,self.z[iZs])
+        Pqs = self.psi_qz[iZs,:].copy()
+        Pqs[:,0] = 0
+        im = [q,z,Pqs]
         return dsp.stddisp(im=im,labs=[r'$q(\AA^{-1})$',r'$z(\AA)$'],
         **kwargs)
 
@@ -171,22 +215,21 @@ class Multi2D():
         return Ib[:,iBs]
 
 
-
     ##################################################################
     ###### main computations
     ##################################################################
-    def _set_transmission_function(self,eps=1):
+    def _set_transmission_function(self,eps=1,v=1):
         x,z,f = self.pattern
         nx = x.size
         ns = int(np.round(self.bz/self.dz))
         self.dz = self.bz/ns;
         Vz = np.zeros((ns,nx))
         iZs = np.arange(0,ns+1)*int(z.size/ns)
-        print(colors.blue+'...integrating projected potential...'+colors.black)
+        if v:print(colors.blue+'...integrating projected potential...'+colors.black)
         for i_s in range(ns):
             s=slice(iZs[i_s],iZs[i_s+1])
             Vz[i_s,:] = eps*np.array([trapz(f[s,i],z[s]) for i in range(nx)])
-        print('Slice thickness and number of slices per cell:dz=%.2fA, nzs=%d\n' %(self.dz,ns))
+        if v:print('Slice thickness and number of slices per cell:dz=%.2fA, nzs=%d\n' %(self.dz,ns))
 
         T  = np.exp(1J*self.sig*Vz)
         #repeat pattern
@@ -197,17 +240,17 @@ class Multi2D():
         self.nx = self.x.size                   #;print(self.nx)
         self.ns = ns
 
-    def _set_propagator(self):
+    def _set_propagator(self,sg=-1,copt=1):
         self.dx = self.x[1]-self.x[0]
         self.q  = fft.fftfreq(self.nx,self.dx)
         self.dq = self.q[1]-self.q[0]
         if self.tilt: #isinstance(tilt,np.ndarray) or isinstance(tilt,list):
             kx = self.k0*np.sin(self.tilt*np.pi/180)
-            self.Pq = np.exp(-1J*np.pi*self.dz*(self.q+kx)**2/self.k0)
-            # self.Pq = np.exp(-1J*(np.pi*self.dz/self.k0*self.q**2-2*self.q*np.arctan(self.tilt*np.pi/180))
+            self.Pq = np.exp(sg*1J*np.pi*self.dz*(self.q+kx)**2/self.k0)
         else:
-            self.Pq = np.exp(-1J*np.pi*self.dz*self.q**2/self.k0)
+            self.Pq = np.exp(sg*1J*np.pi*self.dz*self.q**2/self.k0)
         self.nq = int(1/3*self.nx) #prevent aliasing
+        if copt:self.Pq[self.nq:-self.nq] = 0
 
     def set_Psi0(self):
         Psi  = np.ones(self.x.shape,dtype=complex)
@@ -217,7 +260,7 @@ class Multi2D():
         self.z  = np.array([])
         self.iz = 0
 
-    def propagate(self,nz,iZs=1,iZv=1,copt=1):
+    def propagate(self,nz,iZs=1,iZv=1,v=1):
         '''Propgate over nz slices and save every iZs slices'''
         nzq,z0 = int(nz/iZs),0
         if self.z.size : z0=self.z.max()
@@ -229,22 +272,21 @@ class Multi2D():
             i_s=i%self.ns
             #print(self.T[i_s,:].shape,self.Psi_x.shape)
             self.Psi_q = fft.fft(self.T[i_s,:]*self.Psi_x) #periodic assumption
-            self.Psi_q[self.nq:-self.nq] = 0               #prevent aliasing
+            # self.Psi_q[self.nq:-self.nq] = 0               #prevent aliasing
             self.Psi_x = fft.ifft(self.Pq*self.Psi_q)
             # self.Psi_x = fft.fftshift(fft.ifft(self.Pq*self.Psi_q))
             #save and print out
             msg=''
-            if not i%iZv:
+            if not i%iZv and v:
                 Ix2 = np.sum(np.abs(self.Psi_x)**2)*self.dx
                 Iq2 = np.sum(np.abs(self.Psi_q/self.nx)**2)/self.dq #parseval's theorem of the DFT
                 msg+='i=%-3d,is=%-2d I=%.4f, Iq=%.4f ' %(i,i_s,Ix2,Iq2)
-            if not i%iZs:
-                if msg : msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
+            if not i%iZs :
+                if msg and v: msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
                 self.psi_xz[self.iz,:] = np.abs(self.Psi_x)**2
                 self.psi_qz[self.iz,:] = np.abs(self.Psi_q)**2
                 self.iz+=1
             if msg:print(colors.green+msg+colors.black)
-
 
 
 def load(filename):

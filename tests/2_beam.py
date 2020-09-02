@@ -5,7 +5,7 @@ import wallpp.plane_group as pg     ;imp.reload(pg)
 import multislice.multi_2D as ms    ;imp.reload(ms)
 plt.close('all')
 path='../multislice/docs_fig/multi2D/'
-opts='M'
+opts='ME'
 
 K = 5.008343065817388
 keV   = cst.lam2keV(1/K)#200       # wavelength 200keV
@@ -56,7 +56,6 @@ if 'M' in opts:
 
         fj = lambda ti,j:np.sqrt(np.pi*Ai[j])*np.exp(-(np.pi*Ai[j]*K*np.sin(ti))**2)
         pg.fv()
-
 
         kx = 1#4/ax
         ti   = np.arcsin(kx/ms0.k0)

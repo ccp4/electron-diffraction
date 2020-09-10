@@ -41,27 +41,29 @@ f = np.reshape(f,(n*ndeg,n*ndeg))
 
 if 'P' in opts:dsp.stddisp(im=[x,z,f],scat=[Xa[0],Xa[1],15,'k'],)
 
-epss = np.arange(1,6,2)*0.01#array([0.01,0.05,0.1,0.2])
+epss = np.arange(1,4)*0.01#array([0.01,0.05,0.1,0.2])
 
 ms0 = []
 for eps in epss:
     print(colors.red,eps,colors.black)
     ms0 += [ms.Multi2D([x[0],z.T[0],f],ax1,bz1,keV=keV,Nx=Nx,nz=Nz,
-            dz=bz1/(2*n),eps=eps,
+            dz=bz1/(2*n),eps=eps,sg=-1,
             iZs=1,iZv=np.inf)]
 
-plts,xi_g,xi_1 = [],np.zeros(epss.shape),np.zeros(epss.shape)
+plts0,plts1 = [],[]
+xi_0,xi_1   = np.zeros(epss.shape),np.zeros(epss.shape)
 cs = dsp.getCs('hsv',epss.size)
 for i,eps in enumerate(epss):
-    Ib = ms0[i].Bz_show([-20,-10],out=1)
-    idx0 = sig.find_peaks(-Ib[0],width=5,prominence=0.1)[0][0]
-    idx1 = sig.find_peaks(-Ib[1],width=5)[0][0]
-    xi_g[i] = ms0[i].z[idx0]
+    Ib = ms0[i].Bz_show([10,20],out=1)
+    idx0 = sig.find_peaks(-Ib[0],width=5)[0][0]
+    idx1 = sig.find_peaks(-Ib[1],width=5,prominence=0.1)[0][0]
+    xi_0[i] = ms0[i].z[idx0]
     xi_1[i] = ms0[i].z[idx1]
-    plts+=[[ms0[i].z,-Ib[0],cs[i],r'$\epsilon=%.2f$' %eps]]
-    plts+=[[ms0[i].z,-Ib[1],[cs[i],'--'],'']]
-    plts+=[[xi_g[i],-Ib[0][idx0],[cs[i],'s'],'']]
-    plts+=[[xi_1[i],-Ib[1][idx1],[cs[i],'s'],'']]
-plts2 = [[epss,xi_g,'b-o','$g$'],[epss,xi_1,'g-o','$2$']]
-dsp.stddisp(plts ,lw=2,name=path+'2_beam_I.svg' ,opt='ps')
-dsp.stddisp(plts2,lw=2,name=path+'2_beam_xi.svg',opt='ps')
+    plts0+=[[ms0[i].z,Ib[0],cs[i],r'$\epsilon=%.2f$' %eps]]
+    plts1+=[[ms0[i].z,Ib[1],cs[i],r'$\epsilon=%.2f$' %eps]]
+    plts0+=[[xi_0[i],Ib[0][idx0],[cs[i],'s'],'']]
+    plts1+=[[xi_1[i],Ib[1][idx1],[cs[i],'s'],'']]
+plts2 = [[epss,xi_0,'b-o','$g_1$'],[epss,xi_1,'g-o','$g_2$']]
+dsp.stddisp(plts0 ,labs=[r'$z(\AA)$',r'$I$'],lw=2,name=path+'2_beam_I1.svg' ,opt='ps', xylims=[0,200,-0.0001,0.005])
+dsp.stddisp(plts1 ,labs=[r'$z(\AA)$',r'$I$'],lw=2,name=path+'2_beam_I2.svg' ,opt='ps')
+dsp.stddisp(plts2 ,labs=[r'Potential strength $V_{\epsilon}$',r'$\zeta(\AA)$'],lw=2,name=path+'2_beam_xi.svg' ,opt='ps')

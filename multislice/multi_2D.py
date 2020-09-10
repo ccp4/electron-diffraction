@@ -114,40 +114,41 @@ class Multi2D():
             if 'N' in opts:
                 for i in range(z.size) : Pqs[i,:]/=Pqs[i,0]
             if 'O' not in opts:Pqs[:,0]=0# do not show central beam
-        q   = fft.fftshift(self.q)
+        q   = fft.fftshift(self.q.copy())
         Pqs = [fft.fftshift(Pqs[i,:]) for i in range(z.size)]
         cs  = dsp.getCs(cmap,z.size)
-        plts = [[self.q,Pqs[i],cs[i]] for i in range(z.size)]
+        plts = [[q,Pqs[i],cs[i]] for i in range(z.size)]
         return dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$',r'$|\Psi(q)|^2$'],
             imOpt='hc',caxis=[z.min(),z.max()],cmap=cmap,
             **kwargs)
 
-    def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',out=0,**kwargs):
-        '''Show selected beam iBs as function of thickness '''
-        # Ib = self.psi_qz #np.abs()**2
-        Ib = self.getB(iBs,tol)
-        # Ib = self.psi_qz/self.nx**2/self.dq
-        # if isinstance(iBs,str):
-        #     N   = int(self.nx/2)
-        #     iHs = fft.fftshift(np.arange(-N,N))
-        #     if not 'a' in iBs:
-        #         Im  = Ib[:,1:].max()    #;print(Im)
-        #         Imax = Ib.max(axis=0)   #;print(Imax)
-        #         iHs = iHs[Imax>Im*tol]
-        #     iBs=iHs['O' not in iBs:]
-        #
-        # if isinstance(iBs,list):iBs=np.array(iBs)
-        # Ib   = Ib[:,iBs]
+    def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',plts=[],**kwargs):
+        '''Show selected beam iBs as function of thickness(see getB)'''
+        iBs,Ib = self.getB(iBs,tol,v=1)#;print(iBs)
+        h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
+        cs   = dsp.getCs(cmap,iBs.size)
+        plts += [[self.z,Ib[:,i],[cs[i],'-'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
+        return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],
+        **kwargs)
 
-        if out:
-            return Ib.T
-        else :
-            h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
-            cs   = dsp.getCs(cmap,iBs.size)
-            plts = [[self.z,Ib[:,i],[cs[i],'-'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
-            return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],
-            **kwargs)
+    def Xxz_show(self,iZs=1,iXs=1,**kwargs):
+        '''Show 2D wave propagation solution'''
+        if isinstance(iZs,int):iZs=slice(0,-1,iZs)
+        if isinstance(iXs,int):iZs=slice(0,-1,iXs)
+        x,z = np.meshgrid(self.x,self.z)
+        im = [x[iZs,:],z[iZs,:],self.psi_xz[iZs,:]]
+        return dsp.stddisp(im=im,labs=[r'$x(\AA)$',r'$z(\AA)$'],
+        **kwargs)
 
+    def Qxz_show(self,iZs=1,**kwargs):
+        '''Show 2D wave propagation solution'''
+        iZs = slice(0,-1,iZs)
+        q,z = np.meshgrid(self.q,self.z[iZs])
+        Pqs = self.psi_qz[iZs,:].copy()
+        Pqs[:,0] = 0
+        im = [q,z,Pqs]
+        return dsp.stddisp(im=im,labs=[r'$q(\AA^{-1})$',r'$z(\AA)$'],
+        **kwargs)
     def Ewald_show(self,deg=10,nh=20,nk=10,relrod=0,**kwargs):
         ''' Displays the Ewald sphere and the reciprocal lattice
         - deg : extent of the ewald sphere in degrees
@@ -177,32 +178,20 @@ class Multi2D():
         scat  = [X,Z,15,'k']
         # ax1 = np.sqrt(1**2+10**2)*ax
         # bz1 = ax1
-        dsp.stddisp(plts,scat=scat,labs=[r'$k_x(\AA^{-1})$',r'$k_z(\AA^{-1})$'],
+        return dsp.stddisp(plts,scat=scat,labs=[r'$k_x(\AA^{-1})$',r'$k_z(\AA^{-1})$'],
             **kwargs)#lw=2,xylims=[0,3,0,3])#,xyTicks=[1/ax1,1/bz1])
 
-    def Xxz_show(self,iZs=1,iXs=1,**kwargs):
-        '''Show 2D wave propagation solution'''
-        if isinstance(iZs,int):iZs=slice(0,-1,iZs)
-        if isinstance(iXs,int):iZs=slice(0,-1,iXs)
-        x,z = np.meshgrid(self.x,self.z)
-        im = [x[iZs,:],z[iZs,:],self.psi_xz[iZs,:]]
-        return dsp.stddisp(im=im,labs=[r'$x(\AA)$',r'$z(\AA)$'],
-        **kwargs)
-
-    def Qxz_show(self,iZs=1,**kwargs):
-        '''Show 2D wave propagation solution'''
-        iZs = slice(0,-1,iZs)
-        q,z = np.meshgrid(self.q,self.z[iZs])
-        Pqs = self.psi_qz[iZs,:].copy()
-        Pqs[:,0] = 0
-        im = [q,z,Pqs]
-        return dsp.stddisp(im=im,labs=[r'$q(\AA^{-1})$',r'$z(\AA)$'],
-        **kwargs)
-
+    ##########################################
+    #### get methods
     def getQ(self):return self.q
     def getI(self):return self.psi_qz[-1,:]
-    def getB(self,iBs='O',tol=1e-3):
+    def getB(self,iBs='O',tol=0,v=0):
+        ''' get beam as function of thickness
+        - iBs : 'O'(include origin) a(all)
+        - tol : select only beams max(I)>tol*I_max
+        '''
         Ib = self.psi_qz/self.nx**2/self.dq
+        if isinstance(iBs,list):np.array(iBs)
         if isinstance(iBs,str):
             N   = int(self.nx/2)
             iHs = fft.fftshift(np.arange(-N,N))
@@ -212,8 +201,10 @@ class Multi2D():
                 iHs = iHs[Imax>Im*tol]
             iBs=iHs['O' not in iBs:]
         if isinstance(iBs,list):iBs=np.array(iBs)
-        return Ib[:,iBs]
-
+        if v:
+            return iBs,Ib[:,iBs]
+        else:
+            return Ib[:,iBs]
 
     ##################################################################
     ###### main computations
@@ -277,10 +268,10 @@ class Multi2D():
             # self.Psi_x = fft.fftshift(fft.ifft(self.Pq*self.Psi_q))
             #save and print out
             msg=''
-            if not i%iZv and v:
+            if v and (not i%iZv or i==nz-1):
                 Ix2 = np.sum(np.abs(self.Psi_x)**2)*self.dx
                 Iq2 = np.sum(np.abs(self.Psi_q/self.nx)**2)/self.dq #parseval's theorem of the DFT
-                msg+='i=%-3d,is=%-2d I=%.4f, Iq=%.4f ' %(i,i_s,Ix2,Iq2)
+                msg+='i=%-4d,islice=%-2d I=%.4f, Iq=%.4f ' %(i,i_s,Ix2,Iq2)
             if not i%iZs :
                 if msg and v: msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
                 self.psi_xz[self.iz,:] = np.abs(self.Psi_x)**2
@@ -288,11 +279,43 @@ class Multi2D():
                 self.iz+=1
             if msg:print(colors.green+msg+colors.black)
 
-
+##################################################################
+#### misc functions
+##################################################################
 def load(filename):
     '''load a saved Multislice object'''
     with open(filename,'rb') as f : multi = pickle.load(f)
     return multi
+
+def tilts_show(tilts,mp2,iBs,iZs,**kwargs):
+    ''' display beams for a sequence of tilted simulations
+    tilts,mp2 : tilts array and multislice objects
+    - iBs,iZs : beam and slice indices (integer allowed)
+    '''
+    bopt,zopt,nz=isinstance(iBs,int),isinstance(iZs,int),1
+    if bopt:iBs=np.array([iBs])
+    if zopt:iZs=np.array([iZs])
+    if isinstance(iZs,slice):
+        stop = (mp2[0].z.size+1)*(iZs.stop<0)+iZs.stop #;print(stop)
+        nz = int(np.ceil((stop-iZs.start)/iZs.step))   #;print(nz)
+    else:
+        nz = np.array(iZs).size
+    Itbz = np.zeros((tilts.size,iBs.size,nz))
+    for i,t in enumerate(tilts):
+        Itbz[i,:,:] = mp2[i].getB(iBs)[iZs,:].T
+
+    if zopt and bopt:
+        plts=[tilts,Itbz[:,0,iZs],'bo-']
+        dsp.stddisp(plts,labs=[r'$\theta(deg)$','$I$'],**kwargs)
+    if bopt and not zopt:
+        csZ = dsp.getCs('Reds',nz)
+        plts1 = [[tilts,Itbz[:,0,iZ],[csZ[iZ],'o-'],'%dnm' %(z0/10)] for iZ,z0 in enumerate(mp2[0].z[iZs])]
+        dsp.stddisp(plts1,labs=[r'$\theta(deg)$','$I$'],**kwargs)
+    if zopt and not bopt:
+        cs = dsp.getCs('Spectral',iBs.size)
+        # for iZ in iZs:Iz[:,iZ]/=Iz[:,iZ].max()
+        plts2=[ [tilts,Itbz[:,i],[cs[i],'o-'],'iB=%d' %(iB)] for i,iB in enumerate(iBs)]
+        dsp.stddisp(plts2,labs=[r'$\theta(deg)$','$I$'],**kwargs)
 
 ##################################################################
 ###### Base test

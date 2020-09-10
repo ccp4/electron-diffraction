@@ -64,37 +64,29 @@ def small_thick():
 def tilt(t=0.1,eps=eps):
     mpt = MS2D.Multi2D(pattern,a,b,keV,tilt=t,
             Nx=Nx,dz=0.1*b,nz=1000,ppopt='',#XQZTP
-            iZs=1,iZv=iZv,eps=eps,v=0)
+            iZs=1,iZv=1,eps=eps,v=0)
     # mp1.Bz_show(iBs=np.arange(6)*Nx,lw=2,xylims=[0,400,0,1])
     return mpt
 
-def tilts_test(tilts=np.linspace(0,0.9,100),eps=0.01,**kwargs):
-    nz=3000
-    iBs = np.arange(-3,0)
-    iZs = np.arange(1000,nz,100)
-    # iBs = np.hstack([np.arange(1,4),np.arange(-4,0)])
-    mp2,It = np.empty(tilts.size,dtype=object),np.zeros((tilts.size,iBs.size))
-    Iz = np.zeros((tilts.size,nz))
+def tilts_test(tilts=np.linspace(0,0.9,100),
+    eps=0.01,nz=3000):
+    mp2 = np.empty(tilts.size,dtype=object)
     for i,t in enumerate(tilts):
         print('theta=%.2f' %t)
-        mp2[i] = MS2D.Multi2D(pattern,a,b,keV,tilt=t,
-                Nx=Nx,dz=0.1*b,nz=nz,ppopt='',#XQZTP
-                iZs=1,iZv=100,eps=eps,v=0)
-        Iz[i,:] = mp2[i].getB(iBs)[:,1]
-        It[i,:] = mp2[i].getI()[iBs]
-        # mp2[i].Ewald_show(lw=2)
-    # plts=[[mp0.q,mp0.getI(),'b',''],[mp2.q,mp2.getI(),'r',r'$\theta_i=%.1f^{\circ}$' %mp2.tilt]]
-    cs,csZ = dsp.getCs('Spectral',iBs.size), dsp.getCs('Reds',iZs.size)
-    # for iZ in iZs:Iz[:,iZ]/=Iz[:,iZ].max()
-    plts1=[ [tilts,Iz[:,iZ],[csZ[i],'o-'],'%dnm' %(mp2[0].z[iZ]/10)] for i,iZ in enumerate(iZs)]
-    # plts2=[ [tilts,It[:,i],[cs[i],'o-'],'iB=%d' %(iB)] for i,iB in enumerate(iBs)]
-    dsp.stddisp(plts1,labs=[r'$\theta(deg)$','$I$'],**kwargs)
-    # dsp.stddisp(plts2,labs=[r'$\theta(deg)$','$I$'],**kwargs)
-    return mp2
+        mp2[i] = MS2D.Multi2D(pattern,a,b,keV,tilt=-t,
+                Nx=1,dz=0.1*b,nz=nz,ppopt='',#XQZTP
+                iZs=10,iZv=100,eps=eps,sg=-1,v=1)
+    return tilts,mp2
 
 # mp0=base()
 # ms_sg()
 # mp1=small_thick()
 # mpt=tilt(t=0.1)
-msts=tilts_test(tilts=np.linspace(0,0.3,21),eps=0.1,name=path+'rocking_eps1.svg',opt='p')
+ts,msts=tilts_test(tilts=np.linspace(0,0.2,51),eps=0.1,nz=10010)
+# ts,msts=tilts_test(tilts=np.linspace(0,0.3,21)[6:8],eps=0.02,nz=50000)
+# tilts_show(ts,msts,iBs=1,iZs=-1,name=path+'rocking_eps1.svg',opt='p')
+# tilts_show(msts,iBs=np.arange(-3,3),iZs=-1,name=path+'rocking_eps1.svg',opt='p')
+MS2D.tilts_show(ts,msts,iBs=1,iZs=slice(0,10000,1000),name=path+'rocking_eps1.svg',opt='p')
+m0 = msts[25];m0.Bz_show(np.arange(-5,5))
+# msts[10].Ewald_show(lw=2,xylims=[-0.01,0.4,-0.001,0.005])
 # msts=tilts_test(tilts=np.linspace(0,0.2,51),eps=0.10,name=path+'rocking_eps2.svg',opt='ps')

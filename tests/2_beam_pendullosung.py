@@ -5,7 +5,7 @@ import wallpp.plane_group as pg     ;imp.reload(pg)
 import multislice.multi_2D as ms    ;imp.reload(ms)
 plt.close('all')
 path='../multislice/docs_fig/multi2D/2_beam_'
-opts='T'#MK'
+opts='ME'#MK'
 
 K = 5.008343065817388
 keV   = cst.lam2keV(1/K)#200       # wavelength 200keV
@@ -50,8 +50,8 @@ if 'M' in opts:
     ms0 = ms.Multi2D([x[0],z.T[0],f],ax1,bz1,keV=keV,Nx=Nx,nz=Nz,
             dz=bz1/(2*n),eps=0.01,sg=-1,
             iZs=1,iZv=np.inf)
-    ms0.Bz_show(np.arange(-3,3)*n,lw=2  ,name=path+'Iz.svg',opt='ps')
-    ms0.Qz_show(slice(0,-1,100),opts='O' ,name=path+'Iq.svg',opt='ps',xylims=['x',-5,5])
+    # ms0.Bz_show(np.arange(-3,3)*n,lw=2  ,name=path+'Iz.svg',opt='ps')
+    # ms0.Qz_show(slice(0,-1,100),opts='O' ,name=path+'Iq.svg',opt='ps',xylims=['x',-5,5])
 
     # if 'D' in opts:
     #     iM = -n*4
@@ -119,7 +119,8 @@ if 'E' in opts:
 
     fig,ax0 = ms0.Ewald_show()
     dsp.stddisp(plts,scat=scat,labs=[r'$k_x(\AA^{-1})$',r'$k_z(\AA^{-1})$'],
-        lw=2,xylims=[-0.01,1.1,-0.01,0.2],ax=ax0,name=path+'E.svg',opt='ps')#,xyTicks=[1/ax1,1/bz1])
+        lw=2,xylims=[-0.01,1.1,-0.01,0.2],ax=ax0,
+        name=path+'E.svg',opt='p')
 
 
 if 'K' in opts:

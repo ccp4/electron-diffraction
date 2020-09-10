@@ -148,7 +148,7 @@ class NearBragg():
         for i in range(self.npx) :
             tij  = np.abs(self.x0s[i]-self.x)/(self.z0-self.z)
             R_ij = self.z + np.sqrt((self.x0s[i]-self.x)**2+(self.z0-self.z)**2)
-            Rij  = self.x0s[i]*self.x/self.z0
+            Rij  = self.x0s[i]*self.x/(self.z0-self.z)
             self.I[i] = np.abs(np.sum(
                 self.fj(tij,self.Za)*np.exp(2*np.pi*1J*Rij/self.lam)/(R_ij*cst.A)))**2
 

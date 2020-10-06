@@ -111,5 +111,5 @@ if __name__ == "__main__":
     # Li_patterns(name+'gif/',nzs=20, opt='drsp',fopt='',ppopt='w',v=1)
     # Li_gif(name+'gif/')
     # df = Li_latsize(name+'latsize/',nvals=3,opt='drsp',fopt='',ppopt='w',v=1)
-    Li_wobble(name+'wobble/',nvals=3,opt='',fopt='',ppopt='wu',v=0)#,ssh='tarik-CCP4home')
+    # Li_wobble(name+'wobble/',nvals=3,opt='',fopt='',ppopt='wu',v=0)#,ssh='tarik-CCP4home')
     # Li_rots()

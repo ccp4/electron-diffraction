@@ -64,16 +64,21 @@ class Multi2D():
     ###################################################################
     #### display
     ###################################################################
-    def Tz_show(self,iSz=slice(0,None,1),**kwargs):
+    def Tz_show(self,iSz=slice(0,None,1),Vopt='VT',**kwargs):
         '''Show Transmission function '''
         if isinstance(iSz,int):iSz=[iSz]
         if isinstance(iSz,slice):iSz=list(np.arange(self.ns)[iSz])
         if isinstance(iSz,list):N=len(iSz)
         cs1,cs2,cs3 = dsp.getCs('Greens',N),dsp.getCs('Blues',N),dsp.getCs('Reds',N)
-        plts = [[self.x,self.Vz[iSz[i],:].T ,cs1[i]] for i in range(N)]
-        plts+= [[self.x,self.T.real[iSz[i],:].T,cs2[i]] for i in range(N)]
-        plts+= [[self.x,self.T.imag[iSz[i],:].T,cs3[i]] for i in range(N)]
-        legElt={r'$V_z(kV\AA)$':'g-','$re(T)$':'b-','$im(T)$':'r-'}
+        plts,legElt=[],{}
+        if 'V' in Vopt:
+            plts += [[self.x,self.Vz[iSz[i],:].T ,cs1[i]] for i in range(N)]
+            legElt[r'$V_z(kV\AA)$']='g-'
+        if 'T' in Vopt:
+            plts+= [[self.x,self.T.real[iSz[i],:].T,cs2[i]] for i in range(N)]
+            plts+= [[self.x,self.T.imag[iSz[i],:].T,cs3[i]] for i in range(N)]
+            legElt['$re(T)$']='b-'
+            legElt['$im(T)$']='r-'
         return dsp.stddisp(plts,labs=[r'$x(\AA)$',''],#title='Projected potential $V_z$, Transmission function $T$',
             legElt=legElt,**kwargs)
 

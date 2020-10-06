@@ -74,18 +74,20 @@ def get_info_cpu(log_file):
     info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
     return np.array(info,dtype=float)
 
-def update_df_info(df_path,hostpath=None):
+def update_df_info(df_path,hostpath=None,files=[]):
     df = pd.read_pickle(df_path)
     datpath = os.path.dirname(df_path)+'/'
     for name in df.index:
         multi = load_multi_obj(datpath+name);#print(name)
-        state = multi.check_simu_state(ssh_alias=df.loc[name].host,v=0,hostpath=hostpath)
+        ssh_host = df.loc[name].host
+        state    = multi.check_simu_state(ssh_alias=ssh_host,v=0,hostpath=hostpath)
         df.loc[name]['state'] = state
         info = get_info(multi._outf('log'))
         df.loc[name][info_cols[:2]] = info
         if state=='done':
             info = get_info_cpu(multi._outf('log'))
             df.loc[name][info_cols] = info
+        for file in files:multi.ssh_get(ssh_host,file)
     df.to_pickle(df_path);
     print(green+'DataFrame updated and saved : \n' +yellow+df_path+black)
     return df

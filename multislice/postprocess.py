@@ -67,11 +67,16 @@ def get_info(log_file):
     info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
     return np.array(info,dtype=float)
 
-def get_info_cpu(log_file):
+def get_info_cpu(log_file,mulslice=False):
     '''compute zmax,I,cpuTime and wallTime'''
     with open(log_file,'r') as f : log_lines=f.readlines()
-    log_lines = log_lines[-7:-5] + log_lines[-2:]
-    info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
+    if mulslice:
+        log_lines = [log_lines[-6]] + log_lines[-2:]
+        info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
+        info = [log_lines[0].strip().split(',')[0].replace('slice','')]+info #zmax
+    else:
+        log_lines = log_lines[-7:-5] + log_lines[-2:]
+        info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
     return np.array(info,dtype=float)
 
 def update_df_info(df_path,hostpath=None,files=[]):
@@ -85,9 +90,9 @@ def update_df_info(df_path,hostpath=None,files=[]):
         info = get_info(multi._outf('log'))
         df.loc[name][info_cols[:2]] = info
         if state=='done':
-            info = get_info_cpu(multi._outf('log'))
+            info = get_info_cpu(multi._outf('log'),mulslice=multi.is_mulslice)
             df.loc[name][info_cols] = info
-        for file in files:multi.ssh_get(ssh_host,file)
+            for file in files:multi.ssh_get(ssh_host,file)
     df.to_pickle(df_path);
     print(green+'DataFrame updated and saved : \n' +yellow+df_path+black)
     return df

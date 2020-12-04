@@ -21,14 +21,19 @@ class NearBragg():
     - lam  : wavelength(A)
     - Nx,Nz : number of unit cells in each direction
     ## detector : \n
-    - z0   : distance of detector to crystal origin
-    - npx  : number of pixels
-    - tmax : max half angle (deg)
-    - qmax : max resolution A^-1 (sets tmax if defined)
+    - z0   : float - distance of detector to crystal origin
+    - npx  : float - number of pixels
+    - tmax : float - max half angle (deg)
+    - qmax : float - max resolution A^-1  (prevails on tmax if defined)
     OR
-    - q0s  : reciprocal space sampling(A^-1)
+    - q0s  : np.ndarray - reciprocal space sampling(A^-1)
     ## misc :\n
-    - method : Dual, Greens,Fresnel,Fraunhofer,Holton
+    - method :
+        - Greens2    : Double scattering
+        - Greens     : single scattering exact distance calculations
+        - Fresnel    : single scattering Fresnel regime
+        - Fraunhofer : Single scattering Fraunhofer regime
+        - Holton : call Holton code
     - fjopt : with(1) or without(0) form factor (default 1)
     '''
     def __init__(self,pattern,ax,bz,keV=200,lam=None,path='',
@@ -48,22 +53,24 @@ class NearBragg():
         self.I = np.zeros(self.x0s.shape,dtype=dtype)
 
         #form factor
-        if fjopt==0 :
-            self.fj = lambda ti,j:np.ones(ti.shape)
-        elif fjopt==1 :
+        if fjopt==1 :
             self.fj = lambda ti,j:eps*np.sqrt(np.pi)/Ai[j]*np.exp(-(np.pi*Ai[j]*(np.sin(ti)/self.lam))**2)
+        elif fjopt==0 :
+            #no form factor for comparison with Holton code
+            self.fj = lambda ti,j:np.ones(ti.shape)
         #compute
-        if   method=='Dual'   or  method=='D' : self._Dual_beams()
-        elif method=='Proba'  or  method=='P' : self._Proba(iZv)
-        elif method=='Greens' or  method=='G' : self._Greens2(iZv)
-        elif method=='Fresnel'                : self._Fresnel()
-        elif method=='Fraunhofer'             : self._Fraunhofer()
-        elif method=='Holton'                 : self._Holton(path=path)
+        if   method=='Greens2' or  method=='D' : self._Greens2(iZv)
+        elif method=='Proba'   or  method=='P' : self._Proba(iZv)
+        elif method=='Greens'  or  method=='G' : self._Greens()
+        elif method=='Fresnel'                 : self._Fresnel()
+        elif method=='Fraunhofer'              : self._Fraunhofer()
+        elif method=='Holton'                  : self._Holton(path=path)
 
     ################################################################
     # init
     ################################################################
     def replicate(self,ax,bz,Nx,Nz):
+        '''replicate unit cell pattern Nx,Nz times'''
         self.Nx,self.Nz = Nx,Nz
         self.ax,self.bz = ax,bz
         x,z,Za = self.pattern
@@ -84,6 +91,8 @@ class NearBragg():
         self.Za = np.array(Za,dtype=int)
 
     def set_detector(self,npx,z0,tmax,qmax=None):
+        ''' compute pixel positions and sizes from max scattering angle and distance to sample
+        '''
         if qmax:tmax=qmax*self.lam
         self.npx  = npx
         self.z0   = dtype(z0)
@@ -107,6 +116,7 @@ class NearBragg():
     # display
     ################################################################
     def Pattern_show(self,**kwargs):
+        '''Show diffraction pattern'''
         C = [Cs[Z] for Z in self.Za]
         Nx0,Nx1 = int(self.Nx/2),int(np.ceil(self.Nx/2))
         dsp.stddisp(scat=[self.z,self.x,C],
@@ -114,16 +124,18 @@ class NearBragg():
             xyTicks=[self.bz,self.ax],xylims=[0,self.Nz*self.bz,-Nx0*self.ax,Nx1*self.ax],
             **kwargs)
 
-    def stat_show(self,**kwargs):
-        z = self.bz*np.arange(self.Nz+1)/10
-        cs = dsp.getCs('Spectral',2)
-        S = np.array([np.cumsum(Si) for Si in self.S])
-        plts  = [[z,Si,cs[i],'%d' %i] for i,Si in enumerate(S)]
-        plts += [[z,S.sum(axis=0),'k--']]
-        return dsp.stddisp(plts,labs=['$z(nm)$','$Proba$'],
-            **kwargs)
+    # def stat_show(self,**kwargs):
+    #     '''show statistics'''
+    #     z = self.bz*np.arange(self.Nz+1)/10
+    #     cs = dsp.getCs('Spectral',2)
+    #     S = np.array([np.cumsum(Si) for Si in self.S])
+    #     plts  = [[z,Si,cs[i],'%d' %i] for i,Si in enumerate(S)]
+    #     plts += [[z,S.sum(axis=0),'k--']]
+    #     return dsp.stddisp(plts,labs=['$z(nm)$','$Proba$'],
+    #         **kwargs)
 
     def F_show(self,qopt=0,**kwargs):
+        '''Show atomic form factors'''
         Za = np.unique(self.Za)
         t = self.getAngle()*np.pi/180
         if qopt:
@@ -141,17 +153,17 @@ class NearBragg():
     def getI(self):return self.I
 
     ################################################################
-    # run .c code
+    # utils to run James Holton .c code
     ################################################################
-    def save_input(self,file):
+    def _save_input(self,file):
         np.savetxt(file,np.vstack([self.z,np.zeros(self.x.shape),self.x,
             np.ones(self.x.shape),np.zeros(self.x.shape),np.zeros(self.x.shape)]).T)
         print(colors.yellow+file+colors.black)
 
-    def cmd(self,opts='s',path='',file='atoms.txt'):
+    def _cmd(self,opts='s',path='',file='atoms.txt'):
         self.path = path
         self.file = file
-        if 's' in opts :self.save_input(path+self.file)
+        if 's' in opts :self._save_input(path+self.file)
         #cmd
         cmd=" %s -file %s " %(nearBragg_bin,path+self.file)
         cmd+='-lambda %f ' %(self.lam)
@@ -167,13 +179,13 @@ class NearBragg():
             self.I = np.loadtxt(path+'I.txt')
             # print(colors.green+'Near Bragg'+colors.black)
 
-
-    ################################################################
-    # Path lengths
-    ################################################################
     def _Holton(self,path=''):
-        self.cmd(opts='sr',path=path,file='atoms.txt')
+        '''Run James Holton code'''
+        self._cmd(opts='sr',path=path,file='atoms.txt')
 
+    ################################################################
+    # Single scattering routines
+    ################################################################
     def _Fraunhofer(self):
         print(colors.green+'... Running nearBragg Fraunhofer ...'+colors.black)
         for i in range(self.npx) :
@@ -192,24 +204,23 @@ class NearBragg():
             self.I[i] = np.abs(np.sum(
                 self.fj(tij,self.Za)*np.exp(2*np.pi*1J*Rij/self.lam)/(R_ij*cst.A)))**2
 
-
-    def _Dual_beams(self):
-        print(colors.green+'... Running nearBragg Dual Beams ...'+colors.black)
-        natoms = self.z.size
-        self.A = np.zeros((self.x0s.size),dtype=np.complex256)
-        for i in range(natoms) :
-            if not i%100 : print('%d/%d' %(i,natoms))
-            #single scattering
-            tij0  = np.abs(self.x0s-self.x[i])/(self.z0-self.z[i])
-            Rij0 = self.z[i] + np.sqrt((self.x0s-self.x[i])**2+(self.z0-self.z[i])**2)
-            self.A += self.fj(tij0,self.Za[i])*np.exp(2*np.pi*1J*Rij0/self.lam)/(Rij0*cst.A)
-            #double scattering
-            for j in range(i):
-                tij = np.arctan((self.x[i]-self.x[j])/(self.z[i]-self.z[j]))
-                Rij = np.sqrt((self.x[j]-self.x[i])**2+(self.z[j]-self.z[i])**2)
-                fij = self.fj(tij,self.Za[j]) #/np.sqrt(Rij)
-                self.A += fij*self.fj(tij0-tij,self.Za[i])*np.exp(2*np.pi*1J*(Rij0+Rij)/self.lam)/(Rij0*cst.A)
-        self.I = np.abs(self.A)**2
+    # def _Dual_beams(self):
+    #     print(colors.green+'... Running nearBragg Dual Beams ...'+colors.black)
+    #     natoms = self.z.size
+    #     self.A = np.zeros((self.x0s.size),dtype=np.complex256)
+    #     for i in range(natoms) :
+    #         if not i%100 : print('%d/%d' %(i,natoms))
+    #         #single scattering
+    #         tij0  = np.abs(self.x0s-self.x[i])/(self.z0-self.z[i])
+    #         Rij0 = self.z[i] + np.sqrt((self.x0s-self.x[i])**2+(self.z0-self.z[i])**2)
+    #         self.A += self.fj(tij0,self.Za[i])*np.exp(2*np.pi*1J*Rij0/self.lam)/(Rij0*cst.A)
+    #         #double scattering
+    #         for j in range(i):
+    #             tij = np.arctan((self.x[i]-self.x[j])/(self.z[i]-self.z[j]))
+    #             Rij = np.sqrt((self.x[j]-self.x[i])**2+(self.z[j]-self.z[i])**2)
+    #             fij = self.fj(tij,self.Za[j]) #/np.sqrt(Rij)
+    #             self.A += fij*self.fj(tij0-tij,self.Za[i])*np.exp(2*np.pi*1J*(Rij0+Rij)/self.lam)/(Rij0*cst.A)
+    #     self.I = np.abs(self.A)**2
 
     def _Greens(self):
         print(colors.green+'... Running nearBragg Greens ...'+colors.black)
@@ -219,35 +230,83 @@ class NearBragg():
             self.I[i] = np.abs(np.sum(
                 self.fj(tij,self.Za)*np.exp(2*np.pi*1J*R_ij/self.lam)/(R_ij*cst.A)))**2
 
+    #################################################################
+    #### Multiple scattering routines
+    #################################################################
     def _Greens2(self,iZv=5):
+        '''2-level dynamical scattering ignoring backward scattering'''
         print(colors.green+'... Running nearBragg Greens2 ...'+colors.black)
         natoms  = self.z.size
         dq      = self.q0s[1]-self.q0s[0]
-        sig_e   = sum(self.fj(self.q0s*self.lam,self.Za[0])**2)*dq
-        print('dq=%.1E Angstrom, sig_e:%.1E Angstrom' %(dq,sig_e))
+        # sig_e   = sum(self.fj(self.q0s*self.lam,self.Za[0])**2)*dq
+        # print('dq=%.1E Angstrom, sig_e:%.1E Angstrom' %(dq,sig_e))
 
-        I0 = 1/(self.ax*self.Nx) #1 electron/transverse area/sec
+        I0 = 1
         self.A = np.zeros((self.x0s.size),dtype=complex)
-        self.S = np.zeros((2,self.Nz+1))
-        self.S[0,0]=1
+        Adyn = np.zeros((self.x0s.size),dtype=complex)
+        # self.S[0,0]=1
         iz=1
+        print(colors.yellow+'atom %d/%d slice %d, I0=%.4f' %(1,natoms, iz,I0) +colors.black)
         for i in range(natoms) :
-            if not i%(iZv*self.Nx) : print('atom %d/%d slice %d, I0=%.4f' %(i+1,natoms, iz,I0))
             #### single scattering
-            tij0 = (self.x0s-self.x[i])/(self.z0-self.z[i])
-            R_ij = self.z[i] + np.sqrt((self.x0s-self.x[i])**2+(self.z0-self.z[i])**2)
-            Akin = np.sqrt(I0)*self.fj(tij0,self.Za[i])*np.exp(2*np.pi*1J*R_ij/self.lam) #/(R_ij*cst.A)
+            ti0 = (self.x0s-self.x[i])/(self.z0-self.z[i])
+            #distance from atom to detector
+            Ri0 = np.sqrt((self.x0s-self.x[i])**2+(self.z0-self.z[i])**2)
+            # single scattering amplitude
+            Akin = self.fj(ti0,self.Za[i])*np.exp(2*np.pi*1J*self.z[i]/self.lam)
+            #### double scattering with backward atoms
+            ibackward = self.Nx*(iz-1)
+            Adyn[:]=0
+            for j in range(ibackward):
+                #angle between atoms
+                tij = np.arctan((self.x[i]-self.x[j])/(self.z[i]-self.z[j]))
+                #distance betwwen atoms
+                Rij = np.sqrt((self.x[j]-self.x[i])**2+(self.z[j]-self.z[i])**2)
+                #amplitude of radiation j at atom i (dimensionless)
+                fij = self.fj(tij,self.Za[j])*np.exp(2*np.pi*1J*Rij/self.lam)/Rij*dq
+                #scattering amplitude from atom i due to scattering from atom j
+                Adyn += fij*self.fj(ti0-tij,self.Za[i])
 
-            Skin = (abs(Akin)**2).sum()*dq
-            assert Skin<1
-            self.S[0,iz] -= sig_e*I0
-            self.S[1,iz] += Skin
-            self.A += Akin
+            #increment slice
             if not (i+1)%self.Nx:
-                I0 -= self.S[1,iz]/(self.ax*self.Nx) #;print(I0)
+                # I0 -= self.S[1,iz]/(self.ax*self.Nx) #;print(I0)
                 iz+=1
+                if not iz%iZv :
+                    print(colors.yellow+'atom %d/%d slice %d, I0=%.4f' %(i+1,natoms, iz,I0) +colors.black)
+
+            # atom contribution to diffraction pattern at detector
+            # print(np.abs(Akin).max(),np.abs(Adyn).max(),np.abs(Akin-Adyn).min())
+            self.A += (Akin+Adyn)*np.exp(2*np.pi*1J*Ri0/self.lam)/(Ri0*cst.A) #*np.sqrt(I0)
         self.I = np.abs(self.A)**2
 
+    # def _Greens2_old(self,iZv=5):
+    #     print(colors.green+'... Running nearBragg Greens2 ...'+colors.black)
+    #     natoms  = self.z.size
+    #     dq      = self.q0s[1]-self.q0s[0]
+    #     sig_e   = sum(self.fj(self.q0s*self.lam,self.Za[0])**2)*dq
+    #     print('dq=%.1E Angstrom, sig_e:%.1E Angstrom' %(dq,sig_e))
+    #
+    #     I0 = 1/(self.ax*self.Nx) #1 electron/transverse area/sec
+    #     self.A = np.zeros((self.x0s.size),dtype=complex)
+    #     self.S = np.zeros((2,self.Nz+1))
+    #     self.S[0,0]=1
+    #     iz=1
+    #     for i in range(natoms) :
+    #         if not i%(iZv*self.Nx) : print('atom %d/%d slice %d, I0=%.4f' %(i+1,natoms, iz,I0))
+    #         #### single scattering
+    #         tij0 = (self.x0s-self.x[i])/(self.z0-self.z[i])
+    #         R_ij = self.z[i] + np.sqrt((self.x0s-self.x[i])**2+(self.z0-self.z[i])**2)
+    #         Akin = np.sqrt(I0)*self.fj(tij0,self.Za[i])*np.exp(2*np.pi*1J*R_ij/self.lam) #/(R_ij*cst.A)
+    #
+    #         Skin = (abs(Akin)**2).sum()*dq
+    #         assert Skin<1
+    #         self.S[0,iz] -= sig_e*I0
+    #         self.S[1,iz] += Skin
+    #         self.A += Akin
+    #         if not (i+1)%self.Nx:
+    #             I0 -= self.S[1,iz]/(self.ax*self.Nx) #;print(I0)
+    #             iz+=1
+    #     self.I = np.abs(self.A)**2
 
     ##
     def _Proba(self,iZv=5):

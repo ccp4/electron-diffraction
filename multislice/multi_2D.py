@@ -13,7 +13,8 @@ import wallpp.lattice as lat
 
 class Multi2D():
     '''multislice 2D for quick testing
-    - pattern,ax,bz : x,z,f
+    - pattern : list of 2d-arrays - [x,z,f] where x,y=np.meshgrid(x0,z0)
+    - ax,bz : lattice constants
     - tilt : beam tilt (deg)
     - Nx : increase supercell size
     - dz : slice thickness
@@ -107,7 +108,8 @@ class Multi2D():
         '''Show wave propagation in q space for slices iZs
         - opts : O(include Origin), N(Normalize Origin), S(Shape normalize)
         '''
-        if isinstance(iZs,int):iZs=slice(0,iZs,self.z.size)
+        # if isinstance(iZs,int):iZs=slice(0,iZs,self.z.size)
+        if isinstance(iZs,int):iZs=slice(0,None,iZs)
         # if isinstance(iZs,list):iZs=slice(0,iZs,self.z.size)
         Pqs = np.zeros((self.psi_qz[iZs,:].shape))
         z   = self.z[iZs]
@@ -124,11 +126,12 @@ class Multi2D():
         cs  = dsp.getCs(cmap,z.size)
         plts = [[q,Pqs[i],cs[i]] for i in range(z.size)]
         return dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$',r'$|\Psi(q)|^2$'],
-            imOpt='hc',caxis=[z.min(),z.max()],cmap=cmap,
+            imOpt='c',caxis=[z.min(),z.max()],cmap=cmap,axPos='V',
             **kwargs)
 
     def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',plts=[],**kwargs):
         '''Show selected beam iBs as function of thickness(see getB)'''
+        # print(iBs)
         iBs,Ib = self.getB(iBs,tol,v=1)#;print(iBs)
         h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
         cs   = dsp.getCs(cmap,iBs.size)

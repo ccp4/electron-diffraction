@@ -131,11 +131,11 @@ class Multislice:
     def make_decks(self,save=True,datpath=None,prev=None,v=False):
         '''create the decks from the information provided'''
         if self.is_mulslice:
-            decks={self.outf['simu_deck']:self._mulslice_deck()}
+            decks={self.outf['simu_deck']:self._mulslice_deck(prev)}
             for i in self.slices:
                 decks[self.outf['slice_deck%s' %i]]=self._atompot_deck(i)
         else:
-            decks={self.outf['simu_deck']:self._autoslic_deck()}
+            decks={self.outf['simu_deck']:self._autoslic_deck(prev)}
         if save:
             #datapath is manually provided for remote generation
             if not datpath : datpath = self.datpath
@@ -561,18 +561,19 @@ class Multislice:
                 deck = self.outf['slice_deck%s' %i]
                 job += 'cat %s | %s >> %s \n' %(deck,temsim+'atompot',logfile)
         job += 'cat %s | %s >> %s\n' %(simu_deck,temsim+prog,logfile)
+
         # postprocess on remote machine
-        pycode='''import multislice.multislice as mupy;
+        pycode='''import numpy as np;
         import multislice.postprocess as pp;
-        multi = pp.load_multi_obj('%s');
-        multi.get_beams(bOpt='fa');
-        ''' %self._outf('obj')
+        beams = pp.import_beams('%s',%s);
+        np.save('%s',beams)
+        ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
         job +='python3 -c "%s"' %pycode.replace('\n','')
 
         #save job
         if not datpath:datpath=self.datpath
         with open(datpath+self.outf['job'],'w') as f : f.write(job)
-        print(colors.red+yellow+datpath+self.outf['job']+colors.black)
+        print(colors.red+colors.yellow+datpath+self.outf['job']+colors.black)
 
     def _get_job_ssh(self,ssh_alias,hostpath=None,v=False,cluster=False):
         #save local datpath
@@ -594,6 +595,7 @@ class Multislice:
         cmd += '%s ' %(' '.join(self.data))
         cmd += '%s ' %(' '.join(list(self.decks.keys())))
         cmd += '%s ' %(self.outf['job'])
+        cmd += '%s ' %(self.outf['obj'])
         cmd += '%s:%s' %(ssh_alias,hostpath)
         # check_output(cmd,shell=True).decode()
         p = Popen(cmd,shell=True);p.wait()
@@ -635,14 +637,16 @@ class Multislice:
         deck += "n\n"                           #thermal displacement
         return deck
 
-    def _mulslice_deck(self):
+    def _mulslice_deck(self,prev=None):
+        prev_run = "%s\n" %['y','n'][prev==None]
+        if prev : prev_run += "%s\n" %(self.datpath+prev)
         Nz,sl = self.repeat[2],ascii_letters[:len(self.data)]
         deck = "%d(%s)\n" %(Nz,sl)              #Stack sequence
         for i in self.slices :                  #atom pots
             deck+="%s\n" %self._outf('slice_imag%s' %i)#
         deck += "%s\n" %(self._outf('image'))   #image file
         deck += "n\n"                           #partial coherence
-        deck += "n\n"                           #start previous run
+        deck += prev_run                        #start previous run
         deck += "%.2f\n" %self.keV              #wavelength
         deck += "0 0\n"                         #crystal tilt
         deck += "%.4f %.4f \n" %self.tilt       #beam tilt
@@ -743,7 +747,7 @@ def sweep_var(name,param,vals,df=1,ssh='',tail='',do_prev=0,**kwargs):
             df.loc[multi.outf['obj']][[param,'host','state']] = [val,ssh,'start']
     if save :
         df.to_pickle(name+dfname)
-        print(colors.green+'Dataframe saved : '+yellow+name+dfname+colors.black)
+        print(colors.green+'Dataframe saved : '+colors.yellow+name+dfname+colors.black)
 
 
 # def coords2grid(coords,cz):

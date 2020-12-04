@@ -13,7 +13,7 @@ ax,bz = 10,5        # lattice constants A
 npx   = 4096       # number of pixels
 Nx,Nz = 10,100,#10,2  # unit cells
 qmax = 4
-opts='F' #HFld
+opts='F' #H(Holton)F(Fraunhofer)l d(diff)
 eps=0.1
 
 if 1:
@@ -23,15 +23,15 @@ if 1:
     # X   = np.random.rand(Natoms,dim)
     # Za  = np.random.randint(len(Zs),size=Natoms)
     np.save(dat+'atoms.npy',[x,z,Za])
-
 pattern = np.load(dat+'atoms.npy')
 
+# NB Greens
 nbG = nb.NearBragg(pattern,ax,bz,keV=keV,npx=npx,Nx=Nx,Nz=Nz,qmax=qmax,method='Greens')
 plts = [[nbG.getQ(),nbG.I,'g-+','Greens']]
 
 if 'H' in opts:
     nbH = nb.NearBragg(pattern,ax,bz,keV=keV,npx=npx,Nx=Nx,Nz=Nz,qmax=qmax,method='Holton',path='dat/')
-    objs=[(nbH,'k--+','Holton'),(nbH,'k-','Greens')]
+    objs=[(nbH,'k--+','Holton'),(nbG,'k-','Greens')]
     nb.display(objs,('q','I'),name=path+'comparisonHolton.svg',opt='sp')
     nbH.Pattern_show(name=path+'comparisonHoltonPattern.svg',opt='sp')
 

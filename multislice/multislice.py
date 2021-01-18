@@ -193,6 +193,8 @@ class Multislice:
         state = self.check_simu_state(ssh_alias=ssh_alias,hostpath=hostpath)
         if not state == 'done' and 'w' in ppopt:
             self.wait_simu(ssh_alias,1,hostpath)
+        self.save_pattern()
+        # self.get_beams(iBs='a',bOpt='f')
         if ssh_alias and 'u' in ppopt:
             if 'I' in ppopt : self.ssh_get(ssh_alias,'image'    ,hostpath)
             if 'B' in ppopt : self.ssh_get(ssh_alias,'beamstxt' ,hostpath)
@@ -200,7 +202,6 @@ class Multislice:
         if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
         if 'B' in ppopt and opt : self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
         if 'P' in ppopt and opt :
-            self.save_pattern()
             self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
 
     ###################################################################
@@ -271,10 +272,14 @@ class Multislice:
             if isinstance(iBs[0],str) :
                 iBs = [ (iB==hk).argmax() for iB in iBs if (iB==hk).sum()]
         else :
-            Imax = np.array([I.max() for I in Ib])
+            Imax = np.array([I.max() for I in Ib]) ;print(Imax)
             iBs = [i for i in range('O' not in bOpt,len(hk)) if Imax[i]>= tol*Imax.max()]
         beams = np.array(hk)[iBs],t, np.array(re)[iBs],np.array(im)[iBs],np.array(Ib)[iBs]
-        pp.plot_beam_thickness(beams,**kwargs)
+
+        if 'o' in bOpt:
+            return beams
+        else:
+            pp.plot_beam_thickness(beams,**kwargs)
 
     def get_beams(self,iBs=[],tol=1e-2,bOpt=''):
         ''' get the beams as recorded during:\n
@@ -311,6 +316,7 @@ class Multislice:
         - kwargs : see stddisp
         returns : [qx,qy,I]
         '''
+        # if not exists(self._outf('patternnpy')):self.save_pattern()
         im = np.load(self._outf('patternnpy')) ;print(im.shape)
         ax,by = self.cell_params[:2]
         Nh,Nk = self.repeat[:2];
@@ -329,7 +335,7 @@ class Multislice:
                     im[0,0] = 1
             if 'c' in Iopt and not Nmax:
                 #print('croping')
-                idx = im[:Nx,:Ny]>im.max()*tol
+                idx = im[:Nx,:Ny]>tol#*im.max()
                 h,k = np.meshgrid(np.arange(Nx),np.arange(Ny))
                 r = np.sqrt(h**2+k**2)
                 Nmax = ceil(r[idx].max()); #print('Pattern Nmax=%d > %E ' %(Nmax,tol))
@@ -360,17 +366,15 @@ class Multislice:
                     im0[i0,j0] = im00
                     im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
             im0 = np.log10(im0)
-        if out :
-            #print('packaging')
-            return h/Nh/ax, k/Nk/by, im0
-        else:
-            N = [1,4]['q' in Iopt]
-            t = np.linspace(0,2*np.pi/N,100)
-            ct,st = np.cos(t),np.sin(t)
-            plts = [[r*ct,r*st,'g--',''] for r in rings]
-            print('displaying pattern...')
-            print(h.shape,im0.shape)
-            dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
+
+        N = [1,4]['q' in Iopt]
+        t = np.linspace(0,2*np.pi/N,100)
+        ct,st = np.cos(t),np.sin(t)
+        plts = [[r*ct,r*st,'g--',''] for r in rings]
+        print('displaying pattern...')
+        print(h.shape,im0.shape)
+        dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
+        if out : return h/Nh/ax, k/Nk/by, im0
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities

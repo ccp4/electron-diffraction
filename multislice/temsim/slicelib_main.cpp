@@ -17,11 +17,11 @@ void parse(int argc, char **argv){
   char c;
   while ((c = getopt (argc, argv, "Z::N::r::R::d::f::o::")) != -1) {
      switch (c) {
-       case 'Z': Z    =atoi(optarg);break;
-       case 'r': r0   =atof(optarg);break;
-       case 'R': rmax =atof(optarg);break;
-       case 'd': dr   =atof(optarg);break;
-       case 'N': nrs  =atoi(optarg);break;
+       case 'Z': Z    = atoi(optarg);break;
+       case 'r': r0   = atof(optarg);break;
+       case 'R': rmax = atof(optarg);break;
+       case 'd': dr   = atof(optarg);break;
+       case 'N': nrs  = atoi(optarg);break;
        case 'o': if(optarg) sprintf(outf,"%s",optarg);break;
        case 'f': func=optarg[0];break;
      }

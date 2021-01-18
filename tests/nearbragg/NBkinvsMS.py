@@ -11,7 +11,7 @@ opts='I'
 # Problem
 keV   = 200        # wavelength 200keV
 Nx    = 10         # Number of transverse unit cells
-Nz    = 30          #
+Nz    = 20          #
 ndeg  = 2**8       # number of pixels
 pptype,ax,bz,angle,Za = 'p1',5,10,90,  2
 pattern = np.array([[2.5,5,Za]])
@@ -30,6 +30,7 @@ ms0 = ms.Multi2D(potential,ax,bz,keV=keV,
 dq=ms0.q[1]-ms0.q[0]
 # Ims = ms0.psi_qz[-1,:].copy()/(ms0.nx**2*ms0.dq**2)
 # print('MS Inorm:%.2f' %(Ims.sum()*ms0.dq))
+ms0.Bz_show(iBs=2,tol=1e-2,cmap='jet',lw=2)
 
 
 ### Run near bragg

@@ -77,9 +77,9 @@ def run_simus(thick=5000,nts=91,ssh=''):
         # multi.postprocess(ppopt='uwP',ssh_alias='tarik-CCP4home')
 
 def run_tilts(**kwargs):
-    tx = np.linspace(0,1,10)#deg
+    tx = np.linspace(0,0.1,10)#deg
     tilts = [[0,t*np.pi/180*1000] for t in tx]
-    mupy.sweep_var(path+'tilts/','tilt',tilts,df='df.pkl',do_prev=0,**kwargs)
+    mupy.sweep_var(path+'tilts/','tilt',tilts,tail='m',df='dfm.pkl',do_prev=0,**kwargs)
 
 
 def update_patterns(dfname='df.pkl',ssh='',hostpath=''):
@@ -108,15 +108,16 @@ def get_figs(dfname='df.pkl'):
     #         imOpt='ch',cmap='Blues',caxis=[0,90],pOpt='tG')
 
 
-data,angles = create_xyz(opts='ps')
+# data,angles = create_xyz(opts='ps')
 # lats  = np.array([rcc.show_grid(path+dat,opt='')[0] for dat in data])
 # multi = run_main(thick=2000,ssh='badb',hostpath='/data3/lii26466/multislice/biotin/')
 
 # multi = run_simus(thick=100,nts=3,ssh='')#'tarik-CCP4home')
-# multi = run_tilts(keV=200,mulslice=False,
-#     NxNy=2048,slice_thick=1.0,Nhk=5,repeat=[2,1,10],
-#     opt='dsr',fopt='f',v=1,
-#     ssh='badb',cluster=1,hostpath='/data3/lii26466/multislice/biotin/tilts/')
+multi = run_tilts(keV=200,mulslice=False,
+    NxNy=2048,slice_thick=1.0,Nhk=5,repeat=[2,1,100],
+    opt='dsr',fopt='f',v=1,
+    ssh='badb',cluster=1,hostpath='/data3/lii26466/multislice/biotin/tilts/')
+
 # df = update_patterns('tilts/df.pkl',ssh='badb',hostpath='/data3/lii26466/multislice/biotin/tilts/')
 # get_figs(dfname='tilts/df.pkl')
 

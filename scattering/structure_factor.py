@@ -6,10 +6,11 @@ from math import pi
 __all__=['structure_factor3D','plot_structure3D','get_miller3D',
         'get_pendulossung']
 
+
 def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     '''Computes structure factor in 3D from :
     - `pattern` : Nx4 array - N atoms with each row : x,y,z,Z
-    - `lat_vec` : 3x3 array - reciprocal lattice vectors
+    - `lat_vec` : 3x3 array - reciprocal lattice vectors (2*pi/a convention)
     - `hkl`     : list of 3 miller indices h,k,l each as 3Ndarray
         - `hklMax`  : int - max miller index in each direction from -hklMax to hklMax
     '''
@@ -30,7 +31,8 @@ def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
         F_i = np.zeros(hx.shape,dtype=complex)
         idx = fa==atom
         for ri in ra[idx,:]:
-            F_i += np.exp(2*pi*1J*(ri[0]*hx+ri[1]*ky+ri[2]*lz))
+            # print(ri,np.exp(-2*pi*1J*(ri[0]*hx+ri[1]*ky+ri[2]*lz)))
+            F_i += np.exp(-2*pi*1J*(ri[0]*hx+ri[1]*ky+ri[2]*lz))
         Fhkl += F_i*fq[i]
     return hkl,Fhkl
 

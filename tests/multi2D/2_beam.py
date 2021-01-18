@@ -5,7 +5,7 @@ import wallpp.plane_group as pg     ;imp.reload(pg)
 import multislice.multi_2D as ms    ;imp.reload(ms)
 plt.close('all')
 path='../multislice/docs_fig/multi2D/2_beam_'
-opts='T'#MK'
+opts='T' #V(potential), T(tilts/rocking curve), M(single run), E(wald), K()'
 
 K = 5.008343065817388
 keV   = cst.lam2keV(1/K)#200       # wavelength 200keV
@@ -46,12 +46,11 @@ else:
     x,z,f = np.load('dat/2_beam.npy')
 
 if 'M' in opts:
-
     ms0 = ms.Multi2D([x[0],z.T[0],f],ax1,bz1,keV=keV,Nx=Nx,nz=Nz,
             dz=bz1/(2*n),eps=0.01,sg=-1,
             iZs=1,iZv=np.inf)
-    ms0.Bz_show(np.arange(-3,3)*n,lw=2  ,name=path+'Iz.svg',opt='ps')
-    ms0.Qz_show(slice(0,-1,100),opts='O' ,name=path+'Iq.svg',opt='ps',xylims=['x',-5,5])
+    ms0.Bz_show(np.arange(-3,3)*n,lw=2  ,name=path+'Iz.svg',opt='p')
+    ms0.Qz_show(slice(0,-1,100),opts='O',name=path+'Iq.svg',opt='p',xylims=['x',-5,5])
 
     # if 'D' in opts:
     #     iM = -n*4
@@ -83,13 +82,18 @@ if 'T' in opts:
     cg  = dsp.getCs('jet',3)[-1]
     plts=[[z,s_g,[cg,'--'],'']]
     fig,ax=mst[19].Bz_show(np.array([0,10,20]),plts=plts,lw=2,opt='ps',name=path+'Itheta_c.svg')
+    # mst[19].Qz_show(opts='O', xylims=['x',-1,2],opt='ps',name=path+'Itheta_q.svg')
 
     zs  = np.array([0.25,0.5,0.75,1,1.25,1.5])*zeta_g #selected z for rocking curve
     iZs = [np.argmin(abs(z-z0)) for z0 in zs]
-    ms.tilts_show(tilts,mst,iBs=20,iZs=iZs,opt='ps',name=path+'rocking.svg')
+    # ms.tilts_show(tilts,mst,iBs=20,iZs=iZs,opt='p',name=path+'rocking.svg')
     # ms.tilts_show(tilts,mst,iBs=10,iZs=slice(0,Nz,100))
 
 if 'E' in opts:
+    ms0 = ms.Multi2D([x[0],z.T[0],f],ax1,bz1,keV=keV,Nx=Nx,nz=1,
+            dz=bz1/(2*n),eps=0.01,sg=-1,
+            iZs=1,iZv=np.inf)
+
     g,theta = 1,0.1
     # Ks = np.linspace(0,2,100)
     # F = lambda K:K*(1-np.sin(2*np.arcsin(g/(2*K))))-g*np.sin(theta)
@@ -113,13 +117,13 @@ if 'E' in opts:
     plts=[]
     # plts +=[[Fz(i),zeta,'b--',''] for i in range(nh)]
     plts += [[K*np.cos(t),K*np.sin(t)+K,'r','']]
-    scat  = [X,Z,25,'b']
+    scat  = [X,Z,80,'b']
     ax1 = np.sqrt(1**2+10**2)*ax
     bz1 = ax1
 
     fig,ax0 = ms0.Ewald_show()
     dsp.stddisp(plts,scat=scat,labs=[r'$k_x(\AA^{-1})$',r'$k_z(\AA^{-1})$'],
-        lw=2,xylims=[-0.01,1.1,-0.01,0.2],ax=ax0,name=path+'E.svg',opt='ps')#,xyTicks=[1/ax1,1/bz1])
+        lw=2,xylims=[-0.01,1.1,-0.01,0.2],ax=ax0,name=path+'E.png',opt='ps')#,xyTicks=[1/ax1,1/bz1])
 
 
 if 'K' in opts:

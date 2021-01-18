@@ -112,7 +112,7 @@ def plot_beam_thickness(beams,rip='I',cm='Greens',**kwargs):
         if 'I' in rip : plts += [[t,Ib[i],[csp[i],'-'],'$I_{%s}$' %(hk[i])]]
         if 'r' in rip : plts += [[t,re[i],csr[i],'$re$']]
         if 'i' in rip : plts += [[t,im[i],csi[i],'$im$']]
-    dsp.stddisp(plts,lw=2,labs=['$thickness(\AA)$','$I_{hk}$'],**kwargs)#,xylims=[0,t.max(),0,5])
+    return dsp.stddisp(plts,lw=2,labs=['$thickness(\AA)$','$I_{hk}$'],**kwargs)#,xylims=[0,t.max(),0,5])
 
 def plot_fe(qmax=1,Nx=20,Vcell=1,**kwargs):
     q0,fq_e = scat.get_elec_atomic_factors(['Si'],q=np.linspace(0,qmax,1000))

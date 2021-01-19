@@ -25,8 +25,10 @@ from os.path import dirname,realpath,exists
 from string import ascii_uppercase as SLICES #ascii_letters
 from string import ascii_letters
 # from utils.glob_colors import*
+from crystals import Crystal
 import utils.glob_colors as colors
 import utils.displayStandards as dsp
+from scattering.structure_factor import structure_factor3D
 from . import postprocess as pp
 
 ssh_hosts = {
@@ -41,7 +43,12 @@ temsim_hosts={
     'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
     'badb'      :'/home/lii26466/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
 }
-
+path_hosts={
+    'BG-X550'   :'/home/ronan/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
+    'tarik-CCP4':'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
+    'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
+    'badb'      :'/data3/lii26466/multislice/',
+}
 
 
 class Multislice:
@@ -79,13 +86,14 @@ class Multislice:
     - `ppopt` : u(update),w(wait), I(image) B(beam) P(pattern) A(azim_avg)
     - `ssh` : ip address or alias of the machine on which to run the job
     - `hostpath` : path to data on host
+    - `cif` : name of .cif file corresponding to structure in path
     '''
     def __init__(self,name,mulslice=False,tail='',data=None,
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,
                 hk=[(0,0)],Nhk=0,hk_sym=0,prev=None,
                 opt='',fopt='w',ppopt='uwP',v=1,
-                ssh=None,hostpath='',cluster=False):
+                ssh=None,hostpath='',cluster=False,cif_file=None):
         #output options
         if isinstance(v,bool) : v=['','nctrdD'][v]
         if isinstance(v,int) : v=''.join(['nctr','DR','d'][:min(v,3)])
@@ -94,9 +102,10 @@ class Multislice:
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
 
         #attributes
-        self.version     = '1.2.1'
-        self.name        = dsp.basename(name)                           #;print('basename:',self.name)
+        self.version     = '1.3.1'
+        self.name        = dsp.basename(name)                       #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
+        self.cif_file    = self.get_cif_file(cif_file)              #;print(self.cif_file)
         self.is_mulslice = mulslice
         self.tilt        = tuple(tilt)
         self.TDS         = TDS
@@ -172,33 +181,37 @@ class Multislice:
         p = None
         if run:
             if ssh_alias :
+                if ssh_alias=='badb':cluster=1
                 cmd = self._get_job_ssh(ssh_alias,hostpath=hostpath,v=v>2,cluster=cluster)
                 #time.sleep(1)
                 #self.check_simu_state(v=0,ssh_alias=ssh_alias,hostpath=hostpath)
             else :
                 self._get_job()
                 cmd = 'bash %s' %self._outf('job')
-            p = Popen(cmd,shell=True)
+            p = Popen(cmd,shell=True) #; print(cmd)
             if v>0 : print(colors.green+self.name+" job submitted"+colors.black)
             if v>1 : print(colors.magenta+cmd+colors.black)
         return p
 
     def postprocess(self,ppopt='uwP',ssh_alias='',tol=1e-4,figpath=None,opt='p',hostpath=''):
         '''Performs postprocessing with predefined options : \n
-        - ppopt:u(update), w(wait till done) I(image), B(beam) P(pattern)
+        - ppopt:u(update), w(wait till done) I(image), B(beam) P(pattern) f(force recalculate)
         - figpath : Directory to place the figures if saving with automatic naming (default datpath)
         '''
         if not figpath : figpath = self.datpath
         time.sleep(0.1)
-        state = self.check_simu_state(ssh_alias=ssh_alias,hostpath=hostpath)
+        state = self.check_simu_state(ssh_alias=ssh_alias,hostpath=hostpath);print(state)
         if not state == 'done' and 'w' in ppopt:
             self.wait_simu(ssh_alias,1,hostpath)
-        self.save_pattern()
         # self.get_beams(iBs='a',bOpt='f')
+        print(colors.blue+'...postprocessing...'+colors.black)
         if ssh_alias and 'u' in ppopt:
             if 'I' in ppopt : self.ssh_get(ssh_alias,'image'    ,hostpath)
             if 'B' in ppopt : self.ssh_get(ssh_alias,'beamstxt' ,hostpath)
             if 'P' in ppopt : self.ssh_get(ssh_alias,'pattern'  ,hostpath)
+        #convert to np.array and save
+        if not exists(self._outf('beams')) or 'f' in ppopt:self.get_beams(bOpt='fa')
+        if not exists(self._outf('patternnpy')) or 'f' in ppopt:self.save_pattern()
         if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
         if 'B' in ppopt and opt : self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
         if 'P' in ppopt and opt :
@@ -206,6 +219,25 @@ class Multislice:
 
     ###################################################################
     ################ OUTPUT FUNCTIONS
+    ###################################################################
+    def get_cif_file(self,cif_file):
+        if not cif_file:cif_file=self.name+'.cif'
+        return self.datpath+cif_file
+    def get_structure_factor(self,**sf_args):
+        '''computes structure factor 3D
+        - sf_args : see (structure_factor3D)
+        returns :
+        - (qx,qy,qz),Fhkl
+        '''
+        crys = Crystal.from_cif(self.cif_file)
+        pattern = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in crys.atoms] )
+        lat_vec = np.array(crys.reciprocal_vectors)
+        (h,k,l),Fhkl = structure_factor3D(pattern, lat_vec, **sf_args)
+        qx = h/crys.lattice_parameters[0]
+        qy = k/crys.lattice_parameters[1]
+        qz = l/crys.lattice_parameters[2]
+        return (qx,qy,qz),Fhkl
+
     def image(self,opt='I',cmap='jet',**kwargs):
         '''Displays the 2D image out of simulation
         - opt : I(intensity)
@@ -394,6 +426,7 @@ class Multislice:
 
     ########################################################################
     ###### print functions
+    ########################################################################
     def print_datafiles(self,data=None):
         '''show data files *.dat or .xyz depending on mulslice'''
         if not data : data = self.data
@@ -420,12 +453,18 @@ class Multislice:
         '''print bash script job file '''
         with open(self._outf('job'),'r') as f:
             print(''.join(f.readlines()))
-    def print_log(self):
+    def print_log(self,head_opt=0):
         '''print the logfile of running multislice .log'''
         try:
             with open(self._outf('log'),'r') as f:
                 self._print_header('.log FILE')
-                print(''.join(f.readlines()))
+                log = f.readlines()
+            if head_opt:
+                for i,l in enumerate(log):
+                    if  'Sorting atoms' in l :break
+                print(''.join(log[:i+1]))
+            else:
+                print(''.join(log))
         except FileNotFoundError:
             print(colors.red+'logfile not created yet, run a simu first'+colors.black)
             return 0
@@ -549,6 +588,7 @@ class Multislice:
 
     ########################################################################
     #### Job
+    ########################################################################
     def _get_job(self,temsim=None,cluster=False,datpath=None):
         logfile     = self.outf['log'] #self._outf('log')
         simu_deck   = self.outf['simu_deck'] #self._outf('simu_deck')
@@ -566,13 +606,13 @@ class Multislice:
                 job += 'cat %s | %s >> %s \n' %(deck,temsim+'atompot',logfile)
         job += 'cat %s | %s >> %s\n' %(simu_deck,temsim+prog,logfile)
 
-        # postprocess on remote machine
-        pycode='''import numpy as np;
-        import multislice.postprocess as pp;
-        beams = pp.import_beams('%s',%s);
-        np.save('%s',beams)
-        ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
-        job +='python3 -c "%s"' %pycode.replace('\n','')
+        #### postprocess on remote machine
+        # pycode='''import numpy as np;
+        # import multislice.postprocess as pp;
+        # beams = pp.import_beams('%s',%s);
+        # np.save('%s',beams)
+        # ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
+        # job +='python3 -c "%s"' %pycode.replace('\n','')
 
         #save job
         if not datpath:datpath=self.datpath
@@ -582,7 +622,7 @@ class Multislice:
     def _get_job_ssh(self,ssh_alias,hostpath=None,v=False,cluster=False):
         #save local datpath
         datpath  = self.datpath
-        hostpath = self._get_hostpath(hostpath)
+        hostpath = self._get_hostpath(ssh_alias,hostpath)
         self.datpath = hostpath
 
         #save updated deck and job
@@ -618,7 +658,7 @@ class Multislice:
 
     def ssh_get(self,ssh_alias,file,hostpath=None,dest_path=None):
         if not dest_path : dest_path = self.datpath
-        hostpath = self._get_hostpath(hostpath)
+        hostpath = self._get_hostpath(ssh_alias,hostpath)
         cmd = 'scp %s:%s %s' %(ssh_alias,hostpath+self.outf[file],dest_path)
         p = Popen(cmd,shell=True,stderr=PIPE)#stdout=PIPE
         p.wait()
@@ -711,9 +751,12 @@ e-mail : tarik.drevon@stfc.ac.uk
         print('\t\t\t' +msg+ ' :')
         print(head+colors.black)
 
-    def _get_hostpath(self,hostpath):
+    def _get_hostpath(self,ssh_alias,hostpath):
         if not hostpath :
-            hostpath = self.datpath.replace('ronan','tarik').replace('CCP4','git/ccp4')
+            hostpath = path_hosts[ssh_hosts[ssh_alias]]
+            simu_folder = self.datpath.split('/')[-2]
+            hostpath += simu_folder+'/'
+            # hostpath = self.datpath.replace('ronan','tarik').replace('CCP4','git/ccp4')
         return hostpath
 
     def _outf(self,file):

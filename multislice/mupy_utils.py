@@ -55,36 +55,31 @@ def sweep_var(name,param,vals,df=None,ssh='',tail='',do_prev=0,**kwargs):
         print(green+'Dataframe saved : '+yellow+name+'df.pkl'+black)
 
 
-def make_mulslice_datfile(dat_file,cif_file):
-    ''' create a data file used by atompot(mulslice) from a cif file
-    - dat_file : name of file to save
-    - cif_file : the file to import
-    '''
-    crys = Crystal.from_cif(cif_file)
-    pattern = np.array([np.hstack([a.coords_cartesian,a.atomic_number]) for a in crys.atoms] )
-    deck = ' '.join(np.array(crys.lattice_parameters[:3],dtype=str))+'\n'
-    deck+='0\n'
-    Za = np.array(np.unique(pattern[:,-1]),dtype=int)
-    for Z in Za:
-        deck+=str(Z)+'\n'#; print()
-        xyz = np.array(pattern[pattern[:,-1]==1][:,:3],dtype=str)
-        xyz = '\n'.join([' '.join(l) for l in xyz]) #; print(xyz)
-        deck+=xyz+'\n'
-    deck+='\n\nComment here'
-    with open(dat_file,'w') as f : f.write(deck)
-    # with open(datpath,'r') as f :print(f.readlines())
 
 
-def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],dopt='s',lfact=1.0,tail=''):
-    '''
+################################################################################
+#### coordinate file generation from cif files
+################################################################################
+def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail=''):
+    ''' convert cif file into autoslic .xyz input file
     - file : cif_file
     - rep : super cell repeat
     - n : reorient of the z axis into n
+    - pad : amount of padding on each side (in unit of super cell size)
     '''
     crys    = Crystal.from_cif(file)
     lat_vec = np.array(crys.lattice_vectors)
-    if sum(rep)>3 : crys = crys.supercell(rep[0],rep[1],rep[2])
+    ax,by,cz = crys.lattice_parameters[:3]
+    if sum(rep)>3 :
+        crys = crys.supercell(rep[0],rep[1],rep[2])
+        ax,by,cz = crys.crystal.lattice_parameters[:3]
     pattern = np.array([[a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
+
+    if pad:
+        pattern[:,1] += rep[0]*ax*pad
+        pattern[:,2] += rep[1]*by*pad
+        lat_vec[0][0] = rep[0]*ax*(1+2*pad)
+        lat_vec[1][1] = rep[1]*by*(1+2*pad)
     if xyz:make_xyz(xyz,pattern,lat_vec,n,fmt='%.4f',dopt=dopt)
     return pattern #,lat_params #pattern,crys # file
 
@@ -119,3 +114,49 @@ def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='s'):
         if 'p' in dopt :
             with open(name,'r') as f : print(''.join(f.readlines()))
     return pattern,[ax,by,cz]
+
+def make_mulslice_datfile(dat_file,cif_file):
+    ''' create a data file used by atompot(mulslice) from a cif file
+    - dat_file : name of file to save
+    - cif_file : the file to import
+    '''
+    crys = Crystal.from_cif(cif_file)
+    pattern = np.array([np.hstack([a.coords_cartesian,a.atomic_number]) for a in crys.atoms] )
+    deck = ' '.join(np.array(crys.lattice_parameters[:3],dtype=str))+'\n'
+    deck+='0\n'
+    Za = np.array(np.unique(pattern[:,-1]),dtype=int)
+    for Z in Za:
+        deck+=str(Z)+'\n'#; print()
+        xyz = np.array(pattern[pattern[:,-1]==1][:,:3],dtype=str)
+        xyz = '\n'.join([' '.join(l) for l in xyz]) #; print(xyz)
+        deck+=xyz+'\n'
+    deck+='\n\nComment here'
+    with open(dat_file,'w') as f : f.write(deck)
+    # with open(datpath,'r') as f :print(f.readlines())
+
+
+################################################################################
+#### display coordinate file
+################################################################################
+def show_grid(file,opts='',**kwargs):
+    '''
+    file : path to .xyz file
+    opt : str format 'x1x2' - 'xy','xz','yz','zx',...
+    '''
+    with open(file,'r') as f:l=list(map(lambda s:s.strip().split(' '),f.readlines()))
+    lat_params = np.array(l[1],dtype=float)
+    pattern = np.array(l[2:-1],dtype=float)
+    #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
+    cs = {1:colors.unicolor(0.75),3:(1,0,0),6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),17:(0,1,1)}
+    xij = {'x':1,'y':2,'z':3}
+    if opts:
+        x1,x2 = opts
+        i,j = xij[x1],xij[x2]
+        Z = np.array(pattern[:,0],dtype=int)
+        C = [cs[E] for E in Z]
+        pps = [dsp.Rectangle((0,0),lat_params[i-1],lat_params[j-1],linewidth=2,edgecolor='b',alpha=0.1)]
+        scat = [pattern[:,i],pattern[:,j],C]
+
+        fig,ax = dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,ms=50,
+            **kwargs)
+    # return lat_params,pattern

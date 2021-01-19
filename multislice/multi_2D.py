@@ -47,7 +47,7 @@ class Multi2D():
         self._set_transmission_function(eps,v)
         self._set_propagator(sg,copt)
         self.set_Psi0()
-        self.propagate(nz,iZs,iZv,v)
+        if nz:self.propagate(nz,iZs,iZv,v)
         #display
         if 'T' in ppopt:self.Tz_show()
         if 'P' in ppopt:self.Pq_show()
@@ -65,6 +65,15 @@ class Multi2D():
     ###################################################################
     #### display
     ###################################################################
+    def V_show(self,**kwargs):
+        x0,z0,fv = self.pattern
+        x,z = np.meshgrid(x0,z0)
+
+        args = {'imOpt':'cv','axPos':'V','xylims':[z0.min(),z0.max(),x0.min(),x0.max()]}
+        args.update(kwargs)
+        dsp.stddisp(im=[z,x,fv],labs=['$z$','$x$'],**args)
+
+
     def Tz_show(self,iSz=slice(0,None,1),Vopt='VT',**kwargs):
         '''Show Transmission function '''
         if isinstance(iSz,int):iSz=[iSz]
@@ -106,7 +115,7 @@ class Multi2D():
 
     def Qz_show(self,iZs=1,opts='',cmap='jet',**kwargs):
         '''Show wave propagation in q space for slices iZs
-        - opts : O(include Origin), N(Normalize Origin), S(Shape normalize)
+        - opts : O(include Origin), N(Normalize with max), S(Shape normalize) l(show label)
         '''
         # if isinstance(iZs,int):iZs=slice(0,iZs,self.z.size)
         if isinstance(iZs,int):iZs=slice(0,None,iZs)
@@ -118,16 +127,22 @@ class Multi2D():
             if 'O' not in opts:Pqs[:,0]=0# do not show central beam
             for i in range(z.size) : Pqs[i,:]/=np.sum(Pqs[i,:])
         else:
-            if 'N' in opts:
-                for i in range(z.size) : Pqs[i,:]/=Pqs[i,0]
             if 'O' not in opts:Pqs[:,0]=0# do not show central beam
+            if 'N' in opts:
+                for i in range(z.size) : Pqs[i,:]/=Pqs[i,:].max()
         q   = fft.fftshift(self.q.copy())
         Pqs = [fft.fftshift(Pqs[i,:]) for i in range(z.size)]
         cs  = dsp.getCs(cmap,z.size)
-        plts = [[q,Pqs[i],cs[i]] for i in range(z.size)]
-        return dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$',r'$|\Psi(q)|^2$'],
-            imOpt='c',caxis=[z.min(),z.max()],cmap=cmap,axPos='V',
-            **kwargs)
+        if 'l' in opts:
+            plts = [[q,Pqs[i],cs[i] ,'$%.1fA$' %z[i]] for i in range(z.size)]
+            return dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$',r'$|\Psi(q)|^2$'],
+                imOpt='c',caxis=[z.min(),z.max()],cmap=cmap,axPos='V',
+                **kwargs)
+        else:
+            plts = [[q,Pqs[i],cs[i]] for i in range(z.size)]
+            return dsp.stddisp(plts,labs=[r'$q(\AA^{-1})$',r'$|\Psi(q)|^2$'],
+                imOpt='c',caxis=[z.min(),z.max()],cmap=cmap,axPos='V',
+                **kwargs)
 
     def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',plts=[],**kwargs):
         '''Show selected beam iBs as function of thickness(see getB)'''
@@ -193,9 +208,11 @@ class Multi2D():
     #### get methods
     def getQ(self):return self.q
     def getI(self):return self.psi_qz[-1,:]
-    def getB(self,iBs='O',tol=0,v=0):
+    def getB(self,iBs='Oa',tol=0,v=0):
         ''' get beam as function of thickness
-        - iBs : 'O'(include origin) a(all)
+        - iBs :
+            - str - 'O'(include origin) a(all)
+            - list - the list of indices of the beams
         - tol : select only beams max(I)>tol*I_max
         '''
         Ib = self.psi_qz/self.nx**2/self.dq
@@ -271,7 +288,7 @@ class Multi2D():
             i_s=i%self.ns
             #print(self.T[i_s,:].shape,self.Psi_x.shape)
             self.Psi_q = fft.fft(self.T[i_s,:]*self.Psi_x) #periodic assumption
-            # self.Psi_q[self.nq:-self.nq] = 0               #prevent aliasing
+            # self.Psi_q[self.nq:-self.nq] = 0             #prevent aliasing
             self.Psi_x = fft.ifft(self.Pq*self.Psi_q)
             # self.Psi_x = fft.fftshift(fft.ifft(self.Pq*self.Psi_q))
             #save and print out

@@ -65,6 +65,7 @@ class Wallpaper :
         pOpt      : plot options                                    (see plot_unit_cells)
                   : 'w' to see the unit cell if warning is issued
             Note : gen,ndeg,nh,nk will work only if pattern is defined
+        ndeg   : number of discretization points along one the direction for building the potential map
         '''
         self.pp_type  = pp_type
         self.name     = name if name else df_wallpp.loc[pp_type]['long_name']
@@ -143,7 +144,7 @@ class Wallpaper :
         nh,nk  : number of unit cells to be displayed
         ndeg   : number of discretization points along one the direction for building the potential map'''
         self.Xcell,self.fcell   = self.apply_symmetries(self.X0,self.f0)
-        self.Xa,self.fa         = self.repeat_pattern(self.Xcell,self.fcell,max(nh,3),max(nk,3))
+        self.Xa,self.fa         = self.repeat_pattern(self.Xcell,self.fcell,nh,nk)
         if ndeg :
             self.build_potential(ndeg)
             self.Xc,self.fc = self.apply_symmetries(self.Xp,self.fp)

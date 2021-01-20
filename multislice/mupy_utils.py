@@ -1,4 +1,5 @@
 import pandas as pd, numpy as np
+import os,matplotlib,cbf
 from utils import displayStandards as dsp
 from utils import glob_colors as colors
 from crystals import Crystal
@@ -160,3 +161,41 @@ def show_grid(file,opts='',**kwargs):
         fig,ax = dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,ms=50,
             **kwargs)
     # return lat_params,pattern
+
+
+
+class Viewer_cbf:
+    def __init__(self,exp_path):
+        self.exp_path = exp_path
+        self.figs  = os.listdir(exp_path)
+        self.nfigs = len(self.figs)
+        self.fig,self.ax = dsp.stddisp()
+        cid = self.fig.canvas.mpl_connect('key_press_event', self)
+        self.i=0
+        self.import_exp()
+
+    def import_exp(self):
+        print(colors.yellow+self.figs[self.i]+colors.black)
+        try:
+            content = cbf.read(self.exp_path+self.figs[self.i])
+        except:#UnicodeDecodeError
+            self.i+=1
+            print(colors.red+'error reading file'+colors.black)
+            self.import_exp()
+            return
+        numpy_array_with_data = content.data
+        header_metadata = content.metadata
+        print(colors.blue,header_metadata,colors.black)
+        self.ax.cla()
+        dsp.stddisp(fig=self.fig,ax=self.ax,im=[numpy_array_with_data],
+            cmap='gray',caxis=[0,50],pOpt='t',title=r'%d' %(self.i),opt='')
+        self.fig.canvas.draw()
+
+    def __call__(self, event):
+        # print(event.key)
+        if event.key in ['up','right']:
+            self.i=min(self.i+1,self.nfigs-1)
+            self.import_exp()
+        elif event.key in ['left','down']:
+            self.i=max(0,self.i-1)
+            self.import_exp()

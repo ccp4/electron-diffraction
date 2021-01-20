@@ -1,24 +1,21 @@
 import importlib as imp
-# import pickle
-# from scattering.structure_factor import structure_factor3D
-# from crystals import Crystal
+from utils import*                  ; imp.reload(dsp)
 import multislice.multislice as mupy; imp.reload(mupy)
 import multislice.postprocess as pp ; imp.reload(pp)
 import multislice.mupy_utils as mut ; imp.reload(mut)
 import multislice.rotating_crystal as rcc
-from utils import*
 plt.close('all')
 path = '../dat/ireloh/'
 figpath = '../docs_fig/ireloh/'
 cif_file = path+'ireloh.cif'
 opts = 'FT'  # F(structure factor) E(Ewald) T(tilts) B(Beams)
 hklM = 20
-sig = cst.keV2sigma(200)
+# sig = cst.keV2sigma(200)
 
 
-name = cif_file+'ireloh001.xyz'
-# crys = Crystal.from_cif(file)
-# mut.import_cif(file,name,n=[0,0,1],rep=[1,1,1])#dopt='s')
+name = path+'ireloh001.xyz'
+# crys = Crystal.from_cif(cif_file)
+# mut.import_cif(cif_file,name,n=[0,0,1],rep=[1,1,1])#dopt='s')
 
 # multi = mupy.Multislice(path,data=name,#tail=istr,
 #     mulslice=False,keV=200,#tilt=[tx*np.pi/180/1000,0],
@@ -35,8 +32,8 @@ pad,rep = 1,[8,8,1]
 # mut.import_cif(cif_file,name,n=[0,0,1],rep=rep,pad=pad)#dopt='s')
 # mut.show_grid(name,opts='zx')
 # mut.show_grid(name,opts='xy')
-h,k = np.meshgrid(np.arange(6)*(rep[0]+2*int(pad)),np.arange(6)*(rep[1]+2*int(pad)))
-hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
+# h,k = np.meshgrid(np.arange(6)*(rep[0]+2*int(pad)),np.arange(6)*(rep[1]+2*int(pad)))
+# hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
 
 
 # multi = mupy.Multislice(path,data=name,tail='SC',
@@ -46,9 +43,11 @@ hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
 #     opt='sr',fopt='f',v='nctr',ppopt='wuPBf',#nctrdDR',
 #     ssh='badb',#hostpath=hostpath
 #     )
+
 multi = pp.load_multi_obj('../dat/ireloh/ireloh_SC_autoslic.pkl')
-multi.postprocess(ssh_alias='badb',ppopt='uf')
-# multi.pattern(Iopt='Incslg',out=False,tol=1e-3,gs=1.3,caxis=[-6.2,0],rings=[0.5,1,2],lw=2,
+# multi.postprocess(ssh_alias='badb',ppopt='uB')
+# multi.pattern(Iopt='Incsl',out=False,tol=1e-3,
+#     gs=1.3,caxis=[-6.2,0],rings=[0.5,1],lw=2,
 #     imOpt='cv',axPos='V',cmap='binary',opt='p')
 
 
@@ -107,7 +106,5 @@ def plot_transmission_vs_structure_factor():
 # dsp.stddisp(im=[ h[s],k[s],np.log10(T[s])],xylims=[-hklM,hklM,-hklM,hklM],caxis=[0,5],
 #     imOpt='cv',axPos='V',cmap='binary')
 
-# if 'E' in opts:
-#     #Ewald configuration [010]
-#     mut.ewald_sphere(lat_params,lam=cst.eV2mum(12000)*1e4,tmax=60,T=20.,nx=5 ,ny=20,opt='p',name=figpath+'E_MX.png',xylims=[-1,1.01,-0.1,2.01],xyTicks=1,legLoc='upper right',fonts=fs)
-#     mut.ewald_sphere(lat_params,lam=cst.keV2lam(200)     ,tmax=7 ,T=0.2,nx=20,ny=10,opt='p',name=figpath+'E_ED.png',xylims=[-3,3.01,-0.1,1.01],xyTicks=1,legLoc='upper right',fonts=fs)
+
+cbf_v = mut.Viewer_cbf(exp_path='/home/tarik/Documents/data/ireloh/IRELOH_ED_Dataset_1/')

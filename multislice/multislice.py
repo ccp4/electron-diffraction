@@ -210,11 +210,12 @@ class Multislice:
             if 'B' in ppopt : self.ssh_get(ssh_alias,'beamstxt' ,hostpath)
             if 'P' in ppopt : self.ssh_get(ssh_alias,'pattern'  ,hostpath)
         #convert to np.array and save
-        if not exists(self._outf('beams')) or 'f' in ppopt:self.get_beams(bOpt='fa')
-        if not exists(self._outf('patternnpy')) or 'f' in ppopt:self.save_pattern()
         if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
-        if 'B' in ppopt and opt : self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
+        if 'B' in ppopt and opt :
+            if not exists(self._outf('beams')) or 'f' in ppopt:self.get_beams(bOpt='fa')
+            self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
         if 'P' in ppopt and opt :
+            if not exists(self._outf('patternnpy')) or 'f' in ppopt:self.save_pattern()
             self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
 
     ###################################################################
@@ -304,7 +305,7 @@ class Multislice:
             if isinstance(iBs[0],str) :
                 iBs = [ (iB==hk).argmax() for iB in iBs if (iB==hk).sum()]
         else :
-            Imax = np.array([I.max() for I in Ib]) ;print(Imax)
+            Imax = np.array([I.max() for I in Ib]) #;print(Imax)
             iBs = [i for i in range('O' not in bOpt,len(hk)) if Imax[i]>= tol*Imax.max()]
         beams = np.array(hk)[iBs],t, np.array(re)[iBs],np.array(im)[iBs],np.array(Ib)[iBs]
 
@@ -607,12 +608,12 @@ class Multislice:
         job += 'cat %s | %s >> %s\n' %(simu_deck,temsim+prog,logfile)
 
         #### postprocess on remote machine
-        # pycode='''import numpy as np;
-        # import multislice.postprocess as pp;
-        # beams = pp.import_beams('%s',%s);
-        # np.save('%s',beams)
-        # ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
-        # job +='python3 -c "%s"' %pycode.replace('\n','')
+        pycode='''import numpy as np;
+        import multislice.postprocess as pp;
+        beams = pp.import_beams('%s',%s);
+        np.save('%s',beams)
+        ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
+        job +='python3 -c "%s"' %pycode.replace('\n','')
 
         #save job
         if not datpath:datpath=self.datpath

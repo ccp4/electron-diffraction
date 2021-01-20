@@ -5,7 +5,7 @@ import setuptools
 
 setuptools.setup(
     name="ED",
-    version="0.0.3",
+    version="1.0.1",
     author="Tarik Ronan Drevon",
     author_email="ronandrevon@gmail.com",
     description="Electron diffraction utilities",
@@ -19,5 +19,5 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    #install_requires=['matplotlib','numpy','scipy','colorama','pandas'],
+    install_requires=['numpy','scipy','matplotlib','colorama','pandas','cbf','crystals','TarikDrevonUtils'],
 )

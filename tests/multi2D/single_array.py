@@ -1,7 +1,6 @@
 import importlib as imp
-from utils import*
+from utils import*                  ; imp.reload(dsp)
 import multislice.multi_2D as MS2D  ;imp.reload(MS2D)
-imp.reload(dsp)
 plt.close('all')
 
 keV  = 100  #200

@@ -27,8 +27,9 @@ name = path+'ireloh001.xyz'
 
 
 # padded simulation
-name = path+'IRELOH001.xyz'
-pad,rep = 1,[8,8,1]
+name = path+'IRELOH001_test.xyz'
+# name = path+'IRELOH001.xyz'
+pad,rep = 1,[1,1,1]
 # mut.import_cif(cif_file,name,n=[0,0,1],rep=rep,pad=pad)#dopt='s')
 # mut.show_grid(name,opts='zx')
 # mut.show_grid(name,opts='xy')
@@ -40,12 +41,12 @@ hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
 #     mulslice=False,keV=200,#tilt=[tx*np.pi/180/1000,0],
 #     NxNy=2**12,repeat=[1,1,1],slice_thick=1,hk=hk,#Nhk=5,
 #     #TDS=True,T=300,n_TDS=15,
-#     opt='sr',fopt='f',v='nctr',ppopt='wuPBf',#nctrdDR',
+#     opt='srp',fopt='f',v='nctr',ppopt='wuPBf',#nctrdDR',
 #     ssh='badb',#hostpath=hostpath
 #     )
 
 multi = pp.load_multi_obj('../dat/ireloh/ireloh_pptest_autoslic.pkl')
-multi.postprocess(ssh_alias='badb',ppopt='uB')
+# multi.postprocess(ssh_alias='badb',ppopt='uwBP')
 # multi.pattern(Iopt='Incsl',out=False,tol=1e-3,
 #     gs=1.3,caxis=[-6.2,0],rings=[0.5,1],lw=2,
 #     imOpt='cv',axPos='V',cmap='binary',opt='p')

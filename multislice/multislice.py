@@ -202,13 +202,13 @@ class Multislice:
         time.sleep(0.1)
         state = self.check_simu_state(ssh_alias=ssh_alias,hostpath=hostpath);print(state)
         if not state == 'done' and 'w' in ppopt:
-            self.wait_simu(ssh_alias,1,hostpath)
+            self.wait_simu(ssh_alias,10,hostpath)
         # self.get_beams(iBs='a',bOpt='f')
         print(colors.blue+'...postprocessing...'+colors.black)
         if ssh_alias and 'u' in ppopt:
-            if 'I' in ppopt : self.ssh_get(ssh_alias,'image'    ,hostpath)
-            if 'B' in ppopt : self.ssh_get(ssh_alias,'beams'    ,hostpath)
-            if 'P' in ppopt : self.ssh_get(ssh_alias,'pattern'  ,hostpath)
+            if 'I' in ppopt : self.ssh_get(ssh_alias,'image'     ,hostpath)
+            if 'B' in ppopt : self.ssh_get(ssh_alias,'beams'     ,hostpath)
+            if 'P' in ppopt : self.ssh_get(ssh_alias,'patternnpy',hostpath)
         #convert to np.array and save
         if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
         if 'B' in ppopt and opt :
@@ -611,11 +611,15 @@ class Multislice:
         pyexe='python3'
         if cluster:
             pyexe='/data3/opt/python/3.7.7/bin/python3'
-        pycode='''import numpy as np;
-        import multislice.postprocess as pp;
-        beams = pp.import_beams('%s',%s);
-        np.save('%s',beams)
-        ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
+        # import numpy as np;
+        # beams = pp.import_beams('%s',%s);
+        # np.save('%s',beams)
+        # ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
+        pycode='''import multislice.postprocess as pp;
+        multi = pp.load_multi_obj('%s');
+        multi.get_beams(bOpt='fa');
+        multi.save_pattern();
+        ''' %(self.outf['obj'])
         job +='%s -c "%s"' %(pyexe, pycode.replace('\n',''))
         job+='\n'
 
@@ -635,6 +639,7 @@ class Multislice:
         temsim  = temsim_hosts[host]
         self._get_job(temsim,cluster,datpath)
         self.make_decks(save=True,datpath=datpath)
+        self.save()
 
         #create directory on remote if does not exist
         cmd = 'ssh %s "if [ ! -d %s ]; then mkdir %s;echo %s:%s created;fi"' %(ssh_alias,hostpath,hostpath,ssh_alias,hostpath)
@@ -659,6 +664,7 @@ class Multislice:
         #restore
         self.datpath = datpath
         self.make_decks(save=True)
+        self.save()
         return cmd
 
     def ssh_get(self,ssh_alias,file,hostpath=None,dest_path=None):

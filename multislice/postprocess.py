@@ -1,5 +1,5 @@
 #from utils import *
-import pickle,os
+import pickle5,os
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
@@ -57,7 +57,7 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
 def load_multi_obj(filename):
     '''load a saved Multislice object
     filename : pickle file (.pkl)  '''
-    with open(filename,'rb') as f : multi = pickle.load(f)
+    with open(filename,'rb') as f : multi = pickle5.load(f)
     return multi
 
 def get_info(log_file):

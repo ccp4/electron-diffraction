@@ -10,8 +10,8 @@ figpath = '../docs_fig/ireloh/'
 cif_file = path+'ireloh.cif'
 opts = 'FT'  # F(structure factor) E(Ewald) T(tilts) B(Beams)
 hklM = 20
-# sig = cst.keV2sigma(200)
 
+# cbf_v = mut.Viewer_cbf(exp_path='/home/tarik/Documents/data/ireloh/IRELOH_ED_Dataset_1/')
 
 name = path+'ireloh001.xyz'
 # crys = Crystal.from_cif(cif_file)
@@ -32,20 +32,20 @@ pad,rep = 1,[8,8,1]
 # mut.import_cif(cif_file,name,n=[0,0,1],rep=rep,pad=pad)#dopt='s')
 # mut.show_grid(name,opts='zx')
 # mut.show_grid(name,opts='xy')
-# h,k = np.meshgrid(np.arange(6)*(rep[0]+2*int(pad)),np.arange(6)*(rep[1]+2*int(pad)))
-# hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
+h,k = np.meshgrid(np.arange(6)*(rep[0]+2*int(pad)),np.arange(6)*(rep[1]+2*int(pad)))
+hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
 
 
-# multi = mupy.Multislice(path,data=name,tail='SC',
+# multi = mupy.Multislice(path,data=name,tail='pptest',
 #     mulslice=False,keV=200,#tilt=[tx*np.pi/180/1000,0],
-#     NxNy=2**12,repeat=[1,1,100],slice_thick=1,hk=hk,#Nhk=5,
+#     NxNy=2**12,repeat=[1,1,1],slice_thick=1,hk=hk,#Nhk=5,
 #     #TDS=True,T=300,n_TDS=15,
 #     opt='sr',fopt='f',v='nctr',ppopt='wuPBf',#nctrdDR',
 #     ssh='badb',#hostpath=hostpath
 #     )
 
-multi = pp.load_multi_obj('../dat/ireloh/ireloh_SC_autoslic.pkl')
-# multi.postprocess(ssh_alias='badb',ppopt='uB')
+multi = pp.load_multi_obj('../dat/ireloh/ireloh_pptest_autoslic.pkl')
+multi.postprocess(ssh_alias='badb',ppopt='uB')
 # multi.pattern(Iopt='Incsl',out=False,tol=1e-3,
 #     gs=1.3,caxis=[-6.2,0],rings=[0.5,1],lw=2,
 #     imOpt='cv',axPos='V',cmap='binary',opt='p')
@@ -105,6 +105,3 @@ def plot_transmission_vs_structure_factor():
 
 # dsp.stddisp(im=[ h[s],k[s],np.log10(T[s])],xylims=[-hklM,hklM,-hklM,hklM],caxis=[0,5],
 #     imOpt='cv',axPos='V',cmap='binary')
-
-
-cbf_v = mut.Viewer_cbf(exp_path='/home/tarik/Documents/data/ireloh/IRELOH_ED_Dataset_1/')

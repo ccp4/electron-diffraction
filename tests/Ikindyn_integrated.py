@@ -1,8 +1,11 @@
 from utils import*
 from scipy.integrate import trapz
+plt.close('all')
+path='../figures/'
 
-
-def integrate_th_full(Ts=np.linspace(1,5000,5000),xi=500,iTs=0):
+Ikf = lambda t,sg,xi_g:(np.pi*t/xi_g)**2*np.sinc(t*sg)**2
+Idf = lambda t,sg,xi_g:(np.pi*t/xi_g)**2*np.sinc(t/xi_g*np.sqrt(1+(sg*xi_g)**2))**2
+def integrate_th_full(Ts=np.linspace(1,5000,5000),xi=500,iTs=0,**kwargs):
     '''Integrate the full rocking curve for each thickness
     - Ts : thicknesse
     - xi : Pendullosung
@@ -10,13 +13,11 @@ def integrate_th_full(Ts=np.linspace(1,5000,5000),xi=500,iTs=0):
     '''
     Ikin,Idyn = np.zeros(Ts.shape),np.zeros(Ts.shape)
     for iT,t in enumerate(Ts):
-        w = np.linspace(-1,1,2000)*10*xi/t
-        Ik = np.sinc(t/xi*w)**2
-        Id = np.sinc(t/xi*np.sqrt(1+w**2))**2
-        Ikin[iT] = trapz(Ik,w)
-        Idyn[iT] = trapz(Id,w)
-    plts = [[Ts,Ikin,'b-o','$kin$'],[Ts,Idyn,'r-o','$dyn$']]
-    dsp.stddisp(plts,labs=[r'$z(\AA)$','Integrated $I$'],xylims=['y',0,5])
+        sg = np.linspace(-1,1,2000)*10/t
+        Ikin[iT] = trapz(Ikf(t,sg,xi),sg)
+        Idyn[iT] = trapz(Idf(t,sg,xi),sg)
+    plts = [[Ts,Ikin,'b-','$kin$'],[Ts,Idyn,'r-','$dyn$']]
+    dsp.stddisp(plts,labs=[r'$z(\AA)$','Integrated $I$'],**kwargs)
 
     #plot details
     if isinstance(iTs,int):
@@ -24,15 +25,23 @@ def integrate_th_full(Ts=np.linspace(1,5000,5000),xi=500,iTs=0):
             iTs=slice(0,None,iTs)
         else:
             iTs = slice(0,0)
-    for t in Ts[iTs]:
-        w = np.linspace(-1,1,2000)*10*xi/t
-        Ik = np.sinc(t/xi*w)**2
-        Id = np.sinc(t/xi*np.sqrt(1+w**2))**2
-        plts = [[w,Ik,'b-o','$kin$'],[w,Id,'r-o','$dyn$']]
-        dsp.stddisp(plts,labs=[r'$w$','$I$'],title=r'$z=%f\AA$' %t)
+    for i,t in enumerate(Ts[iTs]):
+        sg = np.linspace(-1,1,2000)*10/t
+        Ik = Ikf(t,sg,xi)
+        Id = Idf(t,sg,xi)
+        pltsD += [sg,Id,[cs[i]],r'$z=%.1f\AA$' %t]
+        plts = [[sg,Ik,'b-o','$kin$'],[sg,Id,'r-o','$dyn$']]
+        dsp.stddisp(plts,labs=[r'$s_g$','$I$'],title=r'$z=%f\AA$' %t)
+
+def plot_rocking_curves(Ts=np.linspace(1,5000,10),xi=500,**kwargs):
+    pltsD,cs = [], dsp.getCs('viridis',Ts.size)
+    for i,t in enumerate(Ts):
+        sg = np.linspace(-0.005,0.005,1000)
+        pltsD += [[sg,Idf(t,sg,xi),[cs[i],'-'],r'$z=%.1f\AA$' %t]]
+    dsp.stddisp(pltsD,labs=[r'$s_g$','$I$'],**kwargs)
 
 
-
-
-# integrate_th_full(Ts=np.linspace(1,5000,5000),xi=500)
-# integrate_th_full(Ts=np.linspace(1,5000,5000),xi=500,iTs=450)
+integrate_th_full(Ts=np.linspace(1,5000,3000),xi=500,iTs=0,
+    xylims=[0,5000,0,0.005],lw=2,name=path+'Iint_kin_dyn.svg',opt='ps')
+plot_rocking_curves(Ts=np.array([0.75,1,1.25,1.5])*500,xi=500,
+    xylims=[-0.005,0.005,0,1],lw=2,name=path+'Iint_kin_dynR.svg',opt='ps')

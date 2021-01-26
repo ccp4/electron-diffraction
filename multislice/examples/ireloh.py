@@ -46,10 +46,10 @@ hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
 #     )
 
 multi = pp.load_multi_obj('../dat/ireloh/ireloh_pptest_autoslic.pkl')
-# multi.postprocess(ssh_alias='badb',ppopt='uwBP')
-# multi.pattern(Iopt='Incsl',out=False,tol=1e-3,
-#     gs=1.3,caxis=[-6.2,0],rings=[0.5,1],lw=2,
-#     imOpt='cv',axPos='V',cmap='binary',opt='p')
+multi.postprocess(ssh_alias='badb',ppopt='uP')
+multi.pattern(Iopt='Incsl',out=False,tol=1e-3,
+    gs=1.3,caxis=[-6.2,0],rings=[0.5,1],lw=2,
+    imOpt='cv',axPos='V',cmap='binary',opt='p')
 
 
 def plot_transmission_vs_structure_factor():

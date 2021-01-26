@@ -617,6 +617,7 @@ class Multislice:
         # ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
         pycode='''import multislice.postprocess as pp;
         multi = pp.load_multi_obj('%s');
+        multi.datpath='./'
         multi.get_beams(bOpt='fa');
         multi.save_pattern();
         ''' %(self.outf['obj'])
@@ -639,7 +640,6 @@ class Multislice:
         temsim  = temsim_hosts[host]
         self._get_job(temsim,cluster,datpath)
         self.make_decks(save=True,datpath=datpath)
-        self.save()
 
         #create directory on remote if does not exist
         cmd = 'ssh %s "if [ ! -d %s ]; then mkdir %s;echo %s:%s created;fi"' %(ssh_alias,hostpath,hostpath,ssh_alias,hostpath)
@@ -664,7 +664,6 @@ class Multislice:
         #restore
         self.datpath = datpath
         self.make_decks(save=True)
-        self.save()
         return cmd
 
     def ssh_get(self,ssh_alias,file,hostpath=None,dest_path=None):

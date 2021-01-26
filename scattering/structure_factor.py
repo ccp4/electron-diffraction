@@ -6,6 +6,10 @@ from math import pi
 __all__=['structure_factor3D','plot_structure3D','get_miller3D',
         'get_pendulossung']
 
+#2D for factors
+Ai = np.array([0.1,0.25,0.26,0.27,1.5])
+fj = lambda q,j,eps:eps*np.sqrt(np.pi)/Ai[j]*np.exp(-(np.pi*Ai[j]*q)**2)
+
 
 def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     '''Computes structure factor in 3D from :
@@ -36,26 +40,27 @@ def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
         Fhkl += F_i*fq[i]
     return hkl,Fhkl
 
-def structure_factor2D(pattern,lat_vec,hk=None,hkMax=10,sym=1,v='q'):
+def structure_factor2D(pattern,lat_vec,hk=None,hkMax=10,sym=1,v=0,eps=1):
     #unpack
-    if not hk : hk = get_miller2D(hkMax,sym)
-    hx,ky = hk
+    if not hk : hl = get_miller2D(hkMax,sym)
+    hx,ky = hl
     ra,fa = pattern[:,:2],pattern[:,2]
     atoms = list(np.array(np.unique(fa),dtype=int));#print(atoms)
     #scattering factor
     b1,b2 = lat_vec
     k_x,k_y = hx*b1[0]+ky*b2[0],hx*b1[1]+ky*b2[1]
     q = np.sqrt(k_x**2+k_y**2)/(2*pi)
-    if 'q' in v : qmax=q.max();print('qmax=%.4f A^-1\nmax_res=%.4f A' %(qmax,1/qmax))
+    fq = [fj(q,Za,eps) for Za in atoms]
+    if v : qmax=q.max();print('qmax=%.4f A^-1\nmax_res=%.4f A' %(qmax,1/qmax))
     #compute structure factor
-    Fhl,n_atoms = np.zeros(h.shape,dtype=complex),len(atoms)
+    Fhl,n_atoms = np.zeros(hx.shape,dtype=complex),len(atoms)
     for i,atom in zip(range(n_atoms),atoms):
-        F_i = np.zeros(h.shape,dtype=complex)
+        F_i = np.zeros(hx.shape,dtype=complex)
         idx = fa==atom
         for ri in ra[idx,:]:
             F_i += np.exp(2*pi*1J*(ri[0]*hx+ri[1]*ky))
         Fhl += F_i*fq[i]
-    return Fhl
+    return hl,Fhl
 
 ###
 def get_pendulossung(name='Si',miller=[0,0,0],keV=200,opt='p'):

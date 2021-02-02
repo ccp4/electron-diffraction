@@ -342,7 +342,7 @@ class Multislice:
 
     def pattern(self,Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
-        - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) g(good)
+        - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
         - rings : list or array - of resolutions for rings to display
         - gs     : broadening parameter
@@ -376,6 +376,7 @@ class Multislice:
             if not Nmax : Nmax = min(256,Nx,Ny)
 
             if 's' in Iopt : im = np.fft.fftshift(im)   #;print('fftshift')
+
             # if qmax:
             #     Nmax =
         #print('preparing')
@@ -385,6 +386,10 @@ class Multislice:
         else:
             im0 = im[Nx-Nmax:Nx+Nmax,Ny-Nmax:Ny+Nmax];del(im)#;print(im0.shape)
             h,k = np.meshgrid(np.arange(-Nmax,Nmax),np.arange(-Nmax,Nmax))
+
+        if 'r' in Iopt :
+            r = np.sqrt(h**2+k**2);r[r==0]=1
+            im0 += np.random.rand(im0.shape[0],im0.shape[1])/(10*r)
         if 'l' in Iopt : #logscale the data
             if 'g' in Iopt:
                 i,j = np.where(im0>10*tol) #index of spots

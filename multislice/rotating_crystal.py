@@ -81,9 +81,10 @@ def rotate_xyz(file,nx,nz,Nx=40,Nz=5,name='',opt='',**kwargs):
 ##########################################################################
 # orient crystal along n_u
 def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True):
-    ''' Rotate the object so that n becomes e_z [1] :\n
+    ''' Rotate the object so that n_u becomes e_z [1] :\n
     - coords : 3xN (or Nx3 array if T=True)
     - n : axis to align e_z against
+    - T : transpose if True
     [1] [rotation matrix from axis and angle](https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle)
     '''
     e_z,n = np.array(ez)/np.linalg.norm(ez),np.array(n_u)/np.linalg.norm(n_u)

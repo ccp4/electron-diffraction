@@ -4,6 +4,7 @@ import multislice.multislice as mupy; imp.reload(mupy)
 import multislice.postprocess as pp ; imp.reload(pp)
 import multislice.mupy_utils as mut ; imp.reload(mut)
 import multislice.rotating_crystal as rcc
+from crystals import Crystal
 plt.close('all')
 path = '../dat/ireloh/'
 figpath = '../docs_fig/ireloh/'
@@ -11,10 +12,12 @@ cif_file = path+'ireloh.cif'
 opts = 'FT'  # F(structure factor) E(Ewald) T(tilts) B(Beams)
 hklM = 20
 
-# cbf_v = mut.Viewer_cbf(exp_path='/home/tarik/Documents/data/ireloh/IRELOH_ED_Dataset_1/')
+# mut.show_image('/home/tarik/Documents/data/ireloh/IRELOH_ED_Dataset_1/n14_a004_0484.cbf')
+cbf_v = mut.Viewer_cbf(exp_path='/home/tarik/Documents/data/ireloh/IRELOH_ED_Dataset_1/',figpath=figpath)
 
-name = path+'ireloh001.xyz'
-# crys = Crystal.from_cif(cif_file)
+# name = path+'ireloh001.xyz'
+name = path+'ireloh484.xyz'
+crys = Crystal.from_cif(cif_file)
 # mut.import_cif(cif_file,name,n=[0,0,1],rep=[1,1,1])#dopt='s')
 
 # multi = mupy.Multislice(path,data=name,#tail=istr,
@@ -27,14 +30,16 @@ name = path+'ireloh001.xyz'
 
 
 # padded simulation
-name = path+'IRELOH001_test.xyz'
+# name = path+'IRELOH001_test.xyz'
 # name = path+'IRELOH001.xyz'
 pad,rep = 1,[1,1,1]
 # mut.import_cif(cif_file,name,n=[0,0,1],rep=rep,pad=pad)#dopt='s')
-# mut.show_grid(name,opts='zx')
-# mut.show_grid(name,opts='xy')
-h,k = np.meshgrid(np.arange(6)*(rep[0]+2*int(pad)),np.arange(6)*(rep[1]+2*int(pad)))
-hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
+# mut.show_grid(name,opts='xy',name=figpath+'001_xy.png',opt='p')
+# mut.show_grid(path+'ireloh001.xyz',opts='xy',name=figpath+'001_xy.png',opt='p',equal=1)
+# mut.show_grid(name,opts='zx',name=figpath+'001_zx.png',opt='ps')
+# mut.show_grid(name,opts='zy',name=figpath+'001_zy.png',opt='ps')
+# h,k = np.meshgrid(np.arange(6)*(rep[0]+2*int(pad)),np.arange(6)*(rep[1]+2*int(pad)))
+# hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
 
 
 # multi = mupy.Multislice(path,data=name,tail='pptest',
@@ -44,13 +49,18 @@ hk=[(h0,k0) for h0,k0 in zip(h.flatten(),k.flatten())];#print(hk)
 #     opt='srp',fopt='f',v='nctr',ppopt='wuPBf',#nctrdDR',
 #     ssh='badb',#hostpath=hostpath
 #     )
-
-multi = pp.load_multi_obj('../dat/ireloh/ireloh_pptest_autoslic.pkl')
-multi.postprocess(ssh_alias='badb',ppopt='uP')
-multi.pattern(Iopt='Incsl',out=False,tol=1e-3,
-    gs=1.3,caxis=[-6.2,0],rings=[0.5,1],lw=2,
-    imOpt='cv',axPos='V',cmap='binary',opt='p')
-
+#
+multi = pp.load_multi_obj('../dat/ireloh/ireloh_t1_autoslic.pkl')
+# multi = pp.load_multi_obj('../dat/ireloh/ireloh_t1_autoslic.pkl')
+# multi = pp.load_multi_obj('../dat/ireloh/ireloh_pptest_autoslic.pkl')
+# multi.postprocess(ssh_alias='badb',ppopt='uP')
+# multi.pattern(Iopt='Incsr',out=False,tol=1e-3,
+#     # gs=1.3,caxis=[-6.2,0],
+#     caxis=[0,0.01],
+#     rings=[0.5,1],lw=2,
+#     imOpt='cv',axPos='V',cmap='gray',
+#     xylims=[-1,1,-1,1], opt='ps',name=figpath+'001_SC.png')
+#
 
 def plot_transmission_vs_structure_factor():
     plts=[]
@@ -99,10 +109,6 @@ def plot_transmission_vs_structure_factor():
 
 
         dsp.stddisp(plts,labs=['$q$','$I$'],xylims=[-2,2,-10,1])
-
-# multi.print_log()
-
-# T = np.exp(1J*sig*Vz)
 
 # dsp.stddisp(im=[ h[s],k[s],np.log10(T[s])],xylims=[-hklM,hklM,-hklM,hklM],caxis=[0,5],
 #     imOpt='cv',axPos='V',cmap='binary')

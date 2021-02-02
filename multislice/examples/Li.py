@@ -1,11 +1,10 @@
 from utils import*
-from utils import displayStandards as dsp
-import multislice as mupy
-from crystals import Crystal
-import rotating_crystal as rcc
-from postprocess import*
 import importlib as imp
-imp.reload(rcc)
+from utils import displayStandards as dsp
+from crystals import Crystal
+from multislice import multislice as mupy
+from multislice import rotating_crystal as rcc; imp.reload(rcc)
+from multislice import postprocess as pp
 
 
 def Li_xyz(path,n=[0,0,1],dopt=1,lfact=1.0,wobble=0,tail=''):
@@ -100,7 +99,10 @@ def Li_wobble(name,nvals=np.inf,**kwargs):
 
 def Li_rots():
     crys = Crystal.from_database('Li')
-    files = rcc.rotate_xyz(crys,Nrot=8,name='dat/Lithium/rots/',opt='p')
+    coords = np.array([a.coords_cartesian for a in crys.atoms])
+
+    # files = rcc.rotate_xyz(crys,Nrot=8,name='dat/Lithium/rots/',opt='p')
+    files = rcc.orient_crystal(coords,ez=[0,0,1],n_u=[0,,1])
     for file in files[:4] : rcc.show_grid(file,title=file,equal=1)#,xyTicks=3.49,xylims=[0,100,0,100])
 
 ##########################################################################
@@ -112,4 +114,4 @@ if __name__ == "__main__":
     # Li_gif(name+'gif/')
     # df = Li_latsize(name+'latsize/',nvals=3,opt='drsp',fopt='',ppopt='w',v=1)
     # Li_wobble(name+'wobble/',nvals=3,opt='',fopt='',ppopt='wu',v=0)#,ssh='tarik-CCP4home')
-    # Li_rots()
+    Li_rots()

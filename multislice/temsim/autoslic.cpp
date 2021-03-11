@@ -27,14 +27,14 @@ FOR DAMAGES RESULTING FROM THE USE OR INABILITY TO USE THIS
 PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA
 BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR
 THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH
-ANY OTHER PROGRAM). 
+ANY OTHER PROGRAM).
 ------------------------------------------------------------------------
 
   ANSI C and TIFF version
   this version uses FFTW 3 (net about a factor of 2X faster)
 
   FFTW choses an optimum form of the FFT at run time so there
-  is some variation in execution speed depending on what else 
+  is some variation in execution speed depending on what else
   the CPU is doing during this planning stage
 
   see:   www.fftw.org
@@ -52,11 +52,11 @@ ANY OTHER PROGRAM).
 
   started 24-july-1996 E. Kirkland
   working 19feb-1997 ejk
-  added look-up-table vzatomLUT() for 3X-4X increase 
+  added look-up-table vzatomLUT() for 3X-4X increase
         in speed 23-may-1997 ejk
   put bandwith limit inside trlayer() 1-oct-1997 ejk
   added Gaussian thermal displacements 1-oct-1997 ejk
-  removed /sqrt(3) from Thermal rms displacements 
+  removed /sqrt(3) from Thermal rms displacements
     to be consistent with Int'l X-ray tables 22-dec-1997 ejk
   corrected zmin/max error with thermal displac. 24-dec-1997 ejk
   fixed small aliasing problem 5-jan-1998 ejk
@@ -112,7 +112,7 @@ ANY OTHER PROGRAM).
      sigmf=0 problem 29-jun-2013 ejk
   fix minor format issue in nbeams message (%ld to %d) 19-jul-2013 ejk
   convert to string message 9-sep-2013 ejk
-  change RNG seed argument to referenece so it get updated for 
+  change RNG seed argument to referenece so it get updated for
       successive calls 21-sep-2013 ejk
   move toString() to slicelib from here 28-nov-2013 ejk
 
@@ -124,9 +124,9 @@ ANY OTHER PROGRAM).
   df0    = defocus (mean value)
   sgmaf = defocus spread (standard deviation)
   dfdelt = sampling interval for defocus integration
-  
-  this file is formatted for a TAB size of 8 characters 
-  
+
+  this file is formatted for a TAB size of 8 characters
+
 */
 
 #include "slicelib.hpp"    // misc. routines for multislice
@@ -134,7 +134,12 @@ ANY OTHER PROGRAM).
 #include "autoslic.hpp"    // header for this class
 
 #include <sstream>	// string streams
+#include <string>
+#include <iostream>  //  C++ stream IO
+#include <fstream>
+#include <iomanip>   //  to format the output
 
+using namespace std;
 //=============================================================
 //---------------  creator and destructor --------------
 
@@ -176,7 +181,7 @@ autoslic::~autoslic()
         x[],y[],z[] = atomic coord
         Znum[] atomic number of each atom
         occ[] = occupancy of each atomic site
-        wobble[] = thermal oscillation amplitude 
+        wobble[] = thermal oscillation amplitude
         hb[],kb[] = (h,k) indexes of beams to monitor during
                           propagation
                 (ignore if lbeams = 0)
@@ -248,7 +253,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
         messageAS( sbuffer );
         exit( 0 );
     }
-            
+
     /*  calculate relativistic factor and electron wavelength */
     mm0 = 1.0F + v0/511.0F;
     wavlen = (float) wavelength( v0 );
@@ -282,10 +287,10 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
     //        wmin, wmax );
     //    messageAS( stemp );
     //}
-    
+
 #ifdef USE_OPENMP
-    /*  force LUT init. to avoid redundant init in parallel form */ 
-    rsq = 0.5;  /* arbitrary position */   
+    /*  force LUT init. to avoid redundant init in parallel form */
+    rsq = 0.5;  /* arbitrary position */
     for( i=0; i<natom; i++) vz =  vzatomLUT( Znum[i], rsq );
 #endif
 
@@ -319,7 +324,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
     wave.resize( nx, ny );
 
     if( (lstart == 0) || (nx!= wave0.nx()) || (ny!=wave0.ny()) ) {
-             wave = 1.0F;  
+             wave = 1.0F;
     } else { wave = wave0; }
 
     trans.init();
@@ -339,7 +344,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
     }
 
  /*  calculate propagator function  */
- 
+
     k2max = nx/(2.0F*ax);
     tctx = ny/(2.0F*by);
     if( tctx < k2max ) k2max = tctx;
@@ -354,7 +359,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
 
     tctx = (float) (2.0 * tan(ctiltx));
     tcty = (float) (2.0 * tan(ctilty));
-    
+
     propxr = (float*) malloc1D( nx, sizeof(float), "propxr" );
     propxi = (float*) malloc1D( nx, sizeof(float), "propxi" );
     propyr = (float*) malloc1D( ny, sizeof(float), "propyr" );
@@ -372,7 +377,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
         propyr[iy] = (float)  cos(t);
         propyi[iy] = (float) -sin(t);
     }
- 
+
 /*  iterate the multislice algorithm proper
 
    NOTE: zero freg is in the bottom left corner and
@@ -385,18 +390,18 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
    conditions as the sampling grid
 */
     if( lpartl == 1 ) {
-        
+
         //sprintf(stemp,"Illumination angle sampling (in mrad) = %f, %f\n",
         //    1000.*rx*wavlen, 1000.*ry*wavlen);
         //messageAS( stemp );
 
         pix.resize(nx,ny);
         pix = 0.0F;     // start with zero and sum into this pix
-        
+
         temp.resize( nx, ny );
         temp.copyInit( trans );
 
-        if( fabs( (double) dfdelt ) < 1.0 ) ndf = 1; 
+        if( fabs( (double) dfdelt ) < 1.0 ) ndf = 1;
         else ndf = (int) ( ( 2.5F * sigmaf ) / dfdelt );
 
         nacx = (int) ( ( acmax / ( wavlen * rx ) ) + 1.5F );
@@ -432,11 +437,11 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
             for( iqy= -nacy; iqy<=nacy; iqy++) {
                 qy = iqy * ry;
                 qy2 = qy * qy;
-        
+
                 for( iqx= -nacx; iqx<=nacx; iqx++) {
                     qx = iqx * rx;
                     q2 = qx*qx + qy2;
-        
+
                     if( (q2 <= q2max) && (q2 >= q2min) ) {
                         nillum += 1;
                         for( ix=0; ix<nx; ix++) {
@@ -447,7 +452,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                             }
                         }
                         /*  add random thermal displacements scaled by temperature
-                                if requested 
+                                if requested
                             remember that initial wobble is at 300K for each direction */
                         if( lwobble == 1 ){
                             scale = (float) sqrt(temperature/300.0) ;
@@ -473,38 +478,38 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                             occ2[i] = occ[i];
                             Znum2[i] = Znum[i];
                         }
-            
+
                         zslice = 0.75*deltaz;  /*  start a little before top of unit cell */
                         istart = 0;
-            
+
                         while( istart < natom ) {
-            
+
                             /* find range of atoms for current slice */
                             na = 0;
-                            for(i=istart; i<natom; i++) 
+                            for(i=istart; i<natom; i++)
                             if( z2[i] < zslice ) na++; else break;
-            
+
                             /* calculate transmission function, skip if layer empty */
                             if( na > 0 ) {
                                 trlayer( &x2[istart], &y2[istart], &occ2[istart],
-                                    &Znum2[istart],na, ax, by, v0, 
+                                    &Znum2[istart],na, ax, by, v0,
                                     trans,  nx, ny, kx2, ky2, &phirms, &nbeams, k2max );
-                
+
                                 wave *= trans;  // transmit
                             }
-            
+
                             /* remember: prop needed here to get anti-aliasing
                                     right */
                             wave.fft();
                             propagate( wave, propxr, propxi, propyr, propyi,
                                 kx2,  ky2,  k2max, nx, ny );
                             wave.ifft();
-            
+
                             zslice += deltaz;
                             istart += na;
-            
+
                         } /* end while(zslice<=..) */
-          
+
                         scale = 1.0F / ( ((float)nx) * ((float)ny) );
                         sum = 0.0;
                         for( ix=0; ix<nx; ix++) {
@@ -513,18 +518,18 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                                     + wave.im(ix,iy)*wave.im(ix,iy);
                         }
                         sum = sum * scale;
-             
+
                         sbuffer=  "Illum. angle = " + toString(1000.*qx*wavlen) +
                                 ", "+toString(1000.*qy*wavlen) +
                                 " mrad, integ. intensity= "+toString(sum);
                         messageAS( sbuffer );
-            
+
                         /*-------- integrate over +/- 2.5 sigma of defocus ------------ */
                         //   should convert to Gauss-Hermite quadrature sometime
                         wave.fft();
                         sumdf = 0.0F;
 
-                        if( fabs( (double) sigmaf ) < 1.0 ) n1 = n2 = 0; 
+                        if( fabs( (double) sigmaf ) < 1.0 ) n1 = n2 = 0;
                         else {
                                 n1 = -ndf;
                                 n2 = ndf;
@@ -532,14 +537,14 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
 
                         for( idf= n1; idf<=n2; idf++) {
                             param[pDEFOCUS] = df = df0 + idf*dfdelt;
-            
+
                             for( ix=0; ix<nx; ix++) {
                                 alx = wavlen * kx[ix];  /* x component of angle alpha */
                                 for( iy=0; iy<ny; iy++) {
                                     aly = wavlen * ky[iy];  /* y component of angle alpha */
                                     k2 = kx2[ix] + ky2[iy];
                                     if( k2 <= k2maxo ) {
-                                        chi0 = (2.0*pi/wavlen) * chi( param, 
+                                        chi0 = (2.0*pi/wavlen) * chi( param,
                                                 alx, aly, multiMode );
                                         tr = (float)  cos(chi0);
                                         ti = (float) -sin(chi0);
@@ -555,14 +560,14 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                             }   /*  end for( ix=0... ) */
 
                             temp.ifft();
-            
+
                             if( (0==n1) && (0==n2) ) pdf = 1;
                             else {
                                 xdf = (double) ( (df - df0) /sigmaf );
                                 pdf = (float) exp( -0.5F * xdf*xdf );
                             }
                             sumdf += pdf;
-            
+
                             for( ix=0; ix<nx; ix++) {
                                 for( iy=0; iy<ny; iy++) {
                                     wr = temp.re(ix,iy);
@@ -570,13 +575,13 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                                     pix.re(ix,iy) += pdf* ( wr*wr + wi*wi );
                                 }
                             }
-            
+
                         }/* end for(idf..) */
 
                         param[ pDEFOCUS ] = df0;  // return to original value
 
                     }/* end if( q2...) */
-        
+
                 } /* end for( iqx..) */
             } /* end for( iqy..) */
         } /* end for( iwobble...) */
@@ -627,7 +632,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
             }
         }
 
-        /*  add random thermal displacements scaled by temperature if requested 
+        /*  add random thermal displacements scaled by temperature if requested
             remember that initial wobble is at 300K for each direction */
         if( lwobble == 1 ){
             scale = (float) sqrt(temperature/300.0) ;
@@ -655,12 +660,13 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
         zslice = 0.75*deltaz;  /*  start a little before top of unit cell */
         istart = 0;
         islice = 1;
-
+        int i_diff=0;
+        char filename[500];
         while( (istart < natom) && ( zslice < (zmax+deltaz) ) ) {
 
             /* find range of atoms for current slice */
             na = 0;
-            for(i=istart; i<natom; i++) 
+            for(i=istart; i<natom; i++)
             if( z[i] < zslice ) na++; else break;
 
             /* calculate transmission function, skip if layer empty */
@@ -668,10 +674,10 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                 trlayer( &x[istart], &y[istart], &occ[istart],
                     &Znum[istart], na, ax, by, v0, trans,
                     nx, ny, kx2, ky2, &phirms, &nbeams, k2max );
-    
-                /*??? printf("average atompot comparison = %g\n", 
+
+                /*??? printf("average atompot comparison = %g\n",
                            phirms/(wavlen*mm0) ); */
-    
+
                 wave *= trans;    //  transmit
             }
 
@@ -684,7 +690,22 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                     beams.im(ib,islice-1) = scale*wave.im(hbeam[ib],kbeam[ib] );   // imag
                 }
             }
+            if ((islice%idiff_pattern)==0){
+              i_diff++;
+              sprintf(filename,"%s.%03d",filediff_pattern.c_str(),i_diff);
+              cout << "writing diffraction "<< filename << " pattern to file ..." <<endl;
 
+              FILE *fp2 = fopen(filename,"w");
+              diff_pattern.resize(nx,ny);
+              diff_pattern = wave;
+              for( ix=0; ix<nx; ix++) {
+        	       for( iy=0; iy<ny; iy++) {
+        	          fprintf(fp2,"%g %g ", diff_pattern.re(ix,iy),diff_pattern.im(ix,iy));
+        	       }
+        	       fprintf(fp2,"\n");
+              }
+              fclose(fp2);
+            }
             /* remember: prop needed here to get anti-aliasing right */
             propagate( wave, propxr, propxi,
                 propyr, propyi, kx2,  ky2,  k2max, nx, ny );
@@ -693,7 +714,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
             /* save depth cross section if requested */
             if( (lcross == 1) && (islice<=nz) ) {
                 for( ix=0; ix<nx; ix++) {
-                    depthpix.re(ix, islice-1) = 
+                    depthpix.re(ix, islice-1) =
                         wave.re(ix,iycross)*wave.re(ix,iycross)
                            + wave.im(ix,iycross)*wave.im(ix,iycross);
                 }
@@ -895,8 +916,7 @@ void autoslic::trlayer(  const float x[], const float y[], const float occ[],
         }
     }
     trans.ifft();
-    
+
     return;
 
  }  /* end autoslic::trlayer() */
- 

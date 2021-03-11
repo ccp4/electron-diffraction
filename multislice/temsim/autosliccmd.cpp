@@ -29,14 +29,14 @@ FOR DAMAGES RESULTING FROM THE USE OR INABILITY TO USE THIS
 PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA
 BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR
 THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH
-ANY OTHER PROGRAM). 
+ANY OTHER PROGRAM).
 ------------------------------------------------------------------------
 
   ANSI C and TIFF version
   this version uses FFTW 3 (net about a factor of 2X faster)
 
   FFTW choses an optimum form of the FFT at run time so there
-  is some variation in execution speed depending on what else 
+  is some variation in execution speed depending on what else
   the CPU is doing during this planning stage
 
   see:   www.fftw.org
@@ -55,11 +55,11 @@ ANY OTHER PROGRAM).
   started 24-july-1996 E. Kirkland
   working 19feb-1997 ejk
   last revised 19-feb-1997 ejk
-  added look-up-table vzatomLUT() for 3X-4X increase 
+  added look-up-table vzatomLUT() for 3X-4X increase
         in speed 23-may-1997 ejk
   put bandwith limit inside trlayer() 1-oct-1997 ejk
   added Gaussian thermal displacements 1-oct-1997 ejk
-  removed /sqrt(3) from Thermal rms displacements 
+  removed /sqrt(3) from Thermal rms displacements
     to be consistent with Int'l X-ray tables 22-dec-1997 ejk
   corrected zmin/max error with thermal displac. 24-dec-1997 ejk
   fixed small aliasing problem 5-jan-1998 ejk
@@ -110,7 +110,7 @@ ANY OTHER PROGRAM).
   convert to cfpix/fftw class from raw fftw 13-nov-2012 to 21-nov-2012 ejk
   move calculation into a class with separate command line front end
       29-may-2013 ejk
-  change RNG seed argument to referenece so it get updated for 
+  change RNG seed argument to referenece so it get updated for
       successive calls 21-sep-2013 ejk
   fix %ld to %d format in printout of aslice.nillum  12-oct-2013 ejk
   add param[] for mode 15-oct-2013 ejk
@@ -124,9 +124,9 @@ ANY OTHER PROGRAM).
   df0    = defocus (mean value)
   sgmaf = defocus spread (standard deviation)
   dfdelt = sampling interval for defocus integration
-  
-  this file is formatted for a TAB size of 4 characters 
-  
+
+  this file is formatted for a TAB size of 4 characters
+
 */
 
 #include <cstdio>  /* ANSI C libraries */
@@ -163,10 +163,10 @@ const int NZMAX= 103;    // max atomic number Z
 int main()
 {
     string filein, fileout, filestart, filebeam, filecross, filediff_pattern, cline, description;
-  
+
     const char version[] = "2-jun-2014 (ejk)";
 
-    int lstart=0, lpartl=0, lbeams=0, lwobble=0, lcross=0, nwobble=1,ldiff_pattern=0;
+    int lstart=0, lpartl=0, lbeams=0, lwobble=0, lcross=0, nwobble=1,ldiff_pattern=0,idiff_pattern=0;
     int ix, iy, iz, nx, ny, nzout, i, nslic0, islice,
         ndf, nbout, ib, ncellx, ncelly, ncellz, NPARAM;
     int nillum, nzbeams;
@@ -180,14 +180,14 @@ int main()
         rmin, rmax, aimin, aimax, ctiltx, ctilty,
         acmin, acmax, Cs3, Cs5, df0, sigmaf, dfdelt, aobj,
         temperature, ycross, dx, dy;
-   
+
     float wmin, wmax, xmin,xmax, ymin, ymax, zmin, zmax;
 
     float *x, *y, *z, *occ, *wobble;
     float *param, *sparam;
 
     double timer, deltaz, vz;
-        
+
     ofstream fp1;
 
     cfpix pix;		// to get results of calculation
@@ -195,7 +195,7 @@ int main()
     cfpix depthpix;	// to get xz cross section results
     cfpix beams;	// to get valuse of requested beams during propagation
     cfpix diff_pattern;	// to get the diffraction pattern
-    
+
     floatTIFF myFile;	//  file input/output
     autoslic aslice;	// has the calculation engine
 
@@ -265,7 +265,7 @@ int main()
                 done = 1;
             } else {
                 cin >> vz;
-                status = readCnm( cline, param, vz );        
+                status = readCnm( cline, param, vz );
                 if( status < 0 ) {
                     cout << "unrecognized aberration, exit..." << endl;
                     exit( EXIT_SUCCESS );
@@ -329,7 +329,7 @@ int main()
         cout << "Type number of configurations to average over:" << endl;
         cin >>  nwobble;
         if( nwobble < 1 ) nwobble = 1;
-        /* get random number seed from time if available 
+        /* get random number seed from time if available
             otherwise ask for a seed */
         ltime = (long) time( NULL );
         iseed = (unsigned) ltime;
@@ -353,8 +353,10 @@ int main()
     if( ldiff_pattern ==1 ){
       cout << "Type name of diffraction pattern file:" << endl;
       cin >> filediff_pattern;
+
+      cout<<"How often should pattern be recorded ? "<<endl;
+      cin >> idiff_pattern;
     }
-    
 /* start timing the actual computation just for fun */
 
     timer = cputim();
@@ -368,7 +370,7 @@ int main()
 
     if ( lstart == 1 ) {
         if( myFile.read( filestart.c_str() ) != 1 ) {
-            cout << "Cannot open input file: " << filestart << endl; 
+            cout << "Cannot open input file: " << filestart << endl;
             exit( 0 );
         }
 
@@ -396,11 +398,11 @@ int main()
         by = sparam[pDY] * ny;
         v0     = sparam[pENERGY];
         nslic0 = (int) sparam[pNSLICES];
-        cout << "Starting pix range " << sparam[pRMIN] << " to " << sparam[pRMAX] 
-              << " real\n" << "           " << sparam[pIMIN] << " to " 
+        cout << "Starting pix range " << sparam[pRMIN] << " to " << sparam[pRMAX]
+              << " real\n" << "           " << sparam[pIMIN] << " to "
               << sparam[pIMAX] << " imag" << endl;
         cout << "Beam voltage = " << v0 << " kV" << endl;
-        cout << "Old crystal tilt x,y = " << 1000.*sparam[pXCTILT] <<  ", " 
+        cout << "Old crystal tilt x,y = " << 1000.*sparam[pXCTILT] <<  ", "
             << 1000.*sparam[pYCTILT] << " mrad" << endl;
 
     } else nslic0 = 0;     /* end if( lstart...) */
@@ -420,7 +422,7 @@ int main()
     cout << natom << " atomic coordinates read in"  << endl;
     cout << description << endl;
 
-    cout <<"Size in pixels Nx, Ny= " << nx << " x " << ny << " = " << nx*ny 
+    cout <<"Size in pixels Nx, Ny= " << nx << " x " << ny << " = " << nx*ny
         << " beams" << endl;
     cout <<"Lattice constant a,b = " << ax << ", " << by << endl;
 
@@ -440,7 +442,7 @@ int main()
         if( wobble[i] < wmin ) wmin = wobble[i];
         if( wobble[i] > wmax ) wmax = wobble[i];
     }
-    cout << "Total specimen range is\n" 
+    cout << "Total specimen range is\n"
         << xmin << " to " << xmax << " in x\n"
             << ymin << " to " << ymax << " in y\n"
         << zmin << " to " << zmax << " in z" << endl;
@@ -456,7 +458,9 @@ int main()
     aslice.lstart = lstart;
     aslice.lwobble = lwobble;
     aslice.ldiff_pattern = ldiff_pattern;
-    
+    aslice.filediff_pattern = filediff_pattern;
+    aslice.idiff_pattern = idiff_pattern;
+
     //   set calculation parameters (some already set above)
     param[ pAX ] = ax;			// supercell size
     param[ pBY ] = by;
@@ -491,7 +495,7 @@ int main()
 
     aslice.calculate( pix, diff_pattern, wave0, depthpix, param, multiMode, natom, &iseed,
                 Znum, x,y,z,occ,wobble, beams, hbeam, kbeam, nbout, ycross, dfdelt );
- 
+
     if( lpartl == 1 ) {         //    with partial coherence
         nillum = aslice.nillum;
         cout << "Total number of illumination angle = "
@@ -499,7 +503,7 @@ int main()
         ndf = (int) ( ( 2.5F * sigmaf ) / dfdelt );  // recal same value in class
         cout << "Total number of defocus values = " << 2*ndf+1 << endl;
     }
-   
+
     else if( lbeams ==1 ) {
             fp1.open( filebeam.c_str() );
             if( fp1.bad() ) {
@@ -516,17 +520,17 @@ int main()
                 fp1 << setw(5) << islice;
                 for( ib=0; ib<nbout; ib++) //  setprecision(4)
                     fp1 << "  " << setw(10) << beams.re(ib,islice)		//????? "%10.6f %10.6f",
-                        << "  " << setw(10) << beams.im(ib,islice); 
+                        << "  " << setw(10) << beams.im(ib,islice);
                 fp1 << endl;
             }
         fp1.close();
 
-    } // end else 
+    } // end else
 
 /*  ------------------------------------------------------
     output results and find min and max to echo
     remember that complex pix are stored in the file in FORTRAN
-        order for compatibility */    
+        order for compatibility */
     pix.findRange( rmin, rmax, aimin, aimax );
 
     param[pRMAX]  = rmax;
@@ -583,22 +587,22 @@ int main()
     }
 
     /*
-      2020 : Tarik Drevon 
-      Save diffraction pattern 
+      2020 : Tarik Drevon
+      Save diffraction pattern
     */
     if (ldiff_pattern){
       cout << "writing diffraction pattern to file ..." <<endl;
       FILE *fp2 = fopen(filediff_pattern.c_str(),"w");
       for( ix=0; ix<nx; ix++) {
-	for( iy=0; iy<ny; iy++) {
-	  fprintf(fp2,"%g %g ", diff_pattern.re(ix,iy),diff_pattern.im(ix,iy));
-	}
-	fprintf(fp2,"\n");
+	       for( iy=0; iy<ny; iy++) {
+	          fprintf(fp2,"%g %g ", diff_pattern.re(ix,iy),diff_pattern.im(ix,iy));
+	       }
+	       fprintf(fp2,"\n");
       }
       fclose(fp2);
     }
-    
-    
+
+
     cout << "Total CPU time = " << cputim()-timer << " sec." << endl;
 #ifdef USE_OPENMP
     cout << "wall time = " << walltim() - walltimer << " sec." << endl;
@@ -607,6 +611,3 @@ int main()
     return 0;
 
 } /* end main() */
-
-
-

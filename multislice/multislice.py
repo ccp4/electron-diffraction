@@ -18,12 +18,14 @@ multi.beam_vs_thickness(bOpt='f')
 import pickle,socket,time
 import pandas as pd
 import numpy as np
+from matplotlib import rc
 from math import ceil,nan
 from subprocess import Popen,check_output,PIPE
 from glob import glob as lsfiles
 from os.path import dirname,realpath,exists
 from string import ascii_uppercase as SLICES #ascii_letters
 from string import ascii_letters
+# from matplotlib.animation import FuncAnimation
 # from utils.glob_colors import*
 from crystals import Crystal
 import utils.glob_colors as colors
@@ -67,6 +69,7 @@ class Multislice:
     - `repeat` : 3-int-list - super cell size in the x,y,z directions
     - `NxNy` : 2-int-list or int : sampling in x and y (same sampling in x and y if only int provided)
     - `slice_thick` : float - slice thickness (A)
+    - `i_slice` : record intensity every i_slice
     - `hk` : list of tuple - beams to record as function of depth
     - `Nhk`: int - set hk on a grid of multiples of the supercell size. Prevails over hk argument if >0. default(0)
     - `hk_sym` : True (take the Friedel pairs for the beams in hk)
@@ -86,11 +89,11 @@ class Multislice:
     - `ppopt` : u(update),w(wait), I(image) B(beam) P(pattern) A(azim_avg)
     - `ssh` : ip address or alias of the machine on which to run the job
     - `hostpath` : path to data on host
-    - `cif` : name of .cif file corresponding to structure in path
+    - `cif_file` : name of .cif file corresponding to structure in path
     '''
     def __init__(self,name,mulslice=False,tail='',data=None,
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
-                keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,
+                keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,i_slice=100,
                 hk=[(0,0)],Nhk=0,hk_sym=0,prev=None,
                 opt='',fopt='w',ppopt='uwP',v=1,
                 ssh=None,hostpath='',cluster=False,cif_file=None):
@@ -102,7 +105,7 @@ class Multislice:
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
 
         #attributes
-        self.version     = '1.3.1'
+        self.version     = '1.3.2'
         self.name        = dsp.basename(name)                       #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.cif_file    = self.get_cif_file(cif_file)              #;print(self.cif_file)
@@ -122,6 +125,7 @@ class Multislice:
         self.hk          = self._set_hk(hk,Nhk,hk_sym)
         self.cell_params = self._get_cell_params('c' in v)
         self.slice_thick = self._set_slice_thick(slice_thick)
+        self.i_slice     = i_slice
         self.thickness   = self._get_thickness('t' in v)
         self.decks       = {}
         self.p           = None
@@ -166,6 +170,7 @@ class Multislice:
         - fopt : f(force rerun), w(warn ask rerun already done)
         - ssh : name of the host to run the job
         '''
+        if isinstance(fopt,int):fopt='f'
         run = True
         if self.check_simu_state(v=0,ssh_alias='') == 'done' :
             if v>0 : print(colors.red+"Simulation already performed in the past."+colors.black)
@@ -193,9 +198,9 @@ class Multislice:
             if v>1 : print(colors.magenta+cmd+colors.black)
         return p
 
-    def postprocess(self,ppopt='uwP',ssh_alias='',tol=1e-4,figpath=None,opt='p',hostpath=''):
+    def postprocess(self,ppopt='wuP',ssh_alias='',tol=1e-4,figpath=None,opt='p',hostpath=''):
         '''Performs postprocessing with predefined options : \n
-        - ppopt:u(update), w(wait till done) I(image), B(beam) P(pattern) f(force recalculate)
+        - ppopt:w(wait until done) u(update) d(display) for I(image), B(beam) P(pattern)     #f(force recalculate)
         - figpath : Directory to place the figures if saving with automatic naming (default datpath)
         '''
         if not figpath : figpath = self.datpath
@@ -209,14 +214,16 @@ class Multislice:
             if 'I' in ppopt : self.ssh_get(ssh_alias,'image'     ,hostpath)
             if 'B' in ppopt : self.ssh_get(ssh_alias,'beams'     ,hostpath)
             if 'P' in ppopt : self.ssh_get(ssh_alias,'patternnpy',hostpath)
-        #convert to np.array and save
-        if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
-        if 'B' in ppopt and opt :
-            # if not exists(self._outf('beams')) or 'f' in ppopt:self.get_beams(bOpt='fa')
-            self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
-        if 'P' in ppopt and opt :
-            # if not exists(self._outf('patternnpy')) or 'f' in ppopt:self.save_pattern()
-            self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
+            if 'S' in ppopt : self.ssh_get(ssh_alias,'patternS'  ,hostpath)
+        #convert to np.array
+        if 'd' in ppopt:
+            if 'I' in ppopt and opt : self.image(opt=opt,name=figpath+self.outf['imagesvg'])
+            if 'B' in ppopt and opt :
+                # if not exists(self._outf('beams')) or 'f' in ppopt:self.get_beams(bOpt='fa')
+                self.beam_vs_thickness(bOpt='f',tol=tol,opt=opt,name=figpath+self.outf['beamssvg'])
+            if 'P' in ppopt and opt :
+                # if not exists(self._outf('patternnpy')) or 'f' in ppopt:self.save_pattern()
+                self.pattern(Iopt='Incsl',tol=tol,imOpt='ch',cmap='gray',opt=opt,name=figpath+self.outf['patternsvg'])
 
     ###################################################################
     ################ OUTPUT FUNCTIONS
@@ -304,9 +311,11 @@ class Multislice:
         if any(iBs) :
             if isinstance(iBs[0],str) :
                 iBs = [ (iB==hk).argmax() for iB in iBs if (iB==hk).sum()]
+                print(iBs)
         else :
             Imax = np.array([I.max() for I in Ib]) #;print(Imax)
             iBs = [i for i in range('O' not in bOpt,len(hk)) if Imax[i]>= tol*Imax.max()]
+
         beams = np.array(hk)[iBs],t, np.array(re)[iBs],np.array(im)[iBs],np.array(Ib)[iBs]
 
         if 'o' in bOpt:
@@ -329,18 +338,29 @@ class Multislice:
         beams = np.load(self._outf('beams'),allow_pickle=True)
         return beams
 
-    def save_pattern(self):
-        print('loading')
-        im = np.loadtxt(self._outf('pattern'))
+    def save_patterns(self):
+        i_files = [f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')]
+        for i in i_files :
+            self.save_pattern(i)
+    def show_patterns(self,**kwargs):
+        patterns = lsfiles(self._outf('pattern').replace('.txt','')+'*.npy')
+        return Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
+
+    def save_pattern(self,i=''):
+        print('loading pattern %s' %i)
+        txt_file=self._outf('pattern')+i
+        im = np.loadtxt(txt_file)
         print('saving')
         real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
         im = real**2+imag**2
         #im = np.fft.fftshift(im)
+        npy_file=self._outf('pattern').replace('.txt','')+i.replace('.','')+'.npy'
+        np.save(npy_file,im,allow_pickle=True)
+        print(colors.green+'file saved : ' +colors.yellow+npy_file+colors.black)
 
-        np.save(self._outf('patternnpy'),im,allow_pickle=True)
-        print(colors.green+'file saved : ' +colors.yellow+self._outf('patternnpy')+colors.black)
 
-    def pattern(self,Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],**kwargs):
+
+    def pattern(self,file='',Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
@@ -350,7 +370,8 @@ class Multislice:
         returns : [qx,qy,I]
         '''
         # if not exists(self._outf('patternnpy')):self.save_pattern()
-        im = np.load(self._outf('patternnpy')) ;print(im.shape)
+        if not file : file = self._outf('patternnpy')
+        im = np.load(file) ;print(im.shape)
         ax,by = self.cell_params[:2]
         Nh,Nk = self.repeat[:2];
         Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
@@ -377,8 +398,6 @@ class Multislice:
 
             if 's' in Iopt : im = np.fft.fftshift(im)   #;print('fftshift')
 
-            # if qmax:
-            #     Nmax =
         #print('preparing')
         if 'q' in Iopt:
             im0 = im[Nx:Nx+Nmax,Ny:Ny+Nmax];del(im)
@@ -405,14 +424,14 @@ class Multislice:
                     im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
             im0 = np.log10(im0)
 
+        if out : return h/Nh/ax, k/Nk/by, im0
         N = [1,4]['q' in Iopt]
         t = np.linspace(0,2*np.pi/N,100)
         ct,st = np.cos(t),np.sin(t)
         plts = [[r*ct,r*st,'g--',''] for r in rings]
         print('displaying pattern...')
         print(h.shape,im0.shape)
-        dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
-        if out : return h/Nh/ax, k/Nk/by, im0
+        return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities
@@ -539,6 +558,7 @@ class Multislice:
                 'imagesvg'  : self.name+'.svg',
                 'pattern'   : self.name+'_pattern.txt',
                 'patternnpy': self.name+'_pattern.npy',
+                'patternS'  : self.name+'_patternS.npy',
                 'patternsvg': self.name+'_pattern.svg',
                 'beamstxt'  : self.name+'_beams.txt',
                 'beams'     : self.name+'_beams.npy',
@@ -622,9 +642,11 @@ class Multislice:
         # ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
         pycode='''import multislice.postprocess as pp;
         multi = pp.load_multi_obj('%s');
-        multi.datpath='./'
+        multi.datpath='./';
         multi.get_beams(bOpt='fa');
-        multi.save_pattern();
+        multi.save_pattern()
+        qx,qy,It1 = multi.pattern(Iopt='Ics',out=True,Nmax=260)
+        np.save(multi.outf['patternS'],[qx,qy,It1])
         ''' %(self.outf['obj'])
         job +='%s -c "%s"' %(pyexe, pycode.replace('\n',''))
         job+='\n'
@@ -676,6 +698,7 @@ class Multislice:
         hostpath = self._get_hostpath(ssh_alias,hostpath)
         cmd = 'scp %s:%s %s' %(ssh_alias,hostpath+self.outf[file],dest_path)
         p = Popen(cmd,shell=True,stderr=PIPE)#stdout=PIPE
+
         p.wait()
         o,e = p.communicate()
         # print(o.decode())
@@ -743,6 +766,7 @@ class Multislice:
         deck += "n\n"                           #intensity cross section
         deck += "y\n"                           #diffraction pattern
         deck += "%s\n" %self._outf('pattern')   #   filename
+        deck += "%d" %self.i_slice;
         return deck
 
     ########################################################################
@@ -811,6 +835,53 @@ def sweep_var(name,param,vals,df=1,ssh='',tail='',do_prev=0,**kwargs):
         df.to_pickle(name+dfname)
         print(colors.green+'Dataframe saved : '+colors.yellow+name+dfname+colors.black)
 
+
+
+class Pattern_viewer():
+    def __init__(self,multi,patterns,figpath,i=0,**args):
+        ''' View cbf files
+        - exp_path : path to images
+        - figpath : place to save the figures
+        - i : starting image
+        '''
+        self.multi = multi
+        self.figpath = figpath
+        self.patterns  = np.sort(patterns);#print(patterns)
+        self.args=args
+        self.nfigs = self.patterns.size
+        self.fig,self.ax = dsp.stddisp()
+        cid = self.fig.canvas.mpl_connect('key_press_event', self)
+        self.i=i     #starting image
+        self.inc=1   #increment(use 'p' or 'm' to change)
+        self.mode=1
+        rc('text', usetex=False)
+        self.update()
+
+    def update(self):
+        self.ax.cla()
+        print("%d/%d" %(self.i,self.nfigs))
+        self.multi.pattern(fig=self.fig,ax=self.ax,file=self.patterns[self.i],
+            title='pattern %d' %self.i,**self.args,opt='')
+        self.fig.canvas.draw()
+
+    def __call__(self, event):
+        # print(event.key)
+        if event.key in ['up','right']:
+            self.i=min(self.i+self.inc,self.nfigs-1)
+            self.mode=1
+            self.update()
+        elif event.key in ['left','down']:
+            self.i=max(0,self.i-self.inc)
+            self.mode=-1
+            self.update()
+
+        if event.key=='s':
+            dsp.saveFig(self.figpath+'pattern%s.png' %str(self.i).zfill(3),ax=self.ax)
+
+        if event.key=='p':
+            self.inc=min(self.inc+1,100);print(self.inc)
+        if event.key=='m':
+            self.inc=max(1,self.inc-1);print(self.inc)
 
 # def coords2grid(coords,cz):
 #     '''arrange coordinates so they fit on periodic grid

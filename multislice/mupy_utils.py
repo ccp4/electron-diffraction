@@ -1,11 +1,21 @@
+import importlib as imp
 import pandas as pd, numpy as np
-import os,matplotlib,cbf
-from utils import displayStandards as dsp#; imp.reload(dsp)
+import os,matplotlib,cbf,re,glob
+from subprocess import check_output
+from utils import displayStandards as dsp   ; imp.reload(dsp)
 from utils import glob_colors as colors
 from crystals import Crystal
-import multislice as mupy
 from matplotlib import rc
-# import rotating crystal as rcc
+import multislice as mupy
+from . import rotating_crystal as rcc       #; imp.reload(rcc)
+
+def get_reciprocal(abc):
+    a1,a2,a3 = abc
+    b1 = np.cross(a2,a3)/(a1.dot(np.cross(a2,a3)))
+    b2 = np.cross(a3,a1)/(a2.dot(np.cross(a3,a1)))
+    b3 = np.cross(a1,a2)/(a3.dot(np.cross(a1,a2)))
+    abc_star = np.vstack([b1,b2,b3])#/(2*np.pi)
+    return abc_star
 
 def ewald_sphere(lat_params,lam=0.025,tmax=7,T=0.2,nx=20,ny=10,**kwargs):
     '''lam(wavelength Angstrum), tmax(angle degrees), T(Thickness mum)'''
@@ -69,43 +79,55 @@ def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail='
     - n : reorient of the z axis into n
     - pad : amount of padding on each side (in unit of super cell size)
     '''
-    crys    = Crystal.from_cif(file)
-    lat_vec = np.array(crys.lattice_vectors)
-    ax,by,cz = crys.lattice_parameters[:3]
-    if sum(rep)>3 :
-        crys = crys.supercell(rep[0],rep[1],rep[2])
-        ax,by,cz = crys.crystal.lattice_parameters[:3]
-    pattern = np.array([[a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
+    crys       = Crystal.from_cif(file)
+    lat_vec    = np.array(crys.lattice_vectors)
+    lat_params = crys.lattice_parameters[:3]
+    pattern    = np.array([[a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
 
-    if pad:
-        pattern[:,1] += rep[0]*ax*pad
-        pattern[:,2] += rep[1]*by*pad
-        lat_vec[0][0] = rep[0]*ax*(1+2*pad)
-        lat_vec[1][1] = rep[1]*by*(1+2*pad)
-    if xyz:make_xyz(xyz,pattern,lat_vec,n,fmt='%.4f',dopt=dopt)
+    if xyz:make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,fmt='%.4f',dopt=dopt)
     return pattern #,lat_params #pattern,crys # file
 
-def make_xyz(name,pattern,lat_vec,n=[0,0,1],fmt='%.4f',dopt='s'):
+def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],rep=[1,1,1],pad=0,fmt='%.4f',dopt='s'):
     '''Creates the.xyz file from a given compound and orientation
     - name    : Full path to the file to save
     - pattern : Nx6 ndarray - Z,x,y,z,occ,wobble format
     - lat_vec : 3x3 ndarray - lattice vectors [a1,a2,a3]
+    - lat_params : ax,by,cz
+    - pad : amount of padding on each side (in unit of super cell size)
     - n : beam direction axis
     - dopt : p(print file),s(save)
     '''
     compound = dsp.basename(name)
-    ax,by,cz = np.diag(lat_vec)
-    # cz = np.linalg.norm(n)
-    # coords = orient_crystal(pattern[:,1:4],n_u=n)
+    Za,occ,bfact = pattern[:,[0,4,5]].T
+    coords = pattern[:,1:4]
+    Nx,Ny,Nz = rep
+    ax,by,cz = lat_params
+    #replicate
+    if sum(rep)>3 :
+        ni,nj,nk = np.meshgrid(range(Nx),range(Ny),range(Nz))
+        ni,nj,nk = ni.flatten(),nj.flatten(),nk.flatten()
+        a1,a2,a3 = np.array(lat_vec)
+        coords = np.vstack([coords + i*a1+j*a2+k*a3 for i,j,k in zip(ni,nj,nk)])
+        Za     = np.tile(Za   ,[ni.size])
+        occ    = np.tile(occ  ,[ni.size])
+        bfact  = np.tile(bfact,[ni.size])
+        lat_params[0] = Nx*ax
+        lat_params[1] = Ny*by
+        lat_params[2] = Nz*cz
 
-    # if 'c' in dopt:
-    #     x,y,z = coords.T
-    #     ax,by = np.abs(x.min()-x.max()),np.abs(y.max()-y.min())
-    #     idx,idy,idz = x<0,y<0,z<0
-    #     # coords[idx,0] += ax
-    #     # coords[idy,1] += by
-    #     coords[idz,2] += cz
-    # pattern[:,1:4] = coords
+    #apply padding
+    if pad:
+        coords[:,0] += Nx*ax*pad
+        coords[:,1] += Ny*by*pad
+        coords[:,2] += Nz*cz*pad
+        lat_params[0] *= 1+2*pad
+        lat_params[1] *= 1+2*pad
+        lat_params[2] *= 1+2*pad
+
+    #orient
+    coords = rcc.orient_crystal(coords,n_u=n)
+    pattern = np.hstack([Za[:,None],coords,occ[:,None],bfact[:,None]])
+    ax,by,cz = lat_params
     #write to file
     if 's' in dopt :
         dir=''.join(np.array(n,dtype=str))
@@ -159,21 +181,109 @@ def show_grid(file,opts='',**kwargs):
         pps = [dsp.Rectangle((0,0),lat_params[i-1],lat_params[j-1],linewidth=2,edgecolor='b',alpha=0.1)]
         scat = [pattern[:,i],pattern[:,j],C]
 
-        fig,ax = dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,ms=50,
+        fig,ax = dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,ms=5,
             **kwargs)
     # return lat_params,pattern
 
+def import_xyz(xyz_file):
+    '''import .xyz file
+    - xyz_file : file to import
+    returns :
+    - pattern    : [Za,coords,occ,bfactor]
+    - lat_params : [ax,by,cz] for the supercell
+    '''
+    with open(xyz_file,'r') as f:l=list(map(lambda s:s.strip().split(' '),f.readlines()))
+    lat_params = np.array(l[1],dtype=float)
+    pattern = np.array(l[2:-1],dtype=float)
+    return pattern,lat_params
+def show_grid3(xyz_file,ms=1,**kwargs):
+    '''display an .xyz file content in a 2D plane
+    xyz_file : .xyz file
+    '''
+    pattern,lat_params = import_xyz(xyz_file)
+    cs = {1:tuple([0.75]*3),6:tuple([0.25]*3),7:(0,0,1),8:(1,0,0),16:(1,1,0),17:(0,1,1)}
+    Z = np.array(pattern[:,0],dtype=int)
+    C = [cs[E] for E in Z]
+
+    scat = [pattern[:,1],pattern[:,2],pattern[:,3],ms,C]
+    return dsp.stddisp(scat=scat,labs=['$x$','$y$','$z$'],rc='3d',**kwargs)
 
 
-def show_image(file):
-    rc('text', usetex=False)
-    content = cbf.read(file)
-    numpy_array_with_data = content.data
-    header_metadata = content.metadata
-    dsp.stddisp(im=[numpy_array_with_data],
-        cmap='gray',caxis=[0,50],pOpt='t',title="%s" %os.path.basename(file),opt='p')
+
+class Image_viewer:
+    def __init__(self,file,sym=1,pad=None):
+        basename      = file.split('_')
+        self.im       = int(basename[-1].replace('.cbf',''))
+        self.basename = '_'.join(basename[:-1])
+        file_ids      = [int(f.split('_')[-1].replace('.cbf','')) for f in glob.glob(self.basename+'*.cbf')]
+        if pad :
+            self.pad=pad
+        else:
+            self.pad=int(np.log10(max(file_ids)))+1       #;print(self.pad)
+
+        ls = np.array(check_output("head -n25 %s" %file,shell=True).decode().split('\n'))
+        px_str      = ls[['Pixel_size' in l for l in ls]][0]
+        D_str       = ls[['Detector_distance' in l for l in ls]][0] #;print(D_str)
+        lam_str     = ls[["Wavelength" in l for l in ls]][0]
+
+        self.pxy    = np.array(re.findall("\d+e-\d+", px_str),dtype=float)
+        self.D      = 1 #float(re.findall("\d+.\d+",D_str)[0])
+        self.lam    = float(re.findall("\d+.\d+",lam_str)[0])
+
+        shape = np.array(cbf.read(file).data.shape)
+        self.image = cbf.read(file).data
+
+        if sym:
+            Nx,Ny = np.array(shape/2,dtype=int)
+            self.Nx,self.Ny = Nx,Ny
+            self.pX,self.pY = np.meshgrid(np.arange(-Nx,Nx+1),np.arange(-Ny,Ny+1))
+        else:
+            Nx,Ny = shape
+            # self.pX,self.pY = np.meshgrid(np.arange(Nx),np.arange(Ny))
+            self.pX,self.pY = np.meshgrid(np.arange(Nx),np.flipud(np.arange(Ny)))
+        self.qx,self.qy = self.px2s(self.pX,self.pY)
+
+    def s2px(self,xh):
+        '''xh : recorded coordinates on image'''
+        px,py = self.pxy
+        pX = self.lam*self.D/px*xh[:,0] + self.Nx
+        pY = -self.lam*self.D/py*xh[:,1] + self.Ny
+        return pX,pY
+
+    def px2s(self,pX,pY):
+        px,py = self.pxy
+        qx,qy = px/self.D/self.lam*pX, py/self.D/self.lam*pY
+        return qx,qy
+
+    def show_image(self,im=None,lab='q',stack=1,**kwargs):
+        rc('text', usetex=False)
+        if not im:im = self.im
+        file = "%s_%s.cbf" %(self.basename,str(im).zfill(self.pad))   #;print(filename)
+        # with open(file,'wb') as f:print(file)
+        content = cbf.read(file)
+        image = content.data
+        if stack>1:
+            for i in range(1,stack):
+                filename = "%s_%s.cbf" %(self.basename,str(im+i).zfill(self.pad))   #;print(filename)
+                image+=cbf.read(filename).data
+            if 'caxis' in list(kwargs.keys()):
+                kwargs['caxis'] = list(np.array(kwargs['caxis'])*stack) #; print(kwargs['caxis'])
+        if 'q' in lab:
+            labs = ['$q_x(A^{-1})$','$q_y(A^{-1})$']
+            X,Y = self.qx,-self.qy
+        elif 'p' in lab:
+            labs = ['','']#['$p_x$','$p_y$']
+            X,Y = self.pX,self.pY
+        elif 'x' in lab:
+            labs = ['$x(mm)$','$y(mm)$']
+            px,py = self.pxy
+            X,Y = self.pX*px*1e3,self.pY*py*1e3
+        return dsp.stddisp(im=[X,Y,image],labs=labs,
+            pOpt='ptX',title="%s" %os.path.basename(file),**kwargs)
 
 
+
+#######
 class Viewer_cbf:
     def __init__(self,exp_path,figpath,i=0):
         ''' View cbf files

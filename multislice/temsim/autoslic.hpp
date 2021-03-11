@@ -27,14 +27,14 @@ FOR DAMAGES RESULTING FROM THE USE OR INABILITY TO USE THIS
 PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA
 BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR
 THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH
-ANY OTHER PROGRAM). 
+ANY OTHER PROGRAM).
 ------------------------------------------------------------------------
 
   ANSI C and TIFF version
   this version uses FFTW 3 (net about a factor of 2X faster)
 
   FFTW choses an optimum form of the FFT at run time so there
-  is some variation in execution speed depending on what else 
+  is some variation in execution speed depending on what else
   the CPU is doing during this planning stage
 
   see:   www.fftw.org
@@ -52,11 +52,11 @@ ANY OTHER PROGRAM).
 
   started 24-july-1996 E. Kirkland
   working 19feb-1997 ejk
-  added look-up-table vzatomLUT() for 3X-4X increase 
+  added look-up-table vzatomLUT() for 3X-4X increase
         in speed 23-may-1997 ejk
   put bandwith limit inside trlayer() 1-oct-1997 ejk
   added Gaussian thermal displacements 1-oct-1997 ejk
-  removed /sqrt(3) from Thermal rms displacements 
+  removed /sqrt(3) from Thermal rms displacements
     to be consistent with Int'l X-ray tables 22-dec-1997 ejk
   corrected zmin/max error with thermal displac. 24-dec-1997 ejk
   fixed small aliasing problem 5-jan-1998 ejk
@@ -108,7 +108,7 @@ ANY OTHER PROGRAM).
   move calculation into a class with separate command line front end
       29-may-2013 ejk
   convert to string message 9-sep-2013 ejk
-  change RNG seed argument to referenece so it get updated for 
+  change RNG seed argument to referenece so it get updated for
       successive calls 21-sep-2013 ejk
   move toString() to slicelib from here 28-nov-2013 ejk
 
@@ -120,9 +120,9 @@ ANY OTHER PROGRAM).
   df0    = defocus (mean value)
   sgmaf = defocus spread (standard deviation)
   dfdelt = sampling interval for defocus integration
-  
-  this file is formatted for a TAB size of 8 characters 
-  
+
+  this file is formatted for a TAB size of 8 characters
+
 */
 
 #ifndef AUTOSLIC_HPP   // only include this file if its not already
@@ -146,15 +146,15 @@ ANY OTHER PROGRAM).
 class autoslic{
 
 public:
-    
+
     autoslic( );         // constructor functions
-    
+
     ~autoslic();        //  destructor function
 
     // (input) control flags- should be set externally
     //   things that don't fit in param[]
-  int lbeams, lcross, lpartl, lstart, lwobble,ldiff_pattern;
-
+  int lbeams, lcross, lpartl, lstart, lwobble,ldiff_pattern,idiff_pattern;
+  std::string filediff_pattern;
     int nillum;   //  (output) number of illumination angles used
 
     //  main calculation
@@ -168,7 +168,7 @@ private:
         int NZMAX, NSMAX, NCMAX;
         float BW;
         double twopi, ABERR;
-        
+
         void trlayer( const float x[], const float y[], const float occ[],
             const int Znum[], const int natom, const float ax, const float by,
             const float kev, cfpix &trans, const int nx, const int ny,

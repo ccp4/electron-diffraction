@@ -6,8 +6,9 @@ from utils import displayStandards as dsp   ; imp.reload(dsp)
 from utils import glob_colors as colors
 from crystals import Crystal
 from matplotlib import rc
-import multislice as mupy
+from . import multislice as mupy            ; imp.reload(mupy)
 from . import rotating_crystal as rcc       #; imp.reload(rcc)
+from . import postprocess as pp             #; imp.reload(pp)
 
 def get_reciprocal(abc):
     a1,a2,a3 = abc
@@ -38,14 +39,16 @@ def ewald_sphere(lat_params,lam=0.025,tmax=7,T=0.2,nx=20,ny=10,**kwargs):
         **kwargs)
 
 
-def sweep_var(name,param,vals,df=None,ssh='',tail='',do_prev=0,**kwargs):
+def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
+    **kwargs):
     '''
     runs a set of similar simulations with one varying parameter
-    - name          : path to the simulation folder
+    - datpath       : path to the simulation folder
     - param,vals    : the parameters and values to sweep
-    - df            :
-        - pd.Dataframe to update(since parsed as a reference)
-        - int create and save the new dataframe if 1
+    - df :
+        - int - create and save the new dataframe if 1
+        - pd.Dataframe - to update(since parsed as a reference)
+    - pargs         : bool - pass param and values to Multislice  if True
     - do_prev       : Used for iterative fourier transform
     - kwargs : see help(Multislice)
     '''
@@ -54,18 +57,18 @@ def sweep_var(name,param,vals,df=None,ssh='',tail='',do_prev=0,**kwargs):
         if df : df,do_df,save = pd.DataFrame(columns=[param,'host','state']+pp.info_cols),1,1
     nvals,prev = len(vals),None
     for i,val in zip(range(nvals),vals):
-        kwargs[param]=val
+        if pargs:kwargs[param]=val
         if do_prev and i: prev = multi.outf['image']
-        multi=Multislice(name,prev=prev,
-            ssh=ssh,tail=tail+param+str(i).zfill(ceil(nvals/10)),
+        multi=mupy.Multislice(datpath,prev=prev,
+            ssh=ssh,tail=tail+param+str(i).zfill(int(np.ceil(nvals/10))),
             **kwargs)
         if do_df:
-            df.loc[multi.outf['obj']] = [nan]*len(df.columns)
+            df.loc[multi.outf['obj']] = [np.nan]*len(df.columns)
             df.loc[multi.outf['obj']][[param,'host','state']] = [val,ssh,'start']
     if save :
-        df.to_pickle(name+'df.pkl')
-        print(green+'Dataframe saved : '+yellow+name+'df.pkl'+black)
-
+        df.to_pickle(datpath+'df.pkl')
+        print(colors.green+'Dataframe saved : '+colors.yellow+datpath+'df.pkl'+colors.black)
+        return df
 
 
 
@@ -181,8 +184,9 @@ def show_grid(file,opts='',**kwargs):
         pps = [dsp.Rectangle((0,0),lat_params[i-1],lat_params[j-1],linewidth=2,edgecolor='b',alpha=0.1)]
         scat = [pattern[:,i],pattern[:,j],C]
 
-        fig,ax = dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,ms=5,
+        return dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,ms=5,
             **kwargs)
+
     # return lat_params,pattern
 
 def import_xyz(xyz_file):

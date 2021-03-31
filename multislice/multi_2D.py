@@ -1,11 +1,12 @@
-import pickle
-import numpy as np
+import pickle,matplotlib
+import numpy as np, pandas as pd
 import scipy.fftpack as fft
 from scipy.integrate import nquad,trapz,quad
 import utils.displayStandards as dsp
 import utils.physicsConstants as cst
 import utils.glob_colors as colors
 import wallpp.lattice as lat
+import wallpp.plane_group as pg     #;imp.reload(pg)
 # from scipy.signal import fftconvolve
 # from scipy.interpolate import interp1d
 # import utils.FourierUtils as fu
@@ -13,7 +14,7 @@ import wallpp.lattice as lat
 
 class Multi2D():
     '''multislice 2D for quick testing
-    - pattern : list of 2d-arrays - [x,z,f] where x,y=np.meshgrid(x0,z0)
+    - pattern : list of 2d-arrays - [x0,z0,f] where x,z=np.meshgrid(x0,z0)
     - ax,bz : lattice constants
     - tilt : beam tilt (deg)
     - Nx : increase supercell size
@@ -27,35 +28,81 @@ class Multi2D():
             pattern,ax,bz,
             keV=200,Nx=1,tilt=0,
             dz=1,nz=1,copt=1,eps=1,sg=-1,
-            iZs=1,iZv=1,v=1,ppopt=''):
-        self.version = 0.2
+            TDS=False,nTDS=8,ndeg=2**10,wobble=0.05,
+            iZs=1,opts='q',iZv=1,v=1,ppopt=''):
+        self.version = 1.0
         self.pattern = pattern
         self.keV     = keV
         self.Nx      = Nx
         self.dz      = dz
         self.ax      = ax
         self.bz      = bz
-        # self.az,self.bx =
         #energy dependent
         self.lam  = cst.keV2lam(keV)
         self.sig  = cst.keV2sigma(keV)
         self.k0   = 1/self.lam
         self.eps  = eps
         self.tilt = tilt
+        self.copt = copt
+        #TDS
+        self.TDS  = TDS
+        self.nTDS = nTDS
+        self.ndeg = ndeg
+        self.wobble = self._wobble(wobble)
+
         #Computations
         if v:print(colors.red+'\t\t 2D multislice simulation '+colors.black)
-        self._set_transmission_function(eps,v)
-        self._set_propagator(sg,copt)
-        self.set_Psi0()
-        if nz:self.propagate(nz,iZs,iZv,v)
-        #display
+
+        # Thermal diffuse scattering
+        if self.TDS:
+            self._TDS(eps,copt,sg,v)
+        else:
+            # standard
+            self._set_transmission_function(eps,v)
+            self._set_propagator(sg,copt)
+            self.set_Psi0()
+            if nz:self.propagate(nz,iZs,iZv,opts,v)
+
+        display(ppopt)
+
+    def _TDS(self,eps,copt,sg,v):
+        pattern  = np.vstack([self.pattern + np.array([self.ax*i,0,0]) for i in range(self.Nx)])
+        wobbles  = self.wobble[np.array(pattern[:,-1],dtype=int)][:,None]
+        pattern0 = pattern
+        Na = pattern0.shape[0]
+        self.patterns=[]
+        for iTDS in range(nTDS):
+            print(colors.yellow+'configuration %d' %iTDS+ colors.black)
+            pattern[:,:2] = pattern0[:,:2]+(2*np.random.rand(Na,2)-1)*wobbles#*[self.ax,self.bz]
+            self.patterns+=[pattern.copy()]
+
+            p1 = pg.Wallpaper('p1',Nx*self.ax,self.bz,90,pattern,ndeg=ndeg,gen=True)
+            self.pattern = p1.get_potential_grid_p1()
+
+            self._set_transmission_function(eps,v)
+            self._set_propagator(sg,copt)
+            self.set_Psi0(iTDS)
+            self.propagate(nz,iZs,iZv,opts,iTDS,v)
+        self.psi_qz=np.abs(self.psi_qz)**2
+        self.pattern=pattern0
+
+    def display(self,ppopt):
         if 'T' in ppopt:self.Tz_show()
+        if 'Z' in ppopt:self.Za_show()
         if 'P' in ppopt:self.Pq_show()
         if 'Q' in ppopt:self.Qz_show()
         if 'X' in ppopt:self.Xz_show()
         if 'B' in ppopt:self.Bz_show()
         if 'Z' in ppopt:self.Xxz_show()
         if 'Y' in ppopt:self.Qxz_show()
+
+    def _wobble(self,wobble):
+        if isinstance(wobble,int) or isinstance(wobble,float): wobble = [wobble]*5
+        if isinstance(wobble,dict) :
+            wobbles = [0]*5
+            for k,v in wobble.items():wobbles[k]=v
+            wobble = wobbles
+        return np.array(wobble)
 
     def save(self,file):
         with open(file,'wb') as out :
@@ -73,22 +120,42 @@ class Multi2D():
         args.update(kwargs)
         dsp.stddisp(im=[z,x,fv],labs=['$z$','$x$'],**args)
 
+    def Za_show(self):
+        atoms = pd.DataFrame.from_dict(
+            { 0:[(0,0,0),15], 1:[(0.5,0.5,0.5),40],
+              2:[(0,0,1),45], 3:[(1,0,0),50],
+              4:[(0,1,1),80]},
+            orient='index',columns=['c','s'])
 
-    def Tz_show(self,iSz=slice(0,None,1),Vopt='VT',**kwargs):
-        '''Show Transmission function '''
+        markers = list(matplotlib.markers.MarkerStyle.markers.keys())[2:-4]
+        nms=len(markers)
+        scat = ()
+        for i,p in enumerate(self.patterns):
+            Za = atoms.iloc[p[:,2]]
+            # print(Za.size)
+            scat += ([p[:,0],p[:,1],Za.s,Za.c,markers[i%nms]] ,)
+        dsp.stddisp(scat=scat,labs=['$x$','$z$'])
+
+    def Tz_show(self,iSz=slice(0,None,1),opts='',Vopt='VT',cmaps=['Greens','Blues','Reds'],**kwargs):
+        '''Show Transmission function
+        - opts or Vopt : 'V(potential) 'T'(Transmission) 'l'(slice legend)
+        if 'l' is selected
+        '''
+        if opts:Vopt=opts
         if isinstance(iSz,int):iSz=[iSz]
         if isinstance(iSz,slice):iSz=list(np.arange(self.ns)[iSz])
         if isinstance(iSz,list):N=len(iSz)
-        cs1,cs2,cs3 = dsp.getCs('Greens',N),dsp.getCs('Blues',N),dsp.getCs('Reds',N)
+        if isinstance(cmaps,str):cmaps=[cmaps]*3
+        cs1,cs2,cs3 = dsp.getCs(cmaps[0],N),dsp.getCs(cmaps[1],N),dsp.getCs(cmaps[2],N)
         plts,legElt=[],{}
         if 'V' in Vopt:
             plts += [[self.x,self.Vz[iSz[i],:].T ,cs1[i]] for i in range(N)]
-            legElt[r'$V_z(kV\AA)$']='g-'
+            legElt[r'$V_z(kV\AA)$']=[cs1[int(N/2)],'-']
         if 'T' in Vopt:
             plts+= [[self.x,self.T.real[iSz[i],:].T,cs2[i]] for i in range(N)]
             plts+= [[self.x,self.T.imag[iSz[i],:].T,cs3[i]] for i in range(N)]
-            legElt['$re(T)$']='b-'
-            legElt['$im(T)$']='r-'
+            legElt['$re(T)$']=[cs2[int(N/2)],'-']
+            legElt['$im(T)$']=[cs3[int(N/2)],'-']
         return dsp.stddisp(plts,labs=[r'$x(\AA)$',''],#title='Projected potential $V_z$, Transmission function $T$',
             legElt=legElt,**kwargs)
 
@@ -144,13 +211,19 @@ class Multi2D():
                 imOpt='c',caxis=[z.min(),z.max()],cmap=cmap,axPos='V',
                 **kwargs)
 
-    def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',plts=[],**kwargs):
-        '''Show selected beam iBs as function of thickness(see getB)'''
+    def Bz_show(self,iBs='O',tol=1e-3,cmap='jet',sym_opt=False,plts=[],**kwargs):
+        '''Show selected beam iBs as function of thickness(see getB)
+        - sym_opt : special display for symmetry pairs
+        '''
         # print(iBs)
         iBs,Ib = self.getB(iBs,tol,v=1)#;print(iBs)
         h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
         cs   = dsp.getCs(cmap,iBs.size)
-        plts += [[self.z,Ib[:,i],[cs[i],'-'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
+        plts = [[self.z,Ib[:,i],[cs[i],'-'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
+        if sym_opt:
+            iBs,Ib = self.getB(-iBs,tol,v=1)
+            h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
+            plts += [[self.z,Ib[:,i],[cs[i],'--'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
         return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],
         **kwargs)
 
@@ -240,16 +313,16 @@ class Multi2D():
         ns = int(np.round(self.bz/self.dz))
         self.dz = self.bz/ns;
         Vz = np.zeros((ns,nx))
-        iZs = np.arange(0,ns+1)*int(z.size/ns)
+        iZs = np.arange(0,ns+1)*int(z.size/ns)#;print(iZs)
         if v:print(colors.blue+'...integrating projected potential...'+colors.black)
+        if v:print('Slice thickness and number of slices per cell:dz=%.2fA, nzs=%d\n' %(self.dz,ns))
         for i_s in range(ns):
             s=slice(iZs[i_s],iZs[i_s+1])
             Vz[i_s,:] = eps*np.array([trapz(f[s,i],z[s]) for i in range(nx)])
-        if v:print('Slice thickness and number of slices per cell:dz=%.2fA, nzs=%d\n' %(self.dz,ns))
 
         T  = np.exp(1J*self.sig*Vz)
-        #repeat pattern
-        Nx = self.Nx
+
+        Nx = [self.Nx,1][self.TDS]
         self.x  = np.hstack([x + self.ax*i for i in range(Nx)])
         self.Vz = np.hstack([Vz]*Nx)
         self.T  = np.hstack([T]*Nx)             #;print(self.T.shape)
@@ -266,29 +339,35 @@ class Multi2D():
         else:
             self.Pq = np.exp(sg*1J*np.pi*self.dz*self.q**2/self.k0)
         self.nq = int(1/3*self.nx) #prevent aliasing
+
         if copt:self.Pq[self.nq:-self.nq] = 0
 
-    def set_Psi0(self):
+    def set_Psi0(self,iTDS=0):
         Psi  = np.ones(self.x.shape,dtype=complex)
         self.Psi_x = Psi/np.sqrt(np.sum(np.abs(Psi)**2)*self.dx)
-        self.psi_xz = np.zeros((0,self.nx))
-        self.psi_qz = np.zeros((0,self.nx))
+        if self.TDS :
+            if not iTDS :
+                self.psi_xz = np.zeros((0,self.nx))
+                self.psi_qz = np.zeros((0,self.nx),dtype=complex)
+        else:
+            self.psi_xz = np.zeros((0,self.nx))
+            self.psi_qz = np.zeros((0,self.nx))
         self.z  = np.array([])
         self.iz = 0
 
-    def propagate(self,nz,iZs=1,iZv=1,v=1):
+    def propagate(self,nz,iZs=1,iZv=1,opts='q',iTDS=0,v=1):
         '''Propgate over nz slices and save every iZs slices'''
         nzq,z0 = int(nz/iZs),0
         if self.z.size : z0=self.z.max()
         self.z  = np.hstack([self.z,z0+self.dz+np.arange(nzq)*self.dz*iZs ])
-        self.psi_xz = np.vstack([self.psi_xz,np.zeros((nzq,self.nx))])
-        self.psi_qz = np.vstack([self.psi_qz,np.zeros((nzq,self.nx))])
+        if 'x' in opts and not iTDS:self.psi_xz = np.vstack([self.psi_xz,np.zeros((nzq,self.nx))])
+        if 'q' in opts and not iTDS:self.psi_qz = np.vstack([self.psi_qz,np.zeros((nzq,self.nx))])
         # self.T=fft.fftshfft(self.T)
         for i in range(nz):
             i_s=i%self.ns
             #print(self.T[i_s,:].shape,self.Psi_x.shape)
             self.Psi_q = fft.fft(self.T[i_s,:]*self.Psi_x) #periodic assumption
-            # self.Psi_q[self.nq:-self.nq] = 0             #prevent aliasing
+            if self.copt:self.Psi_q[self.nq:-self.nq] = 0  #prevent aliasing
             self.Psi_x = fft.ifft(self.Pq*self.Psi_q)
             # self.Psi_x = fft.fftshift(fft.ifft(self.Pq*self.Psi_q))
             #save and print out
@@ -299,9 +378,14 @@ class Multi2D():
                 msg+='i=%-4d,islice=%-2d I=%.4f, Iq=%.4f ' %(i,i_s,Ix2,Iq2)
             if not i%iZs :
                 if msg and v: msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
-                self.psi_xz[self.iz,:] = np.abs(self.Psi_x)**2
-                self.psi_qz[self.iz,:] = np.abs(self.Psi_q)**2
-                self.iz+=1
+                if 'x' in opts:
+                    self.psi_xz[self.iz,:] = np.abs(self.Psi_x)**2
+                if 'q' in opts:
+                    if self.TDS:
+                        self.psi_qz[self.iz,:] += self.Psi_q
+                    else:
+                        self.psi_qz[self.iz,:] = np.abs(self.Psi_q)**2
+                    self.iz+=1
             if msg:print(colors.green+msg+colors.black)
 
 ##################################################################
@@ -341,6 +425,17 @@ def tilts_show(tilts,mp2,iBs,iZs,**kwargs):
         # for iZ in iZs:Iz[:,iZ]/=Iz[:,iZ].max()
         plts2=[ [tilts,Itbz[:,i],[cs[i],'o-'],'iB=%d' %(iB)] for i,iB in enumerate(iBs)]
         dsp.stddisp(plts2,labs=[r'$\theta(deg)$','$I$'],**kwargs)
+
+
+
+def plot_v(x,z,fv,ax,bz,xa,za):
+    print('..plotting fv...')
+    dr=bz/2
+    idx = np.abs(x[0]-ax/2)<dr
+    xylims = np.hstack([za+dr*np.array([-1,1]),xa+dr*np.array([-1,1])])
+    dsp.stddisp(im=[z[:,idx],x[:,idx],fv[:,idx]],
+        labs=['$z$','$x$'],imOpt='c',axPos='V',xylims=xylims,opt='p')
+
 
 ##################################################################
 ###### Base test

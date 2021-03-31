@@ -191,7 +191,7 @@ class Multislice:
                 #time.sleep(1)
                 #self.check_simu_state(v=0,ssh_alias=ssh_alias,hostpath=hostpath)
             else :
-                self._get_job()
+                self._get_job(cluster=cluster)
                 cmd = 'bash %s' %self._outf('job')
             p = Popen(cmd,shell=True) #; print(cmd)
             if v>0 : print(colors.green+self.name+" job submitted"+colors.black)
@@ -634,19 +634,18 @@ class Multislice:
 
         #### postprocess on remote machine
         pyexe='python3'
-        if cluster:
-            pyexe='/data3/opt/python/3.7.7/bin/python3'
+        # if cluster:pyexe='/data3/opt/python/3.7.7/bin/python3'
         # import numpy as np;
         # beams = pp.import_beams('%s',%s);
         # np.save('%s',beams)
         # ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
-        pycode='''import multislice.postprocess as pp;
+        pycode='''import multislice.postprocess as pp;import numpy as np;
         multi = pp.load_multi_obj('%s');
         multi.datpath='./';
         multi.get_beams(bOpt='fa');
-        multi.save_pattern()
-        qx,qy,It1 = multi.pattern(Iopt='Ics',out=True,Nmax=260)
-        np.save(multi.outf['patternS'],[qx,qy,It1])
+        multi.save_pattern();
+        qx,qy,It1 = multi.pattern(Iopt='Ics',out=True,Nmax=260);
+        np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])
         job +='%s -c "%s"' %(pyexe, pycode.replace('\n',''))
         job+='\n'
@@ -671,9 +670,12 @@ class Multislice:
         #create directory on remote if does not exist
         cmd = 'ssh %s "if [ ! -d %s ]; then mkdir %s;echo %s:%s created;fi"' %(ssh_alias,hostpath,hostpath,ssh_alias,hostpath)
         print(colors.blue+check_output(cmd,shell=True).decode()+colors.black)
+        cmd = 'ssh %s "if [ -f %s ]; then  echo 1;fi"' %(ssh_alias,hostpath+self.data[0])
+        # dat_exist = 0
+        dat_exist = check_output(cmd,shell=True).decode()#;print(hostpath+self.data[0],dat_exist)
         #copy files over to remote
         cmd  = 'cd %s && scp ' %(datpath)
-        cmd += '%s ' %(' '.join(self.data))
+        if not dat_exist:cmd += '%s ' %(' '.join(self.data))
         cmd += '%s ' %(' '.join(list(self.decks.keys())))
         cmd += '%s ' %(self.outf['job'])
         cmd += '%s ' %(self.outf['obj'])

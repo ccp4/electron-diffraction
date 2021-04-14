@@ -1,3 +1,4 @@
+import importlib as imp
 import pickle,matplotlib
 import numpy as np, pandas as pd
 import scipy.fftpack as fft
@@ -7,107 +8,58 @@ import utils.physicsConstants as cst
 import utils.glob_colors as colors
 import wallpp.lattice as lat
 import wallpp.plane_group as pg     #;imp.reload(pg)
+from . import pymultislice;imp.reload(pymultislice)
 # from scipy.signal import fftconvolve
 # from scipy.interpolate import interp1d
 # import utils.FourierUtils as fu
 
 
-class Multi2D():
+class Multi2D(pymultislice.Multislice):
     '''multislice 2D for quick testing
     - pattern : list of 2d-arrays - [x0,z0,f] where x,z=np.meshgrid(x0,z0)
     - ax,bz : lattice constants
-    - tilt : beam tilt (deg)
-    - Nx : increase supercell size
-    - dz : slice thickness
-    - nz : number of slices
-    - iZs,iZv,v : frequency of save and verbose frequency,verbose option
-    - ppopt:T(Transmission)P(propagator)Q(Psi_q)X(Psi_x)B(beams)Z(Psi_xz)Y(Psi_qz)
-    - copt: crop option with propagator
+    - **kwargs : see pymultislice.Multislice.__init__
     '''
-    def __init__(self,
-            pattern,ax,bz,
-            keV=200,Nx=1,tilt=0,
-            dz=1,nz=1,copt=1,eps=1,sg=-1,
-            TDS=False,nTDS=8,ndeg=2**10,wobble=0.05,
-            iZs=1,opts='q',iZv=1,v=1,ppopt=''):
-        self.version = 1.0
-        self.pattern = pattern
-        self.keV     = keV
-        self.Nx      = Nx
-        self.dz      = dz
-        self.ax      = ax
-        self.bz      = bz
-        #energy dependent
-        self.lam  = cst.keV2lam(keV)
-        self.sig  = cst.keV2sigma(keV)
-        self.k0   = 1/self.lam
-        self.eps  = eps
-        self.tilt = tilt
-        self.copt = copt
-        #TDS
-        self.TDS  = TDS
-        self.nTDS = nTDS
-        self.ndeg = ndeg
-        self.wobble = self._wobble(wobble)
+    def __init__(self,pattern,ax,bz,**kwargs):
+        self.version = 2.0
+        self.ax = ax
+        self.bz = bz
+        self.ez = self.bz
+        print(colors.red+'\t\t 2D multislice simulation '+colors.black)
+        super().__init__(pattern,**kwargs)
 
-        #Computations
-        if v:print(colors.red+'\t\t 2D multislice simulation '+colors.black)
-
-        # Thermal diffuse scattering
+    def run(self,nz,iZs,iZv,opts,v):
         if self.TDS:
-            self._TDS(eps,copt,sg,v)
+            self._TDS(nz,iZs,iZv,opts,v)
         else:
-            # standard
-            self._set_transmission_function(eps,v)
-            self._set_propagator(sg,copt)
-            self.set_Psi0()
-            if nz:self.propagate(nz,iZs,iZv,opts,v)
+            self._std_mutlislice(nz,iZs,iZv,opts,v)
 
-        display(ppopt)
-
-    def _TDS(self,eps,copt,sg,v):
+    def _TDS(self,nz,iZs,iZv,opts,v):
         pattern  = np.vstack([self.pattern + np.array([self.ax*i,0,0]) for i in range(self.Nx)])
         wobbles  = self.wobble[np.array(pattern[:,-1],dtype=int)][:,None]
         pattern0 = pattern
         Na = pattern0.shape[0]
         self.patterns=[]
-        for iTDS in range(nTDS):
+        for iTDS in range(self.nTDS):
             print(colors.yellow+'configuration %d' %iTDS+ colors.black)
             pattern[:,:2] = pattern0[:,:2]+(2*np.random.rand(Na,2)-1)*wobbles#*[self.ax,self.bz]
             self.patterns+=[pattern.copy()]
-
-            p1 = pg.Wallpaper('p1',Nx*self.ax,self.bz,90,pattern,ndeg=ndeg,gen=True)
+            p1 = pg.Wallpaper('p1',self.Nx*self.ax,self.bz,90,pattern,ndeg=self.nx,gen=True)
             self.pattern = p1.get_potential_grid_p1()
 
-            self._set_transmission_function(eps,v)
-            self._set_propagator(sg,copt)
+            if v:print(colors.blue+'...integrating projected potential...'+colors.black)
+            self._set_transmission_function()
+            self._set_propagator()
             self.set_Psi0(iTDS)
             self.propagate(nz,iZs,iZv,opts,iTDS,v)
         self.psi_qz=np.abs(self.psi_qz)**2
         self.pattern=pattern0
 
-    def display(self,ppopt):
-        if 'T' in ppopt:self.Tz_show()
-        if 'Z' in ppopt:self.Za_show()
-        if 'P' in ppopt:self.Pq_show()
-        if 'Q' in ppopt:self.Qz_show()
-        if 'X' in ppopt:self.Xz_show()
-        if 'B' in ppopt:self.Bz_show()
-        if 'Z' in ppopt:self.Xxz_show()
-        if 'Y' in ppopt:self.Qxz_show()
-
-    def _wobble(self,wobble):
-        if isinstance(wobble,int) or isinstance(wobble,float): wobble = [wobble]*5
-        if isinstance(wobble,dict) :
-            wobbles = [0]*5
-            for k,v in wobble.items():wobbles[k]=v
-            wobble = wobbles
-        return np.array(wobble)
-
-    def save(self,file):
-        with open(file,'wb') as out :
-            pickle.dump(self, out, pickle.HIGHEST_PROTOCOL)
-        print(colors.green+"object saved : \n"+colors.yellow+file+colors.black)
+    def _std_mutlislice(self,nz,iZs,iZv,opts,v):
+        self._set_transmission_function()
+        self._set_propagator()
+        self.set_Psi0()
+        if nz:self.propagate(nz,iZs,iZv,opts,iTDS=0,v=v)
 
     ###################################################################
     #### display
@@ -129,12 +81,15 @@ class Multi2D():
 
         markers = list(matplotlib.markers.MarkerStyle.markers.keys())[2:-4]
         nms=len(markers)
-        scat = ()
-        for i,p in enumerate(self.patterns):
-            Za = atoms.iloc[p[:,2]]
-            # print(Za.size)
-            scat += ([p[:,0],p[:,1],Za.s,Za.c,markers[i%nms]] ,)
-        dsp.stddisp(scat=scat,labs=['$x$','$z$'])
+        if self.TDS:
+            scat = ()
+            for i,p in enumerate(self.patterns):
+                Za = atoms.iloc[p[:,2]]
+                # print(Za.size)
+                scat += ([p[:,0],p[:,1],Za.s,Za.c,markers[i%nms]] ,)
+            dsp.stddisp(scat=scat,labs=['$x$','$z$'])
+        else:
+            print('pattern with atomic positions need be provided')
 
     def Tz_show(self,iSz=slice(0,None,1),opts='',Vopt='VT',cmaps=['Greens','Blues','Reds'],**kwargs):
         '''Show Transmission function
@@ -224,8 +179,7 @@ class Multi2D():
             iBs,Ib = self.getB(-iBs,tol,v=1)
             h    = ['%d_{%d}' %(i/self.Nx,i%self.Nx) for i in iBs]
             plts += [[self.z,Ib[:,i],[cs[i],'--'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
-        return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],
-        **kwargs)
+        return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],**kwargs)
 
     def Xxz_show(self,iZs=1,iXs=1,**kwargs):
         '''Show 2D wave propagation solution'''
@@ -307,37 +261,33 @@ class Multi2D():
     ##################################################################
     ###### main computations
     ##################################################################
-    def _set_transmission_function(self,eps=1,v=1):
+    def _set_transmission_function(self):
         x,z,f = self.pattern
-        nx = x.size
-        ns = int(np.round(self.bz/self.dz))
-        self.dz = self.bz/ns;
+        nx,ns = x.size,self.ns
         Vz = np.zeros((ns,nx))
         iZs = np.arange(0,ns+1)*int(z.size/ns)#;print(iZs)
-        if v:print(colors.blue+'...integrating projected potential...'+colors.black)
-        if v:print('Slice thickness and number of slices per cell:dz=%.2fA, nzs=%d\n' %(self.dz,ns))
         for i_s in range(ns):
             s=slice(iZs[i_s],iZs[i_s+1])
-            Vz[i_s,:] = eps*np.array([trapz(f[s,i],z[s]) for i in range(nx)])
+            Vz[i_s,:] = np.array([trapz(f[s,i],z[s]) for i in range(nx)])
 
-        T  = np.exp(1J*self.sig*Vz)
+        T  = np.exp(1J*self.eps*self.sig*Vz)
 
         Nx = [self.Nx,1][self.TDS]
         self.x  = np.hstack([x + self.ax*i for i in range(Nx)])
         self.Vz = np.hstack([Vz]*Nx)
         self.T  = np.hstack([T]*Nx)             #;print(self.T.shape)
         self.nx = self.x.size                   #;print(self.nx)
-        self.ns = ns
 
-    def _set_propagator(self,sg=-1,copt=1):
+    def _set_propagator(self):
+        sg,copt = self.sg,self.copt
         self.dx = self.x[1]-self.x[0]
         self.q  = fft.fftfreq(self.nx,self.dx)
         self.dq = self.q[1]-self.q[0]
         if self.tilt: #isinstance(tilt,np.ndarray) or isinstance(tilt,list):
             kx = self.k0*np.sin(self.tilt*np.pi/180)
-            self.Pq = np.exp(sg*1J*np.pi*self.dz*(self.q+kx)**2/self.k0)
+            self.Pq = np.exp(self.sg*1J*np.pi*self.dz*(self.q+kx)**2/self.k0)
         else:
-            self.Pq = np.exp(sg*1J*np.pi*self.dz*self.q**2/self.k0)
+            self.Pq = np.exp(self.sg*1J*np.pi*self.dz*self.q**2/self.k0)
         self.nq = int(1/3*self.nx) #prevent aliasing
 
         if copt:self.Pq[self.nq:-self.nq] = 0
@@ -357,6 +307,7 @@ class Multi2D():
 
     def propagate(self,nz,iZs=1,iZv=1,opts='q',iTDS=0,v=1):
         '''Propgate over nz slices and save every iZs slices'''
+        self.nz+=nz
         nzq,z0 = int(nz/iZs),0
         if self.z.size : z0=self.z.max()
         self.z  = np.hstack([self.z,z0+self.dz+np.arange(nzq)*self.dz*iZs ])
@@ -388,45 +339,6 @@ class Multi2D():
                     self.iz+=1
             if msg:print(colors.green+msg+colors.black)
 
-##################################################################
-#### misc functions
-##################################################################
-def load(filename):
-    '''load a saved Multislice object'''
-    with open(filename,'rb') as f : multi = pickle.load(f)
-    return multi
-
-def tilts_show(tilts,mp2,iBs,iZs,**kwargs):
-    ''' display beams for a sequence of tilted simulations
-    tilts,mp2 : tilts array and multislice objects
-    - iBs,iZs : beam and slice indices (integer allowed)
-    '''
-    bopt,zopt,nz=isinstance(iBs,int),isinstance(iZs,int),1
-    if bopt:iBs=np.array([iBs])
-    if zopt:iZs=np.array([iZs])
-    if isinstance(iZs,slice):
-        stop = (mp2[0].z.size+1)*(iZs.stop<0)+iZs.stop #;print(stop)
-        nz = int(np.ceil((stop-iZs.start)/iZs.step))   #;print(nz)
-    else:
-        nz = np.array(iZs).size
-    Itbz = np.zeros((tilts.size,iBs.size,nz))
-    for i,t in enumerate(tilts):
-        Itbz[i,:,:] = mp2[i].getB(iBs)[iZs,:].T
-
-    if zopt and bopt:
-        plts=[tilts,Itbz[:,0,iZs],'bo-']
-        dsp.stddisp(plts,labs=[r'$\theta(deg)$','$I$'],**kwargs)
-    if bopt and not zopt:
-        csZ = dsp.getCs('Reds',nz)
-        plts1 = [[tilts,Itbz[:,0,iZ],[csZ[iZ],'o-'],'%dnm' %(z0/10)] for iZ,z0 in enumerate(mp2[0].z[iZs])]
-        dsp.stddisp(plts1,labs=[r'$\theta(deg)$','$I$'],**kwargs)
-    if zopt and not bopt:
-        cs = dsp.getCs('Spectral',iBs.size)
-        # for iZ in iZs:Iz[:,iZ]/=Iz[:,iZ].max()
-        plts2=[ [tilts,Itbz[:,i],[cs[i],'o-'],'iB=%d' %(iB)] for i,iB in enumerate(iBs)]
-        dsp.stddisp(plts2,labs=[r'$\theta(deg)$','$I$'],**kwargs)
-
-
 
 def plot_v(x,z,fv,ax,bz,xa,za):
     print('..plotting fv...')
@@ -441,17 +353,19 @@ def plot_v(x,z,fv,ax,bz,xa,za):
 ###### Base test
 ##################################################################
 if __name__=='__main__':
-    import wallpp.plane_group as pg
-    import importlib as imp
-    imp.reload(pg)
-    ndeg = 2**8
-    pptype,a,b,angle = 'p1',20,6,90
-    pattern = np.array([[10,2,3],[5,4,3]])
+    print('run tests/,multi_2D/base_test.py to see an example')
 
-    #get the potential from wallpaper library
-    p1      = pg.Wallpaper(pptype,a,b,angle,pattern,ndeg=ndeg)
-    pattern = p1.get_potential_grid()
-    mp1 = multi2D(pattern,a,b,keV=200,
-            Nx=1,dz=b/2,nz=2,ppopt='',#XQZTP
-            iZs=1,iZv=1)
-    mp1.Tz_show(slice(0,None,1))
+    # import wallpp.plane_group as pg
+    # import importlib as imp
+    # imp.reload(pg)
+    # ndeg = 2**8
+    # pptype,a,b,angle = 'p1',20,6,90
+    # pattern = np.array([[10,2,3],[5,4,3]])
+    #
+    # #get the potential from wallpaper library
+    # p1      = pg.Wallpaper(pptype,a,b,angle,pattern,ndeg=ndeg)
+    # pattern = p1.get_potential_grid()
+    # mp1 = multi2D(pattern,a,b,keV=200,
+    #         Nx=1,dz=b/2,nz=2,ppopt='',#XQZTP
+    #         iZs=1,iZv=1)
+    # mp1.Tz_show(slice(0,None,1))

@@ -26,12 +26,12 @@ FOR DAMAGES RESULTING FROM THE USE OR INABILITY TO USE THIS
 PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF DATA OR DATA
 BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR
 THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH
-ANY OTHER PROGRAM). 
+ANY OTHER PROGRAM).
 
 ------------------------------------------------------------------------
 
     function library for use with multislice programs
-    
+
     should put each subroutine in a separate file and make
     a real obj library but its easier to manage this way
 
@@ -103,7 +103,7 @@ ANY OTHER PROGRAM).
     remove explicit FFTW reference, scaleW(), transportW(), propagateW(),
         add cfpix class in propagate() 4-nov-2012 ejk
     add ToInt() and start putting in the calculation parameters
-       such as nx, ny etc. to capture the whole calc. 
+       such as nx, ny etc. to capture the whole calc.
        and change #define to const int, and add pSOURCE
          13-apr-2013 ejk
     add printfOK conditional to exclude code that won't work in a GUI
@@ -137,7 +137,7 @@ using namespace std;
 // define symbols for the parameter offsets
 //  (could use an enum here too)
 // some of these are redundant because they can be calculated from other parameters
-// this has evolved over a long time with params added as needed, 
+// this has evolved over a long time with params added as needed,
 //             so the order is not ideal - sorry
 const int
         pNPIX    =   0,   // number of pix 1 for real and 2 for complex
@@ -169,13 +169,13 @@ const int
         pMINDET =    31,  // minimum detector angle (STEM) in radians
         pMAXDET =    32,  // maximum detector angle (STEM) in radians
 
-//      pC10   =     35,  //C10 = -df so don't use 
+//      pC10   =     35,  //C10 = -df so don't use
 //      pC30   =     18,  //3rd order spherical - reuse from above
-//      pC50   =     50,  //5th order spherical 
+//      pC50   =     50,  //5th order spherical
 
         pCS5   =     35,  // 5th order Cs5
 
-        //  multipole aberrations (in Ang) 
+        //  multipole aberrations (in Ang)
         pC12a  =     12,  // astig - switch to these from above
         pC12b  =     13,  // because running short of parameters
 
@@ -202,7 +202,7 @@ const int
         pC54b =      54,
         pC56a =      55,
         pC56b =      56,
-        
+
         // sampling parameters
         pAX   =      101,  //  supercell size x, y
         pBY   =      102,
@@ -231,7 +231,7 @@ const int
         pCDFA2 =     151,  // two-fold astig
         pCDFA2PHI =  152,
         pCDFA3 =     153,  // three-fold astig
-        pCDFA3PHI =  154, 
+        pCDFA3PHI =  154,
         pCCS3 =      155,  //  3rd order spherical
         pCCS5 =      156,  //  5th order spherical
         pCCAPMIN =   157,  //  min aperture (in radians)
@@ -284,14 +284,14 @@ int askYN( const char message[] );
 /*
     modified Bessel function K0(x)
     see Abramowitz and Stegun page 380
-    
+
     Note: K0(0) is not define and this function
     returns 1E20
- 
+
     x = (double) real arguments
-    
+
     this routine calls bessi0() = Bessel function I0(x)
-    
+
     12-feb-1997 E. Kirkland
  */
  double bessk0( double x );
@@ -302,7 +302,7 @@ int askYN( const char message[] );
     C10= -df is defocus with the opposite sign
 
     put in a subroutine so I only have to get it right once
-    
+
     now includes thru 5th order 4-jul-2010 ejk
     convert to param array p[] 2-may-2011 ejk
     add multiMode 8-may-2011 ejk
@@ -334,8 +334,8 @@ double cputim();
 
   assumed global vars:
 
-int feTableRead=0; = flag to remember if the param file has been read 
-int nl=3, ng=3; = number of Lorenzians and Gaussians 
+int feTableRead=0; = flag to remember if the param file has been read
+int nl=3, ng=3; = number of Lorenzians and Gaussians
 double fparams[][] = fe parameters
 
 */
@@ -343,23 +343,23 @@ double fparams[][] = fe parameters
 double featom( int iz, double s );
 
 /*--------------- free2D() ----------------------------*/
-/*   
+/*
     free a 2D array f[][] dimensioned as f[ix][iy]
-    
+
     0 < ix < (nx-1)
     0 < iy < (ny-1)   <not used>
-    
+
 */
 void free2D( void ** f, int nx );
 
 /*--------------- free3D() ----------------------------*/
-/*   
+/*
     free a 2D array f[][] dimensioned as f[ix][iy]
-    
+
     0 < ix < (nx-1)
     0 < iy < (ny-1)
     0 < iz < (nz-1) <not used>
-    
+
 */
 void free3D( void *** f, int nx, int ny );
 
@@ -374,7 +374,7 @@ void free3D( void *** f, int nx, int ny );
 
     ko[n]  = real array to get spatial frequencies
     ko2[n] = real array to get k[i]*k[i]
-    xo[n]  = real array to get positions 
+    xo[n]  = real array to get positions
     nk     = integer number of pixels
     ak     = real full scale size of image in pixels
 */
@@ -385,9 +385,9 @@ void freqn( float *ko, float *ko2, float *xo, int nk, double ak );
     1D array allocator for arbitrary type
     make space for m[0...(n-1)]
     printf error message and exit if not successful
-    
-    this save checking for a NULL return etc. every time 
-    
+
+    this save checking for a NULL return etc. every time
+
     n = number of elements
     size = size of each element as returned by
         sizeof(double), sizeof(int), etc.
@@ -435,7 +435,7 @@ void messageSL( const char msg[],  int level = 0 );
 
 /*--------------------- parlay() -----------------------------------*/
 /*
-  subroutine to parse the atomic layer stacking sequence 
+  subroutine to parse the atomic layer stacking sequence
   for use with multislice programs.
 
   This converts layer structure definition of the form:
@@ -484,7 +484,7 @@ void messageSL( const char msg[],  int level = 0 );
               -8 : incomplete stacking sequence
 
    fperr       = (int) if this is not a NULL then write
-           error messages 
+           error messages
 
    a * means that these variables may be modified by this routinec
 
@@ -495,7 +495,7 @@ void messageSL( const char msg[],  int level = 0 );
 int parlay( const char c[], int islice[], int nsmax, int lmax, int *nslice,
                  int fperr );
 #endif
-                 
+
 /*------------------------ propagate() ------------------------*/
 /*
     propagate the wavefunction thru one layer
@@ -505,15 +505,15 @@ int parlay( const char c[], int islice[], int nsmax, int lmax, int *nslice,
     propyr,i[iy]     = real and imag. parts of y comp of propagator
 
     kx2[], ky2[]     = spatial frequency components
-    k2max        = square of maximum k value 
+    k2max        = square of maximum k value
     nx, ny       = size of array
-    
-    on entrance waver,i and 
+
+    on entrance waver,i and
          propxr,i/propyr,i are in reciprocal space
-    
+
     only wave will be changed by this routine
 */
-void propagate( cfpix &wave, 
+void propagate( cfpix &wave,
     float* propxr, float* propxi, float* propyr, float* propyi,
     float* kx2, float* ky2, float k2max, int nx, int ny );
 
@@ -522,16 +522,16 @@ void propagate( cfpix &wave,
     return a random number in the range 0.0->1.0
     with uniform distribution
 
-    the 'Magic Numbers' are from 
+    the 'Magic Numbers' are from
         Numerical Recipes 2nd edit pg. 285
 */
 double ranflat( unsigned long *iseed );
 
 /*-------------------- rangauss() -------------------------- */
 /*
-    Return a normally distributed random number with 
+    Return a normally distributed random number with
     zero mean and unit variance using Box-Muller method
-    
+
     ranflat() is the source of uniform deviates
 
     ref.  Numerical Recipes, 2nd edit. page 289
@@ -540,7 +540,7 @@ double rangauss( unsigned long *iseed );
 
 /*--------------------- readCnm() -----------------------*/
 /*
-    convert aberration line to a number 
+    convert aberration line to a number
 
     cline = character line in style "C32a  2.4"
     param[] = parameter array to get parameter value
@@ -552,14 +552,14 @@ int readCnm( string &cline, float param[], double x );
 
 /*--------------------- ReadfeTable() -----------------------*/
 /*
-   read electron scattering factors from file 
+   read electron scattering factors from file
     featom.tab from the following:
 
-  [1] Table 2.4.6A of The Internation Tables for X-Ray 
+  [1] Table 2.4.6A of The Internation Tables for X-Ray
        Crystallography IV (1974) for 0<s<2.0, all Z
   [2] Doyle and Turner Acta Cryst A24 (1968) p390-397,
-       for 2.5<s<6.0, Z= 2-38, 42, 47-51, 53-56, 63, 
-       79,80, 82,83, 86, 92 
+       for 2.5<s<6.0, Z= 2-38, 42, 47-51, 53-56, 63,
+       79,80, 82,83, 86, 92
   [3] Fox, O'Keefe and Tabbernor, Acta Cryst A45(1989)p.786-793
        for Z= 39-41, 43-46, 52, 57-62, 64-78, 81, 84,85, 87-91,
        93-98 and s=2.5-6.0 using Mott formula applied to Table 1
@@ -571,22 +571,22 @@ int readCnm( string &cline, float param[], double x );
 
   s[][]   = float** to get scattering angles NSTMAX x NSSMAX
   fet[][] = float** to get electron scattering factors NSTMAX x NZMAX
-  
+
   the constants that must be defined above are
 
-#define NSTMAX  62   max s lines in featom.tab 
-#define NSSMAX  13   max groups in featom.tab 
-#define NZMAX   98   max Z in featom.tab 
+#define NSTMAX  62   max s lines in featom.tab
+#define NSSMAX  13   max groups in featom.tab
+#define NZMAX   98   max Z in featom.tab
 #define NCMAX   132  characters per line to read
 
 */
 int ReadfeTable( );
- 
+
  /*--------------------- ReadXYZcoord() -----------------------*/
 /*
     read a set of (x,y,z) coordinates from a file
     and return number of coord. read
-    
+
     infile = name of input file to read from
     ncellx,y,z = number of unit cells in x,y,z to replicate
             (must be >= 1 )
@@ -612,7 +612,7 @@ int ReadfeTable( );
     convert to string and streams mar-2014 ejk
 */
 int ReadXYZcoord( const char* infile, const int ncellx, const int ncelly,
-    const int ncellz, float *ax, float *by, float *cz, int** Znum, 
+    const int ncellz, float *ax, float *by, float *cz, int** Znum,
     float** x, float** y, float** z, float** occ, float **wobble,
     string &line1 );
 
@@ -665,8 +665,8 @@ double sigma( double kev );
 
     improved Shell sort modeled after prog. 6.5 (pg. 274) of
     R. Sedgewick, "Algorithms in C", 3rd edit. Addison-Wesley 1998
-    
-    x[], y[], z[]   = atom coordinates 
+
+    x[], y[], z[]   = atom coordinates
     occ[]           = occupancy of each atom
     Znum[]          = atomic number of each atom
     natom           = number of atoms
@@ -677,7 +677,7 @@ void sortByZ( float x[], float y[], float z[], float occ[],
 /*------------------ splinh() -----------------------------*/
 /*
     fit a quasi-Hermite  cubic spline
-    
+
     [1] Spline fit as in H.Akima, J. ACM 17(1970)p.589-602
         'A New Method of Interpolation and Smooth
         Curve Fitting Based on Local Procedures'
@@ -734,9 +734,9 @@ std::string toString( double x );
     transr,i[ix][iy] = real and imag parts of transmission functions
 
     nx, ny = size of array
-    
+
     on entrance waver,i and transr,i are in real space
-    
+
     only waver,i will be changed by this routine
 */
 void transmit( float** waver, float** wavei,
@@ -753,8 +753,8 @@ void transmit( float** waver, float** wavei,
 
   assumed global vars:
 
-int feTableRead=0; = flag to remember if the param file has been read 
-int nl=3, ng=3; = number of Lorenzians and Gaussians 
+int feTableRead=0; = flag to remember if the param file has been read
+int nl=3, ng=3; = number of Lorenzians and Gaussians
 double fparams[][] = fe parameters
 
   al and ag calculated using physical constants from:
@@ -776,8 +776,8 @@ double vatom( int Z, double radius );
 
   assumed global vars:
 
-int feTableRead=0; = flag to remember if the param file has been read 
-int nl=3, ng=3; = number of Lorenzians and Gaussians 
+int feTableRead=0; = flag to remember if the param file has been read
+int nl=3, ng=3; = number of Lorenzians and Gaussians
 double fparams[][] = fe parameters
 
   al and ag calculated using physical constants from:
@@ -823,4 +823,5 @@ double vzatomLUT( int Z, double rsq );
 
 double wavelength( double kev );
 
+double vzatomSpline( int Z ,double rsq);
 #endif

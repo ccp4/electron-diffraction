@@ -30,10 +30,10 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
     if isinstance(slice_thick,list) :
         idx,beams = beams[0,:],beams[1:,:]
         n_slices = int(len(idx)/len(slice_thick)); #print(n_slices,len(slice_thick))
-        t = np.cumsum(np.tile(slice_thick,n_slices));#print(t[:4])
+        t = np.cumsum(np.tile(slice_thick,n_slices))+0.75*slice_thick;#print(t[:4])
     else :
         idx,beams = beams[0,:-5],beams[1:,:-5]
-        t = idx*slice_thick
+        t = idx*slice_thick+0.75*slice_thick
     #get re,im,I
     nbs = len(hk)
     re = [beams[2*i,:] for i in range(nbs)]
@@ -100,7 +100,7 @@ def update_df_info(df_path,hostpath=None,files=[]):
 #########################################################################
 ### def : display
 #########################################################################
-def plot_beam_thickness(beams,rip='I',cm='Greens',**kwargs):
+def plot_beam_thickness(beams,rip='I',linespec='-',cm='Greens',**kwargs):
     ''' plot the beams as function of thickness
     - beams : beams info from import_beams or file containing them
     - rip flags : I(Intens),r(real),i(imag)
@@ -109,7 +109,7 @@ def plot_beam_thickness(beams,rip='I',cm='Greens',**kwargs):
     nbs = len(hk)
     csp,csr,csi,plts = dsp.getCs(cm,nbs),dsp.getCs('Blues',nbs),dsp.getCs('Reds',nbs),[]
     for i in range(nbs):
-        if 'I' in rip : plts += [[t,Ib[i],[csp[i],'-'],'$I_{%s}$' %(hk[i])]]
+        if 'I' in rip : plts += [[t,Ib[i],[csp[i],'%sx' %linespec],'$I_{%s}$' %(hk[i])]]
         if 'r' in rip : plts += [[t,re[i],csr[i],'$re$']]
         if 'i' in rip : plts += [[t,im[i],csi[i],'$im$']]
     return dsp.stddisp(plts,lw=2,labs=['$thickness(\AA)$','$I_{hk}$'],**kwargs)#,xylims=[0,t.max(),0,5])

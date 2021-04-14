@@ -226,6 +226,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
     cfpix wave;            // complex probe wave functions
     cfpix trans;           // complex transmission functions
     cfpix temp ;           // complex scratch wavefunction
+    char filename[500];
 
     // ---- get setup parameters from param[]
     ax = param[ pAX ];
@@ -378,6 +379,14 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
         propyi[iy] = (float) -sin(t);
     }
 
+    sprintf(filename,"propagator.txt");
+    cout << "writing propagator "<< filename << "  to file ..." <<endl;
+    FILE *fp0 = fopen(filename,"w");
+    for( ix=0; ix<nx; ix++)
+      fprintf(fp0,"%g %g \n", propxr[ix],propxi[ix]);
+    for( iy=0; iy<ny; iy++)
+      fprintf(fp0,"%g %g \n" ,propyr[iy],propyi[iy]);
+    fclose(fp0);
 /*  iterate the multislice algorithm proper
 
    NOTE: zero freg is in the bottom left corner and
@@ -661,7 +670,6 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
         istart = 0;
         islice = 1;
         int i_diff=0;
-        char filename[500];
         while( (istart < natom) && ( zslice < (zmax+deltaz) ) ) {
 
             /* find range of atoms for current slice */
@@ -679,6 +687,18 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                            phirms/(wavlen*mm0) ); */
 
                 wave *= trans;    //  transmit
+
+                sprintf(filename,"translayer.%03d",i_diff);
+                cout << "writing trans layer "<< filename << "  to file ..." <<endl;
+                FILE *fp3 = fopen(filename,"w");
+                diff_pattern.resize(nx,ny);
+                for( ix=0; ix<nx; ix++) {
+          	       for( iy=0; iy<ny; iy++) {
+          	          fprintf(fp3,"%g %g ", trans.re(ix,iy),trans.im(ix,iy));
+          	       }
+          	       fprintf(fp3,"\n");
+                }
+                fclose(fp3);
             }
 
             /*  bandwidth limit */
@@ -691,7 +711,6 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                 }
             }
             if ((islice%idiff_pattern)==0){
-              i_diff++;
               sprintf(filename,"%s.%03d",filediff_pattern.c_str(),i_diff);
               cout << "writing diffraction "<< filename << " pattern to file ..." <<endl;
 
@@ -705,7 +724,9 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
         	       fprintf(fp2,"\n");
               }
               fclose(fp2);
+              i_diff++;
             }
+
             /* remember: prop needed here to get anti-aliasing right */
             propagate( wave, propxr, propxi,
                 propyr, propyi, kx2,  ky2,  k2max, nx, ny );

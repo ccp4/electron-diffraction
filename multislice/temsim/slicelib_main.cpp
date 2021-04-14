@@ -10,6 +10,7 @@ int nrs=100;                   //number of points
 char outf[100]="vatom.txt";    //outfile name
 char func='a';                 //function called (a(vatom),z(vzatom),L(vzLUT))
 double (*vfunc)(int,double);
+int compute=1;
 /*####################################################################
                             utils
 ######################################################################*/
@@ -30,6 +31,7 @@ void parse(int argc, char **argv){
    switch (func) {
      case 'a': vfunc=&vatom     ;break;
      case 'z': vfunc=&vzatom    ;break;
+     case 's': {vfunc=&vzatomSpline;compute=0;}break;
      case 'L': vfunc=&vzatomLUT ;break;
    }
 
@@ -48,8 +50,7 @@ void write_v(double *r, double *v){
 /*####################################################################
                             Main
 ######################################################################*/
-int main(int argc, char **argv){
-  parse(argc,argv);
+void compute_vfunc(){
   double *r = new double[nrs];
   double *v = new double[nrs];
   double ri=r0,r_rsq=0.0;
@@ -62,5 +63,12 @@ int main(int argc, char **argv){
 
   write_v(r,v);
   delete[] r,v;
+}
+int main(int argc, char **argv){
+  parse(argc,argv);
+  if(compute)
+    compute_vfunc();
+  else
+    vfunc(Z,0.0);
   return 0;
 }

@@ -9,6 +9,24 @@ from matplotlib import rc
 from . import multislice as mupy            ; imp.reload(mupy)
 from . import rotating_crystal as rcc       #; imp.reload(rcc)
 from . import postprocess as pp             #; imp.reload(pp)
+from . import multi_3D as MS3D              ;imp.reload(MS3D)
+from . import pymultislice                  ;imp.reload(pymultislice)
+
+def multi3D(name='./unknwon',filename='',load_opt=0,**kwargs):
+    if filename :
+        name=filename.replace('_3D.pkl','')
+    else :
+        filename=name+'_3D.pkl'
+
+    if load_opt :
+        if os.path.exists(filename):
+            print(colors.green+'loading '+colors.yellow+filename+colors.black)
+            return pymultislice.load(filename)
+        else:
+            print(colors.red+'file not found : '+colors.yellow+filename+colors.black)
+    return MS3D.Multi3D(name=name,**kwargs)
+
+
 
 def get_reciprocal(abc):
     a1,a2,a3 = abc
@@ -92,12 +110,12 @@ def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail='
 
 def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],rep=[1,1,1],pad=0,fmt='%.4f',dopt='s'):
     '''Creates the.xyz file from a given compound and orientation
-    - name    : Full path to the file to save
-    - pattern : Nx6 ndarray - Z,x,y,z,occ,wobble format
-    - lat_vec : 3x3 ndarray - lattice vectors [a1,a2,a3]
+    - name       : Full path to the file to save
+    - pattern    : Nx6 ndarray - Z,x,y,z,occ,wobble format
+    - lat_vec    : 3x3 ndarray - lattice vectors [a1,a2,a3]
     - lat_params : ax,by,cz
-    - pad : amount of padding on each side (in unit of super cell size)
-    - n : beam direction axis
+    - pad  : amount of padding on each side (in unit of super cell size)
+    - n    : beam direction axis
     - dopt : p(print file),s(save)
     '''
     compound = dsp.basename(name)
@@ -172,9 +190,13 @@ def show_grid(file,opts='',**kwargs):
     '''
     with open(file,'r') as f:l=list(map(lambda s:s.strip().split(' '),f.readlines()))
     lat_params = np.array(l[1],dtype=float)
-    pattern = np.array(l[2:-1],dtype=float)
+    pattern   = np.array(l[2:-1],dtype=float)
+    plot_grid(pattern,lat_params,opts,**kwargs)
+
+def plot_grid(pattern,lat_params,opts,**kwargs):
     #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
-    cs = {1:colors.unicolor(0.75),3:(1,0,0),6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),17:(0,1,1)}
+    cs = {1:colors.unicolor(0.75),3:(1,0,0),
+          6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),17:(0,1,1)}
     xij = {'x':1,'y':2,'z':3}
     if opts:
         x1,x2 = opts
@@ -184,7 +206,7 @@ def show_grid(file,opts='',**kwargs):
         pps = [dsp.Rectangle((0,0),lat_params[i-1],lat_params[j-1],linewidth=2,edgecolor='b',alpha=0.1)]
         scat = [pattern[:,i],pattern[:,j],C]
 
-        return dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,ms=5,
+        return dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,
             **kwargs)
 
     # return lat_params,pattern
@@ -200,6 +222,7 @@ def import_xyz(xyz_file):
     lat_params = np.array(l[1],dtype=float)
     pattern = np.array(l[2:-1],dtype=float)
     return pattern,lat_params
+
 def show_grid3(xyz_file,ms=1,**kwargs):
     '''display an .xyz file content in a 2D plane
     xyz_file : .xyz file
@@ -213,7 +236,8 @@ def show_grid3(xyz_file,ms=1,**kwargs):
     return dsp.stddisp(scat=scat,labs=['$x$','$y$','$z$'],rc='3d',**kwargs)
 
 
-
+################################################################################
+################################################################################
 class Image_viewer:
     def __init__(self,file,sym=1,pad=None):
         basename      = file.split('_')

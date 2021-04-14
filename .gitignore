@@ -4,6 +4,7 @@
 */figures
 */docs_fig
 
+tests/dials
 tests/*/dat
 multislice/data_2D
 blochwave

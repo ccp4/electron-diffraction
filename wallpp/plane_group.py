@@ -73,6 +73,7 @@ class Wallpaper :
         self.init_unit_cell()
         self.path = path
         self.ndeg = ndeg
+        if isinstance(pattern,list):pattern=np.array(pattern)
         if isinstance(pattern,np.ndarray) or isinstance(pattern,str):
             self.add_pattern(pattern,pOpt)
             if gen :
@@ -143,12 +144,27 @@ class Wallpaper :
         ndeg   : order for generating potential map              (see build_potential)
         nh,nk  : number of unit cells to be displayed
         ndeg   : number of discretization points along one the direction for building the potential map'''
-        self.Xcell,self.fcell   = self.apply_symmetries(self.X0,self.f0)
-        self.Xa,self.fa         = self.repeat_pattern(self.Xcell,self.fcell,nh,nk)
-        if ndeg :
-            self.build_potential(ndeg)
-            self.Xc,self.fc = self.apply_symmetries(self.Xp,self.fp)
-            self.X,self.f   = self.repeat_pattern(self.Xc,self.fc,nh,nk)
+
+        if self.pp_type=='p1':
+            self.buil_potential_p1(ndeg)
+        else:
+            self.Xcell,self.fcell   = self.apply_symmetries(self.X0,self.f0)
+            self.Xa,self.fa         = self.repeat_pattern(self.Xcell,self.fcell,nh,nk)
+            if ndeg :
+                self.build_potential(ndeg)
+                self.Xc,self.fc = self.apply_symmetries(self.Xp,self.fp)
+                self.X,self.f   = self.repeat_pattern(self.Xc,self.fc,nh,nk)
+
+    def buil_potential_p1(self,ndeg=2**8):
+        if isinstance(ndeg,int):ndeg=[ndeg]*2
+        self.x,self.z = np.linspace(0,self.a,ndeg[0]),np.linspace(0,self.b,ndeg[1])
+        x,z = np.meshgrid(self.x,self.z)
+        self.Xa,self.fa=self.X0,self.f0
+        self.fp=np.zeros(x.shape)
+        for X0,Za in zip(self.Xa,self.fa):
+            r = np.sqrt((x-X0[0])**2+(z-X0[1])**2)
+            self.fp += np.exp(-(r/Ai[int(Za)])**2)
+        self.Xp = np.array([x.flatten(),z.flatten()]).T
 
     def build_potential(self,ndeg=10) :
         ''' Build the potential map :
@@ -179,9 +195,12 @@ class Wallpaper :
         x,z,f = x.reshape(Nxz),z.reshape(Nxz),f.reshape(Nxz)
         return x[0,:],z[:,0],f
 
+    def get_potential_grid_p1(self):
+        return self.x,self.z,self.fp
+
     def plot_unit_cells(self,opts='AV',nh=3,nk=4,lvls=10,alpha=0.5,fg='12',**kwargs) :
         '''Display the wallpaper
-        pOpt :  A(Atom), V(potential), p(plot), u(unit_cell), a(asym_unit)
+        pOpt :  A(Atom), V(potential), u(unit_cell), a(asym_unit)
         '''
         fig,ax = dsp.create_fig(figsize=fg,pad=[2.,5]['t' in opts])
         colls,scat,im,cs,lOpt=[],None,None,None,''

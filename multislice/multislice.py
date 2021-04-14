@@ -15,6 +15,7 @@ forcing to repostprocess in case it was already done in an older simulation :
 multi.beam_vs_thickness(bOpt='f')
 ```
 '''
+import importlib as imp
 import pickle,socket,time
 import pandas as pd
 import numpy as np
@@ -31,25 +32,29 @@ from crystals import Crystal
 import utils.glob_colors as colors
 import utils.displayStandards as dsp
 from scattering.structure_factor import structure_factor3D
-from . import postprocess as pp
+from . import postprocess as pp;imp.reload(pp)
 
 ssh_hosts = {
     'local_london':'BG-X550',
     'tarik-CCP4stfc':'tarik-CCP4','tarik-CCP4home':'tarik-CCP4',
     'brno':'brno',
-    'badb':'badb'}
+    'badb':'badb',
+    'badb.rc-harwell.ac.uk':'badb',
+}
 
 temsim_hosts={
     'BG-X550'   :'/home/ronan/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
     'tarik-CCP4':'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
     'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
     'badb'      :'/home/lii26466/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
+    'badb.rc-harwell.ac.uk':'/home/lii26466/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
 }
 path_hosts={
     'BG-X550'   :'/home/ronan/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
     'tarik-CCP4':'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
     'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
     'badb'      :'/data3/lii26466/multislice/',
+    'badb.rc-harwell.ac.uk':'/data3/lii26466/multislice/',
 }
 
 
@@ -105,7 +110,7 @@ class Multislice:
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
 
         #attributes
-        self.version     = '1.3.2'
+        self.version     = '1.4.0'
         self.name        = dsp.basename(name)                       #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.cif_file    = self.get_cif_file(cif_file)              #;print(self.cif_file)
@@ -194,7 +199,7 @@ class Multislice:
                 self._get_job(cluster=cluster)
                 cmd = 'bash %s' %self._outf('job')
             p = Popen(cmd,shell=True) #; print(cmd)
-            if v>0 : print(colors.green+self.name+" job submitted"+colors.black)
+            if v>0 : print(colors.green+self.name+" job submitted at %s" %time.ctime()+colors.black)
             if v>1 : print(colors.magenta+cmd+colors.black)
         return p
 
@@ -208,6 +213,7 @@ class Multislice:
         state = self.check_simu_state(ssh_alias=ssh_alias,hostpath=hostpath);print(state)
         if not state == 'done' and 'w' in ppopt:
             self.wait_simu(ssh_alias,10,hostpath)
+            self.p.wait()
         # self.get_beams(iBs='a',bOpt='f')
         print(colors.blue+'...postprocessing...'+colors.black)
         if ssh_alias and 'u' in ppopt:
@@ -312,10 +318,11 @@ class Multislice:
             if isinstance(iBs[0],str) :
                 iBs = [ (iB==hk).argmax() for iB in iBs if (iB==hk).sum()]
                 print(iBs)
+            if isinstance(iBs[0],tuple):
+                iBs = [i for i,hk0 in enumerate(self.hk) if hk0 in iBs]
         else :
             Imax = np.array([I.max() for I in Ib]) #;print(Imax)
             iBs = [i for i in range('O' not in bOpt,len(hk)) if Imax[i]>= tol*Imax.max()]
-
         beams = np.array(hk)[iBs],t, np.array(re)[iBs],np.array(im)[iBs],np.array(Ib)[iBs]
 
         if 'o' in bOpt:
@@ -376,27 +383,27 @@ class Multislice:
         Nh,Nk = self.repeat[:2];
         Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
         if Nmax : Nmax = min(Nmax,Nx,Ny)
-        if 'I' in Iopt :
+        # if 'I' in Iopt :
             # real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
             # im = real**2+imag**2
-            if 'n' in Iopt : #normalize
-                #print('normalizing')
-                im00 = im[0,0];im[0,0] = 0
-                mMax = im.max();im /= mMax
-                if 'l' in Iopt :
-                    im[0,0] = im00/mMax
-                else:
-                    im[0,0] = 1
-            if 'c' in Iopt and not Nmax:
-                #print('croping')
-                idx = im[:Nx,:Ny]>tol#*im.max()
-                h,k = np.meshgrid(np.arange(Nx),np.arange(Ny))
-                r = np.sqrt(h**2+k**2)
-                Nmax = ceil(r[idx].max()); #print('Pattern Nmax=%d > %E ' %(Nmax,tol))
-                Nmax = min(Nmax,256)#;print(Nx,Ny,Nmax)
-            if not Nmax : Nmax = min(256,Nx,Ny)
+        if 'n' in Iopt : #normalize
+            #print('normalizing')
+            im00 = im[0,0];im[0,0] = 0
+            mMax = im.max();im /= mMax
+            if 'l' in Iopt :
+                im[0,0] = im00/mMax
+            else:
+                im[0,0] = 1
+        if 'c' in Iopt and not Nmax:
+            #print('croping')
+            idx = im[:Nx,:Ny]>tol#*im.max()
+            h,k = np.meshgrid(np.arange(Nx),np.arange(Ny))
+            r = np.sqrt(h**2+k**2)
+            Nmax = ceil(r[idx].max()); #print('Pattern Nmax=%d > %E ' %(Nmax,tol))
+            Nmax = min(Nmax,256)#;print(Nx,Ny,Nmax)
+        if not Nmax : Nmax = min(256,Nx,Ny)
 
-            if 's' in Iopt : im = np.fft.fftshift(im)   #;print('fftshift')
+        if 's' in Iopt : im = np.fft.fftshift(im)   #;print('fftshift')
 
         #print('preparing')
         if 'q' in Iopt:
@@ -477,6 +484,7 @@ class Multislice:
     def print_job(self):
         '''print bash script job file '''
         with open(self._outf('job'),'r') as f:
+            self._print_header('.sh FILE')
             print(''.join(f.readlines()))
     def print_log(self,head_opt=0):
         '''print the logfile of running multislice .log'''

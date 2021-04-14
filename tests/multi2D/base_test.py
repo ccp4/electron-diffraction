@@ -1,9 +1,7 @@
-from utils import*
-import multislice.multi_2D as MS2D
-import wallpp.plane_group as pg
 import importlib as imp
-imp.reload(MS2D)
-imp.reload(pg)
+from utils import*
+import multislice.multi_2D as MS2D  ;imp.reload(MS2D)
+import wallpp.plane_group as pg     ;imp.reload(pg)
 plt.close('all')
 path='../multislice/docs_fig/multi2D/'
 
@@ -15,7 +13,7 @@ pptype,a,b,angle = 'p1',10,4,90
 # pattern = np.array([[2,2,4]])
 pattern = np.array([[2,2,1]])
 p1      = pg.Wallpaper(pptype,a,b,angle,pattern,ndeg=ndeg)
-pattern = p1.get_potential_grid()
+pattern = p1.get_potential_grid_p1()
 
 
 Nx=1
@@ -23,7 +21,8 @@ iZv = np.inf
 def base():
     mp0 = MS2D.Multi2D(pattern,a,b,keV,
             Nx=Nx,dz=b,nz=100,ppopt='',#XQZTP
-            iZs=1,iZv=10,eps=eps)
+            TDS=False,
+            iZs=1,iZv=10,opts='q',eps=eps)
 
     # mp0.Bz_show(iBs=np.arange(6)*Nx,lw=2,xylims=[0,400,0,1])
     # mp1.propagate(300,iZs=2)
@@ -78,15 +77,15 @@ def tilts_test(tilts=np.linspace(0,0.9,100),
                 iZs=10,iZv=100,eps=eps,sg=-1,v=1)
     return tilts,mp2
 
-# mp0=base()
+mp0=base()
 # ms_sg()
 # mp1=small_thick()
 # mpt=tilt(t=0.1)
-ts,msts=tilts_test(tilts=np.linspace(0,0.2,51),eps=0.1,nz=10010)
+# ts,msts=tilts_test(tilts=np.linspace(0,0.2,51),eps=0.1,nz=10010)
 # ts,msts=tilts_test(tilts=np.linspace(0,0.3,21)[6:8],eps=0.02,nz=50000)
 # tilts_show(ts,msts,iBs=1,iZs=-1,name=path+'rocking_eps1.svg',opt='p')
 # tilts_show(msts,iBs=np.arange(-3,3),iZs=-1,name=path+'rocking_eps1.svg',opt='p')
-MS2D.tilts_show(ts,msts,iBs=1,iZs=slice(0,10000,1000),name=path+'rocking_eps1.svg',opt='p')
-m0 = msts[25];m0.Bz_show(np.arange(-5,5))
+# MS2D.tilts_show(ts,msts,iBs=1,iZs=slice(0,10000,1000),name=path+'rocking_eps1.svg',opt='p')
+# m0 = msts[25];m0.Bz_show(np.arange(-5,5))
 # msts[10].Ewald_show(lw=2,xylims=[-0.01,0.4,-0.001,0.005])
 # msts=tilts_test(tilts=np.linspace(0,0.2,51),eps=0.10,name=path+'rocking_eps2.svg',opt='ps')

@@ -31,7 +31,7 @@ ANY OTHER PROGRAM).
 ------------------------------------------------------------------------
 
     function library for use with multislice programs
-    
+
     should put each subroutine in a separate file and make
     a real obj library but its easier to manage this way
 
@@ -146,7 +146,7 @@ using namespace std;
 #ifdef wxGUI
 #include "wx/wx.h"  // regular headers
 //#include "wx/wxprec.h"  // for precompiled headers
-#endif 
+#endif
 
 // for the atomic scattering factor tables
 const int NPMAX=   12;  // number of parameters for each Z
@@ -190,7 +190,7 @@ int askYN( const char message[] )
  {
     int i;
     double ax, sum, t;
-    
+
     double i0a[] = { 1.0, 3.5156229, 3.0899424, 1.2067492,
         0.2659732, 0.0360768, 0.0045813 };
 
@@ -203,7 +203,7 @@ int askYN( const char message[] )
         t = x / 3.75;
         t = t * t;
         sum = i0a[6];
-        for( i=5; i>=0; i--) sum = sum*t + i0a[i]; 
+        for( i=5; i>=0; i--) sum = sum*t + i0a[i];
     } else {
         t = 3.75 / ax;
         sum = i0b[8];
@@ -218,25 +218,25 @@ int askYN( const char message[] )
 /*
     modified Bessel function K0(x)
     see Abramowitz and Stegun page 380
-    
+
     Note: K0(0) is not define and this function
     returns 1E20
- 
+
     x = (double) real arguments
-    
+
     this routine calls bessi0() = Bessel function I0(x)
-    
+
     12-feb-1997 E. Kirkland
  */
  double bessk0( double x )
  {
     double bessi0(double);
- 
+
     int i;
     double ax, x2, sum;
     double k0a[] = { -0.57721566, 0.42278420, 0.23069756,
          0.03488590, 0.00262698, 0.00010750, 0.00000740};
-        
+
     double k0b[] = { 1.25331414, -0.07832358, 0.02189568,
          -0.01062446, 0.00587872, -0.00251540, 0.00053208};
 
@@ -263,7 +263,7 @@ int askYN( const char message[] )
     C10= -df is defocus with the opposite sign
 
     put in a subroutine so I only have to get it right once
-    
+
     now includes thru 5th order 4-jul-2010 ejk
     convert to param array p[] 2-may-2011 ejk
     add multiMode 8-may-2011 ejk
@@ -309,7 +309,7 @@ double chi( float p[], double alx, double aly, int multiMode )
             aln = al2*al2;  /* alpha^4 */
             c4t = ct*c3t - st*s3t;    /*  cos/sin of 4*theta */
             s4t = ct*s3t + st*c3t;
-            w += aln*( p[pC32a]*c2t + p[pC32b]*s2t + p[pC34a]*c4t 
+            w += aln*( p[pC32a]*c2t + p[pC32b]*s2t + p[pC34a]*c4t
                      + p[pC34b]*s4t )/4.0;
 
              /* ---- fourth order ----- */
@@ -325,7 +325,7 @@ double chi( float p[], double alx, double aly, int multiMode )
             s6t = ct*s5t + st*c5t;
             w += aln*(  p[pC52a]*c2t + p[pC52b]*s2t +  p[pC54a]*c4t + p[pC54b]*s4t
                       + p[pC56a]*c6t + p[pC56b]*s6t )/6.0;
-           
+
 #ifdef TEST_COS
             string stemp;
             ct = cos( 6*theta );    /*  quick test of recursion algebra */
@@ -362,11 +362,11 @@ double cputim()
 
   assumed global vars:
 
-#define NZMIN   1    min Z in featom.tab 
-#define NZMAX   103  max Z in featom.tab 
+#define NZMIN   1    min Z in featom.tab
+#define NZMAX   103  max Z in featom.tab
 
-int feTableRead=0; = flag to remember if the param file has been read 
-int nl=3, ng=3; = number of Lorenzians and Gaussians 
+int feTableRead=0; = flag to remember if the param file has been read
+int nl=3, ng=3; = number of Lorenzians and Gaussians
 double fparams[][] = fe parameters
 
 */
@@ -398,45 +398,45 @@ double featom( int Z, double k2 )
 }  /* end featom() */
 
 /*--------------- free2D() ----------------------------*/
-/*   
+/*
     free a 2D array f[][] dimensioned as f[ix][iy]
-    
+
     0 < ix < (nx-1)
     0 < iy < (ny-1)   <not used>
-    
+
 */
 void free2D( void ** f, int nx )
 {
     int ix;
-    
+
     for( ix=0; ix<nx; ix++) free( f[ix] );
     free( f );
-    
+
     return;
-    
+
 }  /* end free2D() */
 
 /*--------------- free3D() ----------------------------*/
-/*   
+/*
     free a 2D array f[][] dimensioned as f[ix][iy]
-    
+
     0 < ix < (nx-1)
     0 < iy < (ny-1)
     0 < iz < (nz-1) <not used>
-    
+
 */
 void free3D( void *** f, int nx, int ny )
 {
     int ix, iy;
-    
+
     for( ix=0; ix<nx; ix++) {
         for( iy=0; iy<ny; iy++) free( f[ix][iy] );
         free( f[ix] );
     }
     free( f );
-    
+
     return;
-    
+
 }  /* end free3D() */
 
 /*------------------------ freqn() ------------------------*/
@@ -450,7 +450,7 @@ void free3D( void *** f, int nx, int ny )
 
     ko[n]  = real array to get spatial frequencies
     ko2[n] = real array to get k[i]*k[i]
-    xo[n]  = real array to get positions 
+    xo[n]  = real array to get positions
     nk     = integer number of pixels
     ak     = real full scale size of image in pixels
 */
@@ -478,9 +478,9 @@ void freqn( float *ko, float *ko2, float *xo, int nk, double ak )
     1D array allocator for arbitrary type
     make space for m[0...(n-1)]
     printf error message and exit if not successful
-    
-    this save checking for a NULL return etc. every time 
-    
+
+    this save checking for a NULL return etc. every time
+
     n = number of elements
     size = size of each element as returned by
         sizeof(double), sizeof(int), etc.
@@ -516,7 +516,7 @@ void **malloc2D( int nx, int ny, size_t size, const char *message )
     int i;
     std::string stemp;
 
-    m = (void**) malloc( nx * sizeof( void* ) ); 
+    m = (void**) malloc( nx * sizeof( void* ) );
     if( m == NULL ) {
         stemp= "out of memory in malloc2D(), size=" + toString(nx) +
                ", "+toString(ny)+": "+message;
@@ -553,7 +553,7 @@ void ***malloc3D( int nx, int ny, int nz, size_t size, const char *message )
     int i, j;
     std::string stemp;
 
-    m = (void***) malloc( nx * sizeof( void** ) ); 
+    m = (void***) malloc( nx * sizeof( void** ) );
     if( m == NULL ) {
         stemp= "out of memory in malloc3D(), size=" + toString(nx) + ", " +
                 toString(ny) + ", " + toString(nz) + ": " + message;
@@ -608,7 +608,7 @@ void messageSL( const char msg[],  int level )
         wxLogStatus( msg );
 
     } else if( 1 == level ) {
-        wxMessageBox( msg, wxT("slicelib"), wxOK | wxICON_INFORMATION ); 
+        wxMessageBox( msg, wxT("slicelib"), wxOK | wxICON_INFORMATION );
     }
 #endif
 
@@ -616,7 +616,7 @@ void messageSL( const char msg[],  int level )
 
 /*--------------------- parlay() -----------------------------------*/
 /*
-  subroutine to parse the atomic layer stacking sequence 
+  subroutine to parse the atomic layer stacking sequence
   for use with multislice programs.
 
   This converts layer structure definition of the form:
@@ -666,7 +666,7 @@ void messageSL( const char msg[],  int level )
               -8 : incomplete stacking sequence
 
    fperr       = (int) if this is not a NULL then write
-           error messages 
+           error messages
 
   NOTE: islice and nslice may be modified by this routine
 
@@ -702,39 +702,39 @@ int parlay( const char c[], int islice[], int nsmax, int lmax,
        /*  skip over embedded spaces, tabs and weird characters */
        while( isspace( c[ic] )  ) ic++;
 
-       /*  if its a character do this  */       
+       /*  if its a character do this  */
        if( isalpha( c[ic] ) ) {
-            for(name=0; name<NCHARS; name++) 
+            for(name=0; name<NCHARS; name++)
                if( c[ic] == cname[name] ) break;
             if( name > lmax ) {
-               if( fperr != 0 ) 
+               if( fperr != 0 )
                   printf("Layer /%c/ out of range in the stacking sequence"
                 " in subroutine parlay.\n", c[ic] );
                 return( -1 );
             } else {
                if( *nslice >= nsmax ) {
-                if( fperr != 0 ) 
+                if( fperr != 0 )
                 printf("Too many layers generated in the stacking"
                     " sequence in parlay.\n");
                     return( -7 );
                }
                 islice[ (*nslice)++ ] = name;
             }
-        
+
     /*  if its a number then extract repeat count up to the '('
     and save it until a ')' appears (i.e. push on the stack)
     */
        } else if ( isdigit( c[ic] ) ) {
         if( istack >= NSTKMAX ) {
-                if( fperr != 0 ) 
+                if( fperr != 0 )
                 printf("Parenthesis nested too deep in "
                    "the stacking sequence in subroutine parlay.\n");
                 return( -3 );
             }
-            repeat[istack] = atoi( &c[ic] ) - 1; 
+            repeat[istack] = atoi( &c[ic] ) - 1;
             while( isdigit(c[ic]) || isspace(c[ic]) ) ic++;
             if( c[ic] != '(' ) {
-                if( fperr != 0 ) 
+                if( fperr != 0 )
                    printf("Missing left parenthesis in "
                    "the stacking sequence in subroutine parlay.'\n");
                    for(i=0; i<=ic; i++) printf("%c", c[i]);
@@ -742,13 +742,13 @@ int parlay( const char c[], int islice[], int nsmax, int lmax,
                    return( -2 );
             }
             ipoint[istack++] = *nslice;
-    
+
         /*  if its a ')' then repeat back to the last '('
                     (i.e. pop the stack) */
 
         } else if( c[ic] == ')' ) {
            if( istack <= 0 ) {
-                if( fperr != 0 ) 
+                if( fperr != 0 )
                 printf("Unmatched right parenthesis in "
                     "the stacking sequence in subroutine parlay.\n");
                 return( -5 );
@@ -758,7 +758,7 @@ int parlay( const char c[], int islice[], int nsmax, int lmax,
            for( j=0; j<repeat[istack]; j++)
             for(i=ipoint[istack]; i<n; i++){
                if( *nslice >= nsmax ) {
-                    if( fperr != 0 ) 
+                    if( fperr != 0 )
                     printf("Too many layers generated in the stacking"
                         " sequence in parlay.\n");
                         return( -7 );
@@ -766,7 +766,7 @@ int parlay( const char c[], int islice[], int nsmax, int lmax,
                 islice[ (*nslice)++ ] = islice[ i ];
             }
         } else {
-           if( fperr != 0 ) 
+           if( fperr != 0 )
            printf("Invalid character /%c/ encountered in "
               "the stacking sequence in subroutine parlay.\n",
               c[ic]);
@@ -774,15 +774,15 @@ int parlay( const char c[], int islice[], int nsmax, int lmax,
         }
 
     } /* end for( ic... */
-    
+
     if( istack != 0 ) {
-        if( fperr != 0 ) 
+        if( fperr != 0 )
         printf("incomplete stacking sequence in parlay.\n");
-        return( -8 ); 
+        return( -8 );
     } else return( 0 );
 
 #undef NCMAX
-#undef NSTKMAX 
+#undef NSTKMAX
 #undef NCHARS
 
 }  /* end parlay() */
@@ -797,12 +797,12 @@ int parlay( const char c[], int islice[], int nsmax, int lmax,
     propyr,i[iy]     = real and imag. parts of y comp of propagator
 
     kx2[], ky2[]     = spatial frequency components
-    k2max        = square of maximum k value 
+    k2max        = square of maximum k value
     nx, ny       = size of array
-    
-    on entrance waver,i and 
+
+    on entrance waver,i and
          propxr,i/propyr,i are in reciprocal space
-    
+
     only wave will be changed by this routine
 */
 void propagate( cfpix &wave,
@@ -814,7 +814,7 @@ void propagate( cfpix &wave,
 
     /*  multiplied by the propagator function */
 
-/*  parallizing this loop usually runs slower (!)     
+/*  parallizing this loop usually runs slower (!)
 #pragma omp parallel for private(j,iy,pxr,pxi,pyr,pyi,wr,wi,tr,ti) */
     for( ix=0; ix<nx; ix++) {
         if( kx2[ix] < k2max ) {
@@ -824,7 +824,7 @@ void propagate( cfpix &wave,
                 if( (kx2[ix] + ky2[iy]) < k2max ) {
                     pyr = propyr[iy];
                     pyi = propyi[iy];
-                    wr = wave.re(ix,iy);   // real 
+                    wr = wave.re(ix,iy);   // real
                     wi = wave.im(ix,iy);   // imag
                     tr = wr*pyr - wi*pyi;
                     ti = wr*pyi + wi*pyr;
@@ -840,7 +840,7 @@ void propagate( cfpix &wave,
                     wave.re(ix,iy) = 0.0F;
                     wave.im(ix,iy) = 0.0F;
         }  /*  end if( kx2[ix]... */
-            
+
     } /* end for(ix..) */
 
 } /* end propagate() */
@@ -850,24 +850,24 @@ void propagate( cfpix &wave,
     return a random number in the range 0.0->1.0
     with uniform distribution
 
-    the 'Magic Numbers' are from 
+    the 'Magic Numbers' are from
         Numerical Recipes 2nd edit pg. 285
 */
 double ranflat( unsigned long *iseed )
 {
     static unsigned long a=1366, c=150889L, m=714025L;
-    
+
     *iseed = ( a * (*iseed) + c ) % m;
-    
+
     return( ((double) *iseed)/m);
 
 }  /* end ranflat() */
 
 /*-------------------- rangauss() -------------------------- */
 /*
-    Return a normally distributed random number with 
+    Return a normally distributed random number with
     zero mean and unit variance using Box-Muller method
-    
+
     ranflat() is the source of uniform deviates
 
     ref.  Numerical Recipes, 2nd edit. page 289
@@ -895,7 +895,7 @@ double rangauss( unsigned long *iseed )
 
 /*--------------------- readCnm() -----------------------*/
 /*
-    convert aberration line to a number 
+    convert aberration line to a number
 
     cline = character line in style "C32a  2.4"
     param[] = parameter array to get parameter value
@@ -906,16 +906,16 @@ double rangauss( unsigned long *iseed )
 */
 int readCnm( string &cline, float param[], double x )
 {
-    /*  so we can loop through them in some ordered manner 
-       - next two array MUST be in identical order 
+    /*  so we can loop through them in some ordered manner
+       - next two array MUST be in identical order
        - leave out C10 because its opp. sign of df=defocus */
     int aberIndex[]={pC12a, pC12b, pC21a, pC21b, pC23a, pC23b, pCS,
-        pC32a, pC32b, pC34a, pC34b, pC41a, pC41b, pC43a, pC43b, pC45a, pC45b, 
+        pC32a, pC32b, pC34a, pC34b, pC41a, pC41b, pC43a, pC43b, pC45a, pC45b,
         pCS5, pC52a, pC52b, pC54a, pC54b, pC56a, pC56b };
 
     string aberSymb[]= {"C12a", "C12b", "C21a", "C21b", "C23a",
-        "C23b", "C30", "C32a", "C32b", "C34a", "C34b", "C41a", "C41b", 
-        "C43a", "C43b", "C45a", "C45b", "C50", "C52a", "C52b", "C54a", 
+        "C23b", "C30", "C32a", "C32b", "C34a", "C34b", "C41a", "C41b",
+        "C43a", "C43b", "C45a", "C45b", "C50", "C52a", "C52b", "C54a",
         "C54b", "C56a", "C56b" };
     int i, status=-1, Naber=24;
 
@@ -937,18 +937,18 @@ int readCnm( string &cline, float param[], double x )
 
   the old version read electron scattering factors
   parameters from file fparam.dat hence the name
-  
+
   the constants that must be defined above are
 
-#define NPMAX   12  = number of parameters for each Z 
-#define NZMIN   1   = min Z in featom.tab 
-#define NZMAX   103 = max Z in featom.tab 
-#define NCMAX   132 = characters per line to read 
+#define NPMAX   12  = number of parameters for each Z
+#define NZMIN   1   = min Z in featom.tab
+#define NZMAX   103 = max Z in featom.tab
+#define NCMAX   132 = characters per line to read
 
   assumed global vars:
 
-int feTableRead=0; = flag to remember if the param file has been read 
-int nl=3, ng=3; = number of Lorenzians and Gaussians 
+int feTableRead=0; = flag to remember if the param file has been read
+int nl=3, ng=3; = number of Lorenzians and Gaussians
 double fparams[][] = fe parameters
 
 */
@@ -961,7 +961,7 @@ int ReadfeTable( )
    /* if the file has been initialized already then just return */
    if( feTableRead == 1 ) return(0);
 
-   fparams = (double**) malloc2D( NZMAX+1, NPMAX, 
+   fparams = (double**) malloc2D( NZMAX+1, NPMAX,
        sizeof(double), "fparams" );
 
     /*  scattering factor parameter data from fparams  */
@@ -2212,7 +2212,7 @@ int ReadfeTable( )
 /*
     read a set of (x,y,z) coordinates from a file
     and return number of coord read
-    
+
     infile = name of input file to read from
     ncellx,y,z = number of unit cells in x,y,z to replicate
             (must be >= 1 )
@@ -2237,7 +2237,7 @@ int ReadfeTable( )
     convert to string and streams mar-2014 ejk
 */
 int ReadXYZcoord( const char* infile, const int ncellx, const int ncelly,
-    const int ncellz, float *ax, float *by, float *cz, int** Znum, 
+    const int ncellz, float *ax, float *by, float *cz, int** Znum,
     float** x, float** y, float** z, float** occ, float **wobble,
     string &line1 )
 {
@@ -2289,14 +2289,14 @@ int ReadXYZcoord( const char* infile, const int ncellx, const int ncelly,
                 zv.push_back( zz );
                 occv.push_back( oo );
                 wobblev.push_back( ww );
-                
+
         } else if( iz > NZMAX ) {
                 stemp= "Warning bad atomic number " + toString( iz ) + " in ReadXYZcoord()";
                 messageSL( stemp.c_str() );
-        } 
+        }
     } while ( iz > 0 );
     fp.close( );
-    
+
     /* now that we know how many coordinates there are
         allocate the arrays */
 
@@ -2405,7 +2405,7 @@ double seval( double *x, double *y, double *b, double *c,
     /*  exit if x0 is outside the spline range */
     if( x0 <= x[0] ) i = 0;
     else if( x0 >= x[n-2] ) i = n-2;
-    else { 
+    else {
         i = 0;
         j = n;
         do{ k = ( i + j ) / 2 ;
@@ -2413,7 +2413,7 @@ double seval( double *x, double *y, double *b, double *c,
             else if( x0 >= x[k] ) i = k;
         } while ( (j-i) > 1 );
     }
-    
+
     z = x0 - x[i];
     seval1 = y[i] + ( b[i] + ( c[i] + d[i] *z ) *z) *z;
 
@@ -2444,9 +2444,9 @@ double sigma( double kev )
     x = ( emass + kev ) / ( 2.0*emass + kev);
     wavl = wavelength( kev );
     pi = 4.0 * atan( 1.0 );
-    
+
     s = 2.0 * pi * x / (wavl*kev);
-    
+
     return( s );
 
 }  /* end sigma() */
@@ -2455,8 +2455,8 @@ double sigma( double kev )
 
     improved Shell sort modeled after prog. 6.5 (pg. 274) of
     R. Sedgewick, "Algorithms in C", 3rd edit. Addison-Wesley 1998
-    
-    x[], y[], z[]   = atom coordinates 
+
+    x[], y[], z[]   = atom coordinates
     occ[]           = occupancy of each atom
     Znum[]          = atomic number of each atom
     natom           = number of atoms
@@ -2497,13 +2497,13 @@ void sortByZ( float x[], float y[], float z[], float occ[],
     for( i=1; i<natom; i++) {
         if( z[i-1] > z[i] ) messageSL( mbad );
     }
- 
+
 }  /* end sortByZ() */
 
 /*------------------ splinh() -----------------------------*/
 /*
     fit a quasi-Hermite  cubic spline
-    
+
     [1] Spline fit as in H.Akima, J. ACM 17(1970)p.589-602
         'A New Method of Interpolation and Smooth
         Curve Fitting Based on Local Procedures'
@@ -2570,9 +2570,9 @@ void splinh( double x[], double y[],
 
         if( (m54+m32) > SMALL )
             t2= (m54*m3 + m32*m4) / (m54 + m32);
-        else 
+        else
             t2 = 0.5* ( m3 + m4 );
-      
+
         x43 = x[i+1] - x[i];
         b[i] = t1;
         c[i] = ( 3.0*m3 - t1 - t1 - t2 ) /x43;
@@ -2644,9 +2644,9 @@ std::string toString( double x )
     transr,i[ix][iy] = real and imag parts of transmission functions
 
     nx, ny = size of array
-    
+
     on entrance waver,i and transr,i are in real space
-    
+
     only waver,i will be changed by this routine
 */
 void transmit( float** waver, float** wavei,
@@ -2655,7 +2655,7 @@ void transmit( float** waver, float** wavei,
 {
     int ix, iy;
     float wr, wi, tr, ti;
-    
+
        for( ix=0; ix<nx; ix++) {
             for( iy=0; iy<ny; iy++) {
                wr = waver[ix][iy];
@@ -2679,11 +2679,11 @@ void transmit( float** waver, float** wavei,
 
   assumed global vars:
 
-#define NZMIN   1   = min Z in featom.tab 
-#define NZMAX   103 = max Z in featom.tab 
+#define NZMIN   1   = min Z in featom.tab
+#define NZMAX   103 = max Z in featom.tab
 
-int feTableRead=0; = flag to remember if the param file has been read 
-int nl=3, ng=3; = number of Lorenzians and Gaussians 
+int feTableRead=0; = flag to remember if the param file has been read
+int nl=3, ng=3; = number of Lorenzians and Gaussians
 double fparams[][] = fe parameters
 
   al and ag calculated using physical constants from:
@@ -2741,11 +2741,11 @@ double vatom( int Z, double radius )
 
   assumed global vars:
 
-#define NZMIN   1   = min Z in featom.tab 
+#define NZMIN   1   = min Z in featom.tab
 #define NZMAX   103 = max Z in featom.tab
 
-int feTableRead=0; = flag to remember if the param file has been read 
-int nl=3, ng=3; = number of Lorenzians and Gaussians 
+int feTableRead=0; = flag to remember if the param file has been read
+int nl=3, ng=3; = number of Lorenzians and Gaussians
 double fparams[][] = fe parameters
 
   al and ag calculated using physical constants from:
@@ -2861,7 +2861,7 @@ double vzatomLUT( int Z, double rsq )
     }
 
     /* now that everything is set up find the
-                scattering factor by interpolation in the table 
+                scattering factor by interpolation in the table
     */
 
     vz = seval( splinx, spliny[iz], splinb[iz],
@@ -2897,3 +2897,84 @@ double wavelength( double kev )
     return( w );
 
 }  /* end wavelength() */
+
+
+
+
+
+
+/*
+TD 04/2021
+*/
+void write_v(int Z, double *splinx, double *spliny,double *splinb,double *splinc,double *splind){
+  char outf[100];
+  sprintf(outf,"spline_%d.txt",Z);    //outfile name
+  FILE *fp=fopen(outf,"w");
+  const static int NRMAX= 100;       /* number of in look-up-table in vzatomLUT */
+  for (int i=0; i<NRMAX; i++){
+    fprintf(fp,"%g %g %g %g %g\n",splinx[i],spliny[i],splinb[i],splinc[i],splind[i]);
+  }
+  fclose(fp);
+  printf("successfully written to %s\n",outf);
+}
+
+double vzatomSpline( int Z ,double rsq)
+{
+    std::string stemp;
+    int i, iz;
+    double dlnr, vz, r;
+    const static double RMIN= 0.01;    /* r (in Ang) range of LUT for vzatomLUT() */
+    const static double RMAX= 5.0;
+    const static int NRMAX= 100;       /* number of in look-up-table in vzatomLUT */
+
+    /* spline interpolation coeff. */
+    static int splineInit=0, *nspline;
+    static double  *splinx, **spliny, **splinb, **splinc, **splind;
+
+    if( splineInit == 0 ) {
+       splinx =  (double*) malloc1D( NRMAX, sizeof( double ), "splinx" );
+       spliny = (double**) malloc2D( NZMAX, NRMAX, sizeof( double ), "spliny"  );
+       splinb = (double**) malloc2D( NZMAX, NRMAX, sizeof( double ), "splinb"  );
+       splinc = (double**) malloc2D( NZMAX, NRMAX, sizeof( double ), "splinc"  );
+       splind = (double**) malloc2D( NZMAX, NRMAX, sizeof( double ), "splind"  );
+
+        /*  generate a set of logarithmic r values */
+        dlnr = log(RMAX/RMIN)/(NRMAX-1);
+        for( i=0; i<NRMAX; i++)
+            splinx[i] = RMIN * exp( i * dlnr );
+        stemp= "fit from r= " + toString(splinx[0]) + " to r= " + toString(splinx[NRMAX-1]);
+        messageSL( stemp.c_str(), 0 );
+        for( i=0; i<NRMAX; i++)
+        splinx[i] = splinx[i] * splinx[i];   /* use r^2 not r for speed */
+
+        nspline = (int*) malloc1D( NZMAX, sizeof(int), "nspline" );
+        for( i=0; i<NZMAX; i++) nspline[i] = 0;
+        splineInit = 1;     /* remember that this has been done */
+    }
+
+    iz = Z - 1;  /* convert atomic number to array index */
+    if( (Z < 1) || ( Z > NZMAX) ) {
+        stemp= "Bad atomic number " + toString(Z) + " in vzatomLUT()";
+        messageSL( stemp.c_str(), 2 );
+        exit( 0 );
+    }
+
+    /* if this atomic number has not been called before
+                generate the spline coefficients */
+    if( nspline[iz] == 0 ) {
+
+    for( i=0; i<NRMAX; i++) {
+        r = sqrt( splinx[i] );
+        spliny[iz][i] = vzatom( Z, r );
+    }
+        nspline[iz] = NRMAX;
+        splinh( splinx, spliny[iz], splinb[iz],
+                  splinc[iz], splind[iz], NRMAX);
+        write_v(Z, splinx, spliny[iz], splinb[iz],splinc[iz], splind[iz]);
+    }
+    return 0.0;
+    /* now that everything is set up find the
+                scattering factor by interpolation in the table
+    */
+
+}  /* end () */

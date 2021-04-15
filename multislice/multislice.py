@@ -86,10 +86,10 @@ class Multislice:
     - `v`  : verbose - str or bool(all if True) or int(verbose level)
         - n(naming pattern),c(cell params),t(thickness),r(run cmd)
         - d(data),D(Decks),R(full run cmd)
-    - `opt` : d(save_deck), s(save_obj), r(do_run), p(do_pp)
-    - `fopt` : f(force rerun), w(warn rerun). If the simulation was previously completed :
-        - 'w' is on  (default case) : the user will be asked to confirm whether he wants to rerun it,
-        - 'w' is off (fopt='') : The simulation is not rerun
+    - `opt` : d(save_deck), s(save_obj), r(do_run),  f(force rerun),w(ask before running again), p(do_pp)
+    - `fopt` : If the simulation was previously completed :\n
+        - '' : The simulation will not be run again
+        - 'w' is on  (default case) : the user will be asked to confirm whether he wants to run it again
         - 'f' in fopt : The simulation is rerun
     - `ppopt` : u(update),w(wait), I(image) B(beam) P(pattern) A(azim_avg)
     - `ssh` : ip address or alias of the machine on which to run the job
@@ -100,17 +100,19 @@ class Multislice:
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,i_slice=100,
                 hk=[(0,0)],Nhk=0,hk_sym=0,prev=None,
-                opt='',fopt='w',ppopt='uwP',v=1,
+                opt='sr',fopt='',ppopt='uwP',v=1,
                 ssh=None,hostpath='',cluster=False,cif_file=None):
         #output options
         if isinstance(v,bool) : v=['','nctrdD'][v]
         if isinstance(v,int) : v=''.join(['nctr','DR','d'][:min(v,3)])
         save_deck,save_obj,do_run,do_pp = [s in opt for s in 'dsrp']
         save_deck |= do_run
+        if 'f' in opt: fopt += 'f'
+        if 'w' in opt: fopt += 'w'
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
 
         #attributes
-        self.version     = '1.4.0'
+        self.version     = '1.4.1'
         self.name        = dsp.basename(name)                       #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.cif_file    = self.get_cif_file(cif_file)              #;print(self.cif_file)
@@ -367,7 +369,7 @@ class Multislice:
 
 
 
-    def pattern(self,file='',Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],**kwargs):
+    def pattern(self,file='',Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
@@ -378,7 +380,8 @@ class Multislice:
         '''
         # if not exists(self._outf('patternnpy')):self.save_pattern()
         if not file : file = self._outf('patternnpy')
-        im = np.load(file) ;print(im.shape)
+        im = np.load(file)
+        if v>1:print('original image shape',im.shape)
         ax,by = self.cell_params[:2]
         Nh,Nk = self.repeat[:2];
         Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
@@ -436,8 +439,7 @@ class Multislice:
         t = np.linspace(0,2*np.pi/N,100)
         ct,st = np.cos(t),np.sin(t)
         plts = [[r*ct,r*st,'g--',''] for r in rings]
-        print('displaying pattern...')
-        print(h.shape,im0.shape)
+        if v:print('displaying pattern:',im0.shape)
         return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):

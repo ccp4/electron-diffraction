@@ -1,9 +1,10 @@
 #from utils import *
-import pickle5,os
+import pickle5,os,glob
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from utils import displayStandards as dsp
+from utils import glob_colors as colors
 from utils.glob_colors import*
 from scattering import scattering_factors as scat
 # import get_elec_atomic_factors,wavelength
@@ -54,6 +55,19 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
 #########################################################################
 #### def : DataFrame utilities
 #########################################################################
+def load(datpath,tail=''):
+    filename = datpath
+    pkls = glob.glob(datpath+'*.pkl')
+    filename = pkls[0]
+    if tail:
+        tail_files = [pkl for pkl in pkls if tail in pkl]
+        if tail_files:
+            filename=tail_files[0]
+        else:
+            print(colors.red+'warning: tail "%s" not found in %s' %(tail,datpath)+colors.black )
+    print(colors.green+'loading ' +colors.yellow+filename+colors.black )
+    return load_multi_obj(filename)
+
 def load_multi_obj(filename):
     '''load a saved Multislice object
     filename : pickle file (.pkl)  '''

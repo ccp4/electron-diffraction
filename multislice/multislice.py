@@ -538,6 +538,8 @@ class Multislice:
                 elif 'z=' == l1[:2] : state="%d%%" %int(100*float(l1[3:8])/self.thickness)
                 elif 'END' in l2 : state='done'
                 elif sum(['wall time' in l for l in lines]) : state='processing'
+                else:state='init'
+
             #print state info
             if v :
                 if state=='init': print(colors.green+"Initializing..."+colors.black)
@@ -636,7 +638,7 @@ class Multislice:
         job = "#!/bin/bash\n"
         if cluster:job += "#$ -j y\n#$ -cwd\n#$ -V -w e\n"
         job += '\ncd %s \n' %self.datpath
-        job += 'printf "%s" > %s \n' %(header,logfile) #overwrite logfile
+        job += 'printf "%s" > %s \n\n' %(header,logfile) #overwrite logfile
         if self.is_mulslice:
             for i in self.slices :
                 deck = self.outf['slice_deck%s' %i]
@@ -650,7 +652,7 @@ class Multislice:
         # beams = pp.import_beams('%s',%s);
         # np.save('%s',beams)
         # ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
-        job+='printf "\n\n\t\t POSTPROCESSING\n"  >> %s' %(logfile)
+        job+='printf "\n\tPOSTPROCESSING\n"  >> %s \n\n' %(logfile)
         pycode='''import multislice.postprocess as pp;import numpy as np;
         multi = pp.load_multi_obj('%s');
         multi.datpath='./';

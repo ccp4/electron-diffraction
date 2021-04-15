@@ -644,7 +644,7 @@ class Multislice:
 
         #### postprocess on remote machine
         pyexe='python3'
-        # if cluster:pyexe='/data3/opt/python/3.7.7/bin/python3'
+        if cluster:pyexe='/home/lii26466/anaconda3/bin/python3'
         # import numpy as np;
         # beams = pp.import_beams('%s',%s);
         # np.save('%s',beams)

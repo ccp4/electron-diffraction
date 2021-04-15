@@ -369,7 +369,7 @@ class Multislice:
 
 
 
-    def pattern(self,file='',Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,**kwargs):
+    def pattern(self,file='',Iopt='Incsl',out=0,tol=1e-6,qmax=None,cmap='binary',Nmax=None,gs=3,rings=[],v=1,**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
@@ -440,7 +440,8 @@ class Multislice:
         ct,st = np.cos(t),np.sin(t)
         plts = [[r*ct,r*st,'g--',''] for r in rings]
         if v:print('displaying pattern:',im0.shape)
-        return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],**kwargs)
+        return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],
+            cmap=cmap,pOpt='im',**kwargs)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities
@@ -534,8 +535,8 @@ class Multislice:
                 elif 'elapsed time' in l2 : state='done'
                 else : state='init'
             else:
-                if not sum(['Sorting' in l for l in lines]) : state='init'
-                elif 'z=' == l1[:2] : state="%d%%" %int(100*float(l1[3:8])/self.thickness)
+                # if not sum(['Sorting' in l for l in lines]) : state='init'
+                if 'z=' == l1[:2] : state="%d%%" %int(100*float(l1[3:8])/self.thickness)
                 elif 'END' in l2 : state='done'
                 elif sum(['wall time' in l for l in lines]) : state='processing'
                 else:state='init'
@@ -661,8 +662,8 @@ class Multislice:
         qx,qy,It1 = multi.pattern(Iopt='Ics',out=True,Nmax=260);
         np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])
-        job +='%s -c "%s" >>%s 2>&1 ' %(pyexe, pycode.replace('\n',''),logfile)
-        job+='END\n'
+        job +='%s -c "%s" >>%s 2>&1 \n' %(pyexe, pycode.replace('\n',''),logfile)
+        job+='printf "END" >>%s\n' %(logfile)
 
         #save job
         if not datpath:datpath=self.datpath

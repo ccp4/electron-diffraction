@@ -657,7 +657,7 @@ class Multislice:
         qx,qy,It1 = multi.pattern(Iopt='Ics',out=True,Nmax=260);
         np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])
-        job +='%s -c "%s"' %(pyexe, pycode.replace('\n',''))
+        job +='%s -c "%s" >>%s 2>&1 ' %(pyexe, pycode.replace('\n',''),logfile)
         job+='\n'
 
         #save job

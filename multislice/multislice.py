@@ -534,9 +534,10 @@ class Multislice:
                 elif 'elapsed time' in l2 : state='done'
                 else : state='init'
             else:
-                if 'z=' == l1[:2] : state="%d%%" %int(100*float(l1[3:8])/self.thickness)
-                elif 'wall time' in l2 : state='done'
-                else : state='init'
+                if not sum(['Sorting' in l for l in lines]) : state='init'
+                elif 'z=' == l1[:2] : state="%d%%" %int(100*float(l1[3:8])/self.thickness)
+                elif 'END' in l2 : state='done'
+                elif sum(['wall time' in l for l in lines]) : state='processing'
             #print state info
             if v :
                 if state=='init': print(colors.green+"Initializing..."+colors.black)
@@ -642,13 +643,14 @@ class Multislice:
                 job += 'cat %s | %s >> %s \n' %(deck,temsim+'atompot',logfile)
         job += 'cat %s | %s >> %s\n' %(simu_deck,temsim+prog,logfile)
 
-        #### postprocess on remote machine
+        #### postprocess
         pyexe='python3'
         if cluster:pyexe='/home/lii26466/anaconda3/bin/python3'
         # import numpy as np;
         # beams = pp.import_beams('%s',%s);
         # np.save('%s',beams)
         # ''' %(self._outf('beamstxt'),self.slice_thick,self._outf('beams'))
+        job+='printf "\n\n\t\t POSTPROCESSING\n"  >> %s' %(logfile)
         pycode='''import multislice.postprocess as pp;import numpy as np;
         multi = pp.load_multi_obj('%s');
         multi.datpath='./';
@@ -658,7 +660,7 @@ class Multislice:
         np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])
         job +='%s -c "%s" >>%s 2>&1 ' %(pyexe, pycode.replace('\n',''),logfile)
-        job+='\n'
+        job+='END\n'
 
         #save job
         if not datpath:datpath=self.datpath

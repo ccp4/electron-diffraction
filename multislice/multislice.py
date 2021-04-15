@@ -369,7 +369,8 @@ class Multislice:
 
 
 
-    def pattern(self,file='',Iopt='Incsl',out=0,tol=1e-6,qmax=None,cmap='binary',Nmax=None,gs=3,rings=[],v=1,**kwargs):
+    def pattern(self,file='',Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
+        cmap='binary',pOpt='im',**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
@@ -441,7 +442,7 @@ class Multislice:
         plts = [[r*ct,r*st,'g--',''] for r in rings]
         if v:print('displaying pattern:',im0.shape)
         return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],
-            cmap=cmap,pOpt='im',**kwargs)
+            cmap=cmap,pOpt=pOpt,**kwargs)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities

@@ -59,14 +59,17 @@ def load(datpath,tail=''):
     filename = datpath
     pkls = glob.glob(datpath+'*.pkl')
     filename = pkls[0]
-    if tail:
-        tail_files = [pkl for pkl in pkls if tail in pkl]
-        if tail_files:
-            filename=tail_files[0]
-        else:
-            print(colors.red+'warning: tail "%s" not found in %s' %(tail,datpath)+colors.black )
-    print(colors.green+'loading ' +colors.yellow+filename+colors.black )
-    return load_multi_obj(filename)
+    tails = ['_'.join(pkl.split('_')[1:-1]) for pkl in pkls]
+    file_idx = [i for i,t in enumerate(tails) if tail == t]
+    if file_idx:
+        if len(file_idx)>1:print(colors.red+'several matches for tail : ',file_dx+colors.black)
+        filename=pkls[file_idx[0]]
+        print(colors.green+'loading ' +colors.yellow+filename+colors.black )
+        return load_multi_obj(filename)
+    else:
+        print(colors.red+'warning: tail "%s" not found in %s' %(tail,datpath)+colors.black )
+        print(colors.green+'available tails:'+colors.yellow,tails,colors.black)
+
 
 def load_multi_obj(filename):
     '''load a saved Multislice object

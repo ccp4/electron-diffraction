@@ -61,7 +61,7 @@ path_hosts={
 class Multislice:
     ''' **DATA PARAMETERS :**\n
     - `name` : path to the simulation folder
-    - `tail` : trailing string in the naming convention of outputs
+    - `tail` : trailing string in the naming convention of outputs (tag is an alias as well)
         - name pattern = *name*\_*tail*\_*program_name*
     - `data` : data file names
         - if None and mulslice simu : all *[a-zA-Z].dat and stacked alphabetically
@@ -73,7 +73,7 @@ class Multislice:
     - `tilt` : 2-list - crystal tilt tx,ty (mrad)
     - `repeat` : 3-int-list - super cell size in the x,y,z directions
     - `NxNy` : 2-int-list or int : sampling in x and y (same sampling in x and y if only int provided)
-    - `slice_thick` : float - slice thickness (A)
+    - `slice_thick` : float - slice thickness (A) (`dz` can also be used as an alias)
     - `i_slice` : record intensity every i_slice
     - `hk` : list of tuple - beams to record as function of depth
     - `Nhk`: int - set hk on a grid of multiples of the supercell size. Prevails over hk argument if >0. default(0)
@@ -96,9 +96,9 @@ class Multislice:
     - `hostpath` : path to data on host
     - `cif_file` : name of .cif file corresponding to structure in path
     '''
-    def __init__(self,name,mulslice=False,tail='',data=None,
+    def __init__(self,name,mulslice=False,tail='',tag=None,data=None,
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
-                keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,i_slice=100,
+                keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,dz=None,i_slice=100,
                 hk=[(0,0)],Nhk=0,hk_sym=0,prev=None,
                 opt='sr',fopt='',ppopt='uwP',v=1,
                 ssh=None,hostpath='',cluster=False,cif_file=None):
@@ -112,7 +112,7 @@ class Multislice:
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
 
         #attributes
-        self.version     = '1.4.1'
+        self.version     = '1.4.2'
         self.name        = dsp.basename(name)                       #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.cif_file    = self.get_cif_file(cif_file)              #;print(self.cif_file)
@@ -121,7 +121,7 @@ class Multislice:
         self.TDS         = TDS
         self.T           = T
         self.n_TDS       = n_TDS
-        self.tail        = '_'+tail if tail else ''
+        self.tail        = self._set_tail(tail,tag)
         self.name        = self._set_name('n' in v)
         self.data        = self._get_datafiles(data)
         self.slices      = SLICES[:len(self.data)]
@@ -131,7 +131,7 @@ class Multislice:
         self.NxNy        = self._set_NxNy(NxNy)
         self.hk          = self._set_hk(hk,Nhk,hk_sym)
         self.cell_params = self._get_cell_params('c' in v)
-        self.slice_thick = self._set_slice_thick(slice_thick)
+        self.slice_thick = self._set_slice_thick(slice_thick,dz)
         self.i_slice     = i_slice
         self.thickness   = self._get_thickness('t' in v)
         self.decks       = {}
@@ -210,6 +210,7 @@ class Multislice:
         - ppopt:w(wait until done) u(update) d(display) for I(image), B(beam) P(pattern)     #f(force recalculate)
         - figpath : Directory to place the figures if saving with automatic naming (default datpath)
         '''
+        print(colors.blue+'...postprocessing...'+colors.black)
         if not figpath : figpath = self.datpath
         time.sleep(0.1)
         state = self.check_simu_state(ssh_alias=ssh_alias,hostpath=hostpath);print(state)
@@ -217,7 +218,6 @@ class Multislice:
             self.wait_simu(ssh_alias,10,hostpath)
             self.p.wait()
         # self.get_beams(iBs='a',bOpt='f')
-        print(colors.blue+'...postprocessing...'+colors.black)
         if ssh_alias and 'u' in ppopt:
             if 'I' in ppopt : self.ssh_get(ssh_alias,'image'     ,hostpath)
             if 'B' in ppopt : self.ssh_get(ssh_alias,'beams'     ,hostpath)
@@ -604,6 +604,11 @@ class Multislice:
                 cell_params = [ax,by,[cz]]
         if v : print('ax=%.3fA, by=%.3f, cz=' %(ax,by), cz)
         return cell_params
+
+    def _set_tag(self,tail,tag=None):
+        if isinstance(tag,str):tail=tag
+        tail = '_'+tail if tail else ''
+        return tail
     def _set_name(self,v=False):
         name = self.name+self.tail+['_autoslic','_mulslice'][self.is_mulslice]
         if v : print('Simu name pattern = '+name)
@@ -618,7 +623,8 @@ class Multislice:
             h,k = np.meshgrid(range(-sym*Nhk,Nhk),range(-sym*Nhk,Nhk))
             hk=[(Nh*h,Nk*k) for h,k in zip(h.flatten(),k.flatten())];#print(hk)
         return hk
-    def _set_slice_thick(self,slice_thick):
+    def _set_slice_thick(self,slice_thick,dz=None):
+        if dz:slice_thick=dz
         if self.is_mulslice : slice_thick = self.cell_params[2]
         return slice_thick
     def _get_thickness(self,v=True):

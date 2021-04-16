@@ -54,7 +54,7 @@ path_hosts={
     'tarik-CCP4':'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
     'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
     'badb'      :'/data3/lii26466/multislice/',
-    'badb.rc-harwell.ac.uk':'/data3/lii26466/multislice/',
+    'badb.rc-harwell.ac.uk' :'/data3/lii26466/multislice/',
 }
 
 
@@ -93,8 +93,10 @@ class Multislice:
         - 'f' in fopt : The simulation is rerun
     - `ppopt` : u(update),w(wait), I(image) B(beam) P(pattern) A(azim_avg)
     - `ssh` : ip address or alias of the machine on which to run the job
-    - `hostpath` : path to data on host
     - `cif_file` : name of .cif file corresponding to structure in path
+    ### OBSOLETE
+    - `hostpath` : path to data on host
+    - `cluster` : indicate if running on a cluster using qsub
     '''
     def __init__(self,name,mulslice=False,tail='',tag=None,data=None,
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
@@ -690,7 +692,7 @@ class Multislice:
         self.make_decks(save=True,datpath=datpath)
 
         #create directory on remote if does not exist
-        cmd = 'ssh %s "if [ ! -d %s ]; then mkdir %s;echo %s:%s created;fi"' %(ssh_alias,hostpath,hostpath,ssh_alias,hostpath)
+        cmd = 'ssh %s "if [ ! -d %s ]; then mkdir -p %s;echo %s:%s created;fi"' %(ssh_alias,hostpath,hostpath,ssh_alias,hostpath)
         print(colors.blue+check_output(cmd,shell=True).decode()+colors.black)
         cmd = 'ssh %s "if [ -f %s ]; then  echo 1;fi"' %(ssh_alias,hostpath+self.data[0])
         # dat_exist = 0
@@ -816,9 +818,11 @@ e-mail : tarik.drevon@stfc.ac.uk
 
     def _get_hostpath(self,ssh_alias,hostpath):
         if not hostpath :
-            hostpath = path_hosts[ssh_hosts[ssh_alias]]
-            simu_folder = self.datpath.split('/')[-2]
-            hostpath += simu_folder+'/'
+            local_hostpath  = path_hosts[socket.gethostname()]
+            remote_hostpath = path_hosts[ssh_hosts[ssh_alias]]
+            hostpath  = self.datpath.replace(local_hostpath,remote_hostpath)
+            # simu_folder = self.datpath.split('/')[-2]
+            # hostpath += simu_folder+'/'
             # hostpath = self.datpath.replace('ronan','tarik').replace('CCP4','git/ccp4')
         return hostpath
 

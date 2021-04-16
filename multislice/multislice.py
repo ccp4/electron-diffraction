@@ -605,7 +605,7 @@ class Multislice:
         if v : print('ax=%.3fA, by=%.3f, cz=' %(ax,by), cz)
         return cell_params
 
-    def _set_tag(self,tail,tag=None):
+    def _set_tail(self,tail,tag=None):
         if isinstance(tag,str):tail=tag
         tail = '_'+tail if tail else ''
         return tail

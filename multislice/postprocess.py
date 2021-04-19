@@ -1,4 +1,3 @@
-#from utils import *
 import pickle5,os,glob
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -55,6 +54,10 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
 #########################################################################
 #### def : DataFrame utilities
 #########################################################################
+def rock_load(datpath):
+    with open(datpath+'rock.pkl','rb') as f : rock = pickle5.load(f)
+    return rock
+
 def load(datpath,tail='',tag=None):
     if tag:tail=tag
     filename = datpath
@@ -84,20 +87,20 @@ def get_info(log_file):
     log_lines = log_lines[-2:]
     info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
     return np.array(info,dtype=float)
-
-def get_info_cpu(log_file,mulslice=False):
-    '''compute zmax,I,cpuTime and wallTime'''
-    with open(log_file,'r') as f : log_lines=f.readlines()
-    if mulslice:
-        log_lines = [log_lines[-6]] + log_lines[-2:]
-        info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
-        info = [log_lines[0].strip().split(',')[0].replace('slice','')]+info #zmax
-    else:
-        zl = [i for i,l in enumerate(lines) if 'z=' in l ][-1]
-        wl = [i for i,l in enumerate(lines) if 'wall time' in l ][0]
-        log_lines = np.array(log_lines)[[zl-1,zl]+[wl-1,wl]]
-        info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
-    return np.array(info,dtype=float)
+#
+# def get_info_cpu(log_file,mulslice=False):
+#     '''compute zmax,I,cpuTime and wallTime'''
+#     with open(log_file,'r') as f : log_lines=f.readlines()
+#     if mulslice:
+#         log_lines = [log_lines[-6]] + log_lines[-2:]
+#         info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
+#         info = [log_lines[0].strip().split(',')[0].replace('slice','')]+info #zmax
+#     else:
+#         zl = [i for i,l in enumerate(lines) if 'z=' in l ][-1]
+#         wl = [i for i,l in enumerate(lines) if 'wall time' in l ][0]
+#         log_lines = np.array(log_lines)[[zl-1,zl]+[wl-1,wl]]
+#         info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
+#     return np.array(info,dtype=float)
 
 def update_df_info(df_path,hostpath=None,files=[]):
     df = pd.read_pickle(df_path)
@@ -107,10 +110,10 @@ def update_df_info(df_path,hostpath=None,files=[]):
         ssh_host = df.loc[name].host
         state    = multi.check_simu_state(ssh_alias=ssh_host,v=0,hostpath=hostpath)
         df.loc[name]['state'] = state
-        info = get_info(multi._outf('log'))
-        df.loc[name][info_cols[:2]] = info
+        info = multi.log_info(v=0)
+        df.loc[name][info_cols[:2]] = info[2:]
         if state=='done':
-            info = get_info_cpu(multi._outf('log'),mulslice=multi.is_mulslice)
+            info = multi.log_info(v=0)#get_info_cpu(multi._outf('log'),mulslice=multi.is_mulslice)
             df.loc[name][info_cols] = info
             for file in files:multi.ssh_get(ssh_host,file)
     df.to_pickle(df_path);

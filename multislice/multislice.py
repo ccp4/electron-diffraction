@@ -184,14 +184,16 @@ class Multislice:
         if self.check_simu_state(v=0,ssh_alias='') == 'done' :
             if v>0 : print(colors.red+"Simulation already performed in the past."+colors.black)
             if 'f' in fopt :
-                msg='Force re-running.'
+                msg='Force re-running. Deleting logfile'
+                p = Popen('if [ -f %s ];then rm %s;fi' %(self._outf('log'),self._outf('log')), shell=True,stderr=PIPE,stdout=PIPE)
+                p.wait();p.communicate()
             else :
                 if 'w' in fopt :
                     run = input(colors.red+"Re-run?(y/n) : "+colors.black)=='y'
                     msg = 're-running'
                 else :
                     run,msg = False, 'not running'
-            if v>1 : print(colors.red+msg+colors.black)
+            if v : print(colors.red+msg+colors.black)
         p = None
         if run:
             if ssh_alias :
@@ -388,6 +390,7 @@ class Multislice:
         ax,by = self.cell_params[:2]
         Nh,Nk = self.repeat[:2];
         Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
+        NMAX = 512
         if Nmax : Nmax = min(Nmax,Nx,Ny)
         # if 'I' in Iopt :
             # real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
@@ -406,8 +409,8 @@ class Multislice:
             h,k = np.meshgrid(np.arange(Nx),np.arange(Ny))
             r = np.sqrt(h**2+k**2)
             Nmax = ceil(r[idx].max()); #print('Pattern Nmax=%d > %E ' %(Nmax,tol))
-            Nmax = min(Nmax,256)#;print(Nx,Ny,Nmax)
-        if not Nmax : Nmax = min(256,Nx,Ny)
+            Nmax = min(Nmax,NMAX)#;print(Nx,Ny,Nmax)
+        if not Nmax : Nmax = min(NMAX,Nx,Ny)
 
         if 's' in Iopt : im = np.fft.fftshift(im)   #;print('fftshift')
 
@@ -516,7 +519,7 @@ class Multislice:
         else:
             zl = [i for i,l in enumerate(lines) if 'z=' in l ][-1]
             wl = [i for i,l in enumerate(lines) if 'wall time' in l ][0]
-            log_lines = np.array(lines)[[zl-1,zl]+[wl-1,wl]]
+            log_lines = np.array(lines)[[zl,zl+1]+[wl-1,wl]]
             info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
         info = np.array(info,dtype=float)
         if v:
@@ -848,9 +851,83 @@ e-mail : tarik.drevon@stfc.ac.uk
 #########################################################################
 ##### utilities
 #########################################################################
+def get_tilts(tx=np.arange(0,10,0.05),ty=0):
+    def convert_tilts(tilts,ntilts):
+        if isinstance(tilts,float) or isinstance(tilts,int):
+            tilts = [tilts]*ntilts
+        return np.deg2rad(tilts)*1000
+
+    if isinstance(tx,list) : tx=np.array(tx)
+    if isinstance(ty,list) : ty=np.array(ty)
+    nts = 0
+    if isinstance(tx,np.ndarray):
+        nts=tx.size
+    if isinstance(ty,np.ndarray):
+        if nts:
+            if not nts==ty.size:
+                raise Exception('tx and ty have different sizes')
+        nts = ty.size
+    if not nts:
+        raise Exception('at list one array of tilts must be provided ')
+    txs = convert_tilts(tx,nts)
+    tys = convert_tilts(ty,nts)
+    tilts = [[tx,ty] for tx,ty in zip(txs,tys)]
+    return tilts
+
+class Rocking:
+    def __init__(self,path,tx=np.arange(0,10,0.05),ty=0,tag='',**kwargs):
+        ''' simulate rocking curve
+        - tx : tilt parameters around x(degrees)
+            - float - constant value
+            - list or np.ndarray : actual list of tilts
+        - ty : tilt parameters around y(same behaviour as tx)
+        - tag : tag will then be 'tag_tilt<nb>'
+        '''
+        self.path=path
+        self.df_path = path+'tilts.pkl'
+        self.tx,self.ty = tx,ty
+        self.tilts = get_tilts(tx,ty)
+        self.df = sweep_var(path,param='tilt',vals=self.tilts,tail=tag,df='tilts.pkl',
+            **kwargs)
+        self.save(v=1)
+
+    def save(self,v=0):
+        '''save this object'''
+        file = self.path+'rock.pkl'
+        with open(self.path+'rock.pkl','wb') as out :
+            pickle.dump(self, out, pickle.HIGHEST_PROTOCOL)
+        if v:print(colors.green+"object saved\n"+colors.yellow+file+colors.black)
+
+    def load(self,i):
+        return pp.load(self.path+self.df.index[i])
+
+    def update(self,files=[],v=1):
+        df = pp.update_df_info(self.df_path,files)
+        if v:print(df[['tilt','state','zmax(A)','Inorm']])
+        return df
+
+    def plot_rocking(self,iBs,iZs=-1):
+        self.update(v=0);
+        ts = self.tx
+        multi = pp.load_multi_obj(self.path+self.df.index[0])
+        # hk,z,re,im,Ib = multi.get_beams(iBs)
+        hk,z,re,im,Ib = multi.beam_vs_thickness(bOpt='o',iBs=iBs)
+        if isinstance(iZs,int):iZs=[iZs]
+        nbs = np.array(hk).size
+        nzs = z[iZs].size
+        I = np.zeros((len(self.tilts),nbs,nzs))
+        for i,pkl in enumerate(self.df.index):
+            multi = pp.load_multi_obj(self.path+pkl)
+            hk,z,re,im,Ib = multi.beam_vs_thickness(bOpt='o',iBs=iBs)           #;print(Ib.shape)
+            I[i] = np.array(Ib[:,iZs])
+        cs = dsp.getCs('jet',nbs)
+
+        plots = [[ts,I[:,i,-1],[cs[i],'o-'], '%s' %hk[i]] for i,iB in enumerate(iBs)]
+        dsp.stddisp(plots,labs=[r'$\theta$(deg)','$I$'])
+
+
 def sweep_var(name,param,vals,df=1,ssh='',tail='',do_prev=0,**kwargs):
-    '''
-    runs a set of similar simulations with one varying parameter
+    '''runs a set of similar simulations with one varying parameter
     - name          : path to the simulation folder
     - param,vals    : the parameters and values to sweep
     - df            :
@@ -878,7 +955,7 @@ def sweep_var(name,param,vals,df=1,ssh='',tail='',do_prev=0,**kwargs):
     if save :
         df.to_pickle(name+dfname)
         print(colors.green+'Dataframe saved : '+colors.yellow+name+dfname+colors.black)
-
+    return df
 
 
 class Pattern_viewer():

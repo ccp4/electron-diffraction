@@ -507,6 +507,22 @@ class Multislice:
         except FileNotFoundError:
             print(colors.red+'logfile not created yet, run a simu first'+colors.black)
             return 0
+    def log_info(self,v=1):
+        with open(self._outf('log'),'r') as f : lines=f.readlines()
+        if self.is_mulslice:
+            log_lines = [log_lines[-6]] + log_lines[-2:]
+            info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
+            info = [log_lines[0].strip().split(',')[0].replace('slice','')]+info #zmax
+        else:
+            zl = [i for i,l in enumerate(lines) if 'z=' in l ][-1]
+            wl = [i for i,l in enumerate(lines) if 'wall time' in l ][0]
+            log_lines = np.array(lines)[[zl-1,zl]+[wl-1,wl]]
+            info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
+        info = np.array(info,dtype=float)
+        if v:
+            # print(info,log_lines)
+            print('Imax=%.4f,zmax=%.1f,cpuT=%.1f,wallT=%.1f' %tuple(info))
+        return info
 
     def wait_simu(self,ssh_alias='',t=1,hostpath=''):
         state = 0
@@ -875,7 +891,7 @@ class Pattern_viewer():
         self.multi = multi
         self.figpath = figpath
         self.patterns  = np.sort(patterns);#print(patterns)
-        self.args=args
+        self.args = args
         self.nfigs = self.patterns.size
         self.fig,self.ax = dsp.stddisp()
         cid = self.fig.canvas.mpl_connect('key_press_event', self)

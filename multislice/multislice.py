@@ -875,7 +875,7 @@ def get_tilts(tx=np.arange(0,10,0.05),ty=0):
     return tilts
 
 class Rocking:
-    def __init__(self,path,tx=np.arange(0,10,0.05),ty=0,tag='',**kwargs):
+    def __init__(self,name,tx=np.arange(0,10,0.05),ty=0,tag='',**kwargs):
         ''' simulate rocking curve
         - tx : tilt parameters around x(degrees)
             - float - constant value
@@ -883,11 +883,11 @@ class Rocking:
         - ty : tilt parameters around y(same behaviour as tx)
         - tag : tag will then be 'tag_tilt<nb>'
         '''
-        self.path=path
-        self.df_path = path+'tilts.pkl'
+        self.path=name
+        self.df_path = self.path+'tilts.pkl'
         self.tx,self.ty = tx,ty
         self.tilts = get_tilts(tx,ty)
-        self.df = sweep_var(path,param='tilt',vals=self.tilts,tail=tag,df='tilts.pkl',
+        self.df = sweep_var(name,param='tilt',vals=self.tilts,tail=tag,df='tilts.pkl',
             **kwargs)
         self.save(v=1)
 

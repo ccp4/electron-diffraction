@@ -55,7 +55,8 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
 #########################################################################
 #### def : DataFrame utilities
 #########################################################################
-def load(datpath,tail=''):
+def load(datpath,tail='',tag=None):
+    if tag:tail=tag
     filename = datpath
     pkls = glob.glob(datpath+'*.pkl')
     filename = pkls[0]

@@ -909,9 +909,12 @@ class Rocking:
 
     def update(self,files=[],v=1):
         df = pp.update_df_info(self.df_path,files)
-        if v:print(df[['tilt','state','zmax(A)','Inorm']])
+        if v:
+            np.set_printoptions(precision=3)
+            pd.set_option("precision", 2)
+            print(df[['tilt','state','zmax(A)','Inorm']])
 
-    def plot_rocking(self,iBs,iZs=-1,zs=None):
+    def plot_rocking(self,iBs,iZs=-1,zs=None,**kwargs):
         '''plot rocking curve for beams iBs at thickness zs
         - iBs : list - beam indices [1,2,5] or ids [(1,0),(1,1)]
         - iZs : int or list - slice indices (last slice by default )
@@ -931,7 +934,7 @@ class Rocking:
         for iz,iZ in enumerate(z[iZs]):
             legElt.update({'$z=%d A$' %(iZ):['k',ms[iz]+'-']})
             plts += [[ts,I[:,i,iz],[cs[i],ms[iz]+'-'],''] for i,iB in enumerate(iBs)]
-        dsp.stddisp(plts,labs=[r'$\theta$(deg)','$I$'],legElt=legElt)
+        dsp.stddisp(plts,labs=[r'$\theta$(deg)','$I$'],legElt=legElt,**kwargs)
 
     #############################################################################
     #### misc

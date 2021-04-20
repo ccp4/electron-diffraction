@@ -50,4 +50,4 @@ if __name__ == '__main__':
     #     opt = 'sr')
     rock = pp.rock_load(name,'tx')
     rock.update(v=1);
-    rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=slice(10,None,10))
+    rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=None,zs=[5,15,38])

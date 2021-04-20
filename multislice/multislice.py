@@ -911,28 +911,43 @@ class Rocking:
         df = pp.update_df_info(self.df_path,files)
         if v:print(df[['tilt','state','zmax(A)','Inorm']])
 
-    def plot_rocking(self,iBs,iZs=-1):
-        self.update(v=0);
-        ts = self.tx
-        multi = pp.load_multi_obj(self.path+self.df.index[0])
-        hk,z,re,im,Ib = multi.beam_vs_thickness(bOpt='o',iBs=iBs)
-        z0 = isinstance(iZs,int)
-        if z0:iZs=[iZs]
-        nbs = np.array(hk).size
-        nzs = z[iZs].size
+    def plot_rocking(self,iBs,iZs=-1,zs=None):
+        '''plot rocking curve for beams iBs at thickness zs
+        - iBs : list - beam indices [1,2,5] or ids [(1,0),(1,1)]
+        - iZs : int or list - slice indices (last slice by default )
+        - zs : float or list - selected thickness (in A) to show(takes preference over iZs if set)
+        '''
+        nbs,nzs,iZs = self._init_rocking(iBs,iZs,zs)
+
         I = np.zeros((len(self.tilts),nbs,nzs))
         for i,pkl in enumerate(self.df.index):
             multi = pp.load_multi_obj(self.path+pkl)
             hk,z,re,im,Ib = multi.beam_vs_thickness(bOpt='o',iBs=iBs)           #;print(Ib.shape)
             I[i] = np.array(Ib[:,iZs])
 
-
+        ts = self.tx
         cs,ms,plts = dsp.getCs('jet',nbs), dsp.markers,[]
         legElt = { '%s' %hk[i]:[cs[i],'-'] for i,iB in enumerate(iBs)}
         for iz,iZ in enumerate(z[iZs]):
-            legElt.update({'$z=%d nm$' %(iZ/10):['k',ms[iz]+'-']})
+            legElt.update({'$z=%d A$' %(iZ):['k',ms[iz]+'-']})
             plts += [[ts,I[:,i,iz],[cs[i],ms[iz]+'-'],''] for i,iB in enumerate(iBs)]
         dsp.stddisp(plts,labs=[r'$\theta$(deg)','$I$'],legElt=legElt)
+
+    #############################################################################
+    #### misc
+    #############################################################################
+    def _init_rocking(self,iBs,iZs,zs):
+        self.update(v=0)
+        multi = pp.load_multi_obj(self.path+self.df.index[0])
+        hk,z,re,im,Ib = multi.beam_vs_thickness(bOpt='o',iBs=iBs)
+        if isinstance(zs,float) or isinstance(zs,float):zs = [zs]
+        if isinstance(zs,list) or isinstance(zs,np.ndarray):
+            iZs = [np.argmin(abs(z-z0)) for z0 in zs]
+        if isinstance(iZs,int):iZs=[iZs]
+        nbs = np.array(hk).size
+        nzs = z[iZs].size
+        return nbs,nzs,iZs
+
 
 
 def sweep_var(name,param,vals,df=1,ssh='',tail='',do_prev=0,**kwargs):

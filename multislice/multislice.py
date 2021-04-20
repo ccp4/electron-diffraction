@@ -30,9 +30,9 @@ from string import ascii_letters
 # from utils.glob_colors import*
 from crystals import Crystal
 import utils.glob_colors as colors
-import utils.displayStandards as dsp
+import utils.displayStandards as dsp                        ;imp.reload(dsp)
 from scattering.structure_factor import structure_factor3D
-from . import postprocess as pp;imp.reload(pp)
+from . import postprocess as pp                             ;imp.reload(pp)
 
 ssh_hosts = {
     'local_london':'BG-X550',
@@ -883,8 +883,9 @@ class Rocking:
         - ty : tilt parameters around y(same behaviour as tx)
         - tag : tag will then be 'tag_tilt<nb>'
         '''
-        self.path=name
-        self.df_path = self.path+'tilts.pkl'
+        self.path = name
+        self.tag  = tag
+        self.df_path = self.path+self.tag+'tilts.pkl'
         self.tx,self.ty = tx,ty
         self.tilts = get_tilts(tx,ty)
         self.df = sweep_var(name,param='tilt',vals=self.tilts,tail=tag,df='tilts.pkl',
@@ -893,26 +894,29 @@ class Rocking:
 
     def save(self,v=0):
         '''save this object'''
-        file = self.path+'rock.pkl'
-        with open(self.path+'rock.pkl','wb') as out :
+        file = self.path+self.tag+'rock.pkl'
+        with open(file,'wb') as out :
             pickle.dump(self, out, pickle.HIGHEST_PROTOCOL)
         if v:print(colors.green+"object saved\n"+colors.yellow+file+colors.black)
 
+
+    #############################################################################
+    # utilities
+    #############################################################################
     def load(self,i):
-        return pp.load(self.path+self.df.index[i])
+        return pp.load_multi_obj(self.path+self.df.index[i])
 
     def update(self,files=[],v=1):
         df = pp.update_df_info(self.df_path,files)
         if v:print(df[['tilt','state','zmax(A)','Inorm']])
-        return df
 
     def plot_rocking(self,iBs,iZs=-1):
         self.update(v=0);
         ts = self.tx
         multi = pp.load_multi_obj(self.path+self.df.index[0])
-        # hk,z,re,im,Ib = multi.get_beams(iBs)
         hk,z,re,im,Ib = multi.beam_vs_thickness(bOpt='o',iBs=iBs)
-        if isinstance(iZs,int):iZs=[iZs]
+        z0 = isinstance(iZs,int)
+        if z0:iZs=[iZs]
         nbs = np.array(hk).size
         nzs = z[iZs].size
         I = np.zeros((len(self.tilts),nbs,nzs))
@@ -920,10 +924,15 @@ class Rocking:
             multi = pp.load_multi_obj(self.path+pkl)
             hk,z,re,im,Ib = multi.beam_vs_thickness(bOpt='o',iBs=iBs)           #;print(Ib.shape)
             I[i] = np.array(Ib[:,iZs])
-        cs = dsp.getCs('jet',nbs)
 
-        plots = [[ts,I[:,i,-1],[cs[i],'o-'], '%s' %hk[i]] for i,iB in enumerate(iBs)]
-        dsp.stddisp(plots,labs=[r'$\theta$(deg)','$I$'])
+
+        cs,ms,plts = dsp.getCs('jet',nbs), dsp.markers,[]
+        legElt = { '%s' %hk[i]:[cs[i],'-'] for i,iB in enumerate(iBs)}
+        print(z[iZs])
+        for iz,iZ in enumerate(z[iZs]):
+            legElt.update({'$z=%d nm$' %(iZ/10):['k',ms[iz]+'-']})
+            plts += [[ts,I[:,i,iz],[cs[i],ms[iz]+'-'],''] for i,iB in enumerate(iBs)]
+        dsp.stddisp(plts,labs=[r'$\theta$(deg)','$I$'],legElt=legElt)
 
 
 def sweep_var(name,param,vals,df=1,ssh='',tail='',do_prev=0,**kwargs):
@@ -956,79 +965,3 @@ def sweep_var(name,param,vals,df=1,ssh='',tail='',do_prev=0,**kwargs):
         df.to_pickle(name+dfname)
         print(colors.green+'Dataframe saved : '+colors.yellow+name+dfname+colors.black)
     return df
-
-
-class Pattern_viewer():
-    def __init__(self,multi,patterns,figpath,i=0,**args):
-        ''' View cbf files
-        - exp_path : path to images
-        - figpath : place to save the figures
-        - i : starting image
-        '''
-        self.multi = multi
-        self.figpath = figpath
-        self.patterns  = np.sort(patterns);#print(patterns)
-        self.args = args
-        self.nfigs = self.patterns.size
-        self.fig,self.ax = dsp.stddisp()
-        cid = self.fig.canvas.mpl_connect('key_press_event', self)
-        self.i=i     #starting image
-        self.inc=1   #increment(use 'p' or 'm' to change)
-        self.mode=1
-        rc('text', usetex=False)
-        self.update()
-
-    def update(self):
-        self.ax.cla()
-        print("%d/%d" %(self.i,self.nfigs))
-        self.multi.pattern(fig=self.fig,ax=self.ax,file=self.patterns[self.i],
-            title='pattern %d' %self.i,**self.args,opt='')
-        self.fig.canvas.draw()
-
-    def __call__(self, event):
-        # print(event.key)
-        if event.key in ['up','right']:
-            self.i=min(self.i+self.inc,self.nfigs-1)
-            self.mode=1
-            self.update()
-        elif event.key in ['left','down']:
-            self.i=max(0,self.i-self.inc)
-            self.mode=-1
-            self.update()
-
-        if event.key=='s':
-            dsp.saveFig(self.figpath+'pattern%s.png' %str(self.i).zfill(3),ax=self.ax)
-
-        if event.key=='p':
-            self.inc=min(self.inc+1,100);print(self.inc)
-        if event.key=='m':
-            self.inc=max(1,self.inc-1);print(self.inc)
-
-# def coords2grid(coords,cz):
-#     '''arrange coordinates so they fit on periodic grid
-#     Rotates the crystal around z so x and y are positive
-#     - z < 0 => z_cz
-#     '''
-#     x,y,z = coords.T
-#     Rz = lambda t : np.array([cos(t),sint(t),0],[-sint(t),cos(t),0],[0,0,1]])
-#     if x[0]<0 & y[0]>0 : coords = Rz(-pi/2).dot(coords.T).T
-#     if x[0]>0 & y[0]<0 : coords = Rz(pi/2).dot(coords.T).T
-#     if x[0]<0 & y[0]<0 : coords = Rz(pi).dot(coords.T).T
-#     idz = coords[:,2]<0
-#     coords[idz] = coords[idz]+cz
-#     return coords
-########################################################################
-#def : test
-########################################################################
-def test_base(name,**kwargs):
-    multi=Multislice(name,keV=200,
-        repeat=[2,2,5],NxNy=128,slice_thick=1.3575,Nhk=3,
-        **kwargs)
-    return multi
-
-if __name__ == '__main__':
-    name  = 'dat/test/'
-    #multi = test_base(name,mulslice=False,opt='dsrp',fopt='',ppopt='I',ssh='',v=1)
-    #multi = test_base(name,mulslice=False,fopt='f',opt='dsr',ppopt='',ssh='tarik-CCP4home',v='nctrdDR')
-    # multi = test_base(name,mulslice=True,ssh=None,fopt='f',opt='dsr',v='nctrdDR')
-    # multi = test_base(name,tail='TDS',mulslice=False,TDS=True,T=300,fopt='f',ppopt='wP',opt='dsrp',v='nctrdDR')

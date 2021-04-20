@@ -239,6 +239,7 @@ def show_grid3(xyz_file,ms=1,**kwargs):
 ################################################################################
 ################################################################################
 class Image_viewer:
+    '''a copy of dials.image_viewer'''
     def __init__(self,file,sym=1,pad=None):
         basename      = file.split('_')
         self.im       = int(basename[-1].replace('.cbf',''))
@@ -313,6 +314,7 @@ class Image_viewer:
 
 #######
 class Viewer_cbf:
+    '''similar to adxv. Works with raw cbf'''
     def __init__(self,exp_path,figpath,i=0):
         ''' View cbf files
         - exp_path : path to images
@@ -363,6 +365,52 @@ class Viewer_cbf:
 
         if event.key=='s':
             dsp.saveFig(self.figpath+'exp_%s.png' %str(self.i).zfill(3),ax=self.ax)
+
+        if event.key=='p':
+            self.inc=min(self.inc+1,100);print(self.inc)
+        if event.key=='m':
+            self.inc=max(1,self.inc-1);print(self.inc)
+
+class Multi_Pattern_viewer():
+    def __init__(self,multi,patterns,figpath,i=0,**args):
+        ''' View cbf files
+        - exp_path : path to images
+        - figpath : place to save the figures
+        - i : starting image
+        '''
+        self.multi = multi
+        self.figpath = figpath
+        self.patterns  = np.sort(patterns);#print(patterns)
+        self.args = args
+        self.nfigs = self.patterns.size
+        self.fig,self.ax = dsp.stddisp()
+        cid = self.fig.canvas.mpl_connect('key_press_event', self)
+        self.i=i     #starting image
+        self.inc=1   #increment(use 'p' or 'm' to change)
+        self.mode=1
+        rc('text', usetex=False)
+        self.update()
+
+    def update(self):
+        self.ax.cla()
+        print("%d/%d" %(self.i,self.nfigs))
+        self.multi.pattern(fig=self.fig,ax=self.ax,file=self.patterns[self.i],
+            title='pattern %d' %self.i,**self.args,opt='')
+        self.fig.canvas.draw()
+
+    def __call__(self, event):
+        # print(event.key)
+        if event.key in ['up','right']:
+            self.i=min(self.i+self.inc,self.nfigs-1)
+            self.mode=1
+            self.update()
+        elif event.key in ['left','down']:
+            self.i=max(0,self.i-self.inc)
+            self.mode=-1
+            self.update()
+
+        if event.key=='s':
+            dsp.saveFig(self.figpath+'pattern%s.png' %str(self.i).zfill(3),ax=self.ax)
 
         if event.key=='p':
             self.inc=min(self.inc+1,100);print(self.inc)

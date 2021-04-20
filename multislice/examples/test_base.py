@@ -45,9 +45,9 @@ if __name__ == '__main__':
     # show_postprocess(tag,'')
 
     # test_get_tilts()
-    # rock = mupy.Rocking(name,tx=np.arange(3)*0.05,ty=0,tag='tx_',
-    #     NxNy=256,repeat=[1,1,10],Nhk=3,
-    #     opt = 'sr')
+    rock = mupy.Rocking(name,tx=np.arange(3)*0.05,ty=0,tag='tx_',
+        NxNy=256,repeat=[1,1,10],Nhk=3,
+        opt = 'sr')
     rock = pp.rock_load(name)
     rock.update(v=1);
-    rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=-1)
+    rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=slice(10,None,10))

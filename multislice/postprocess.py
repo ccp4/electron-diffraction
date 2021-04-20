@@ -54,8 +54,8 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
 #########################################################################
 #### def : DataFrame utilities
 #########################################################################
-def rock_load(datpath):
-    with open(datpath+'rock.pkl','rb') as f : rock = pickle5.load(f)
+def rock_load(datpath,tag=''):
+    with open(datpath+tag+'rock.pkl','rb') as f : rock = pickle5.load(f)
     return rock
 
 def load(datpath,tail='',tag=None):
@@ -87,20 +87,6 @@ def get_info(log_file):
     log_lines = log_lines[-2:]
     info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
     return np.array(info,dtype=float)
-#
-# def get_info_cpu(log_file,mulslice=False):
-#     '''compute zmax,I,cpuTime and wallTime'''
-#     with open(log_file,'r') as f : log_lines=f.readlines()
-#     if mulslice:
-#         log_lines = [log_lines[-6]] + log_lines[-2:]
-#         info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
-#         info = [log_lines[0].strip().split(',')[0].replace('slice','')]+info #zmax
-#     else:
-#         zl = [i for i,l in enumerate(lines) if 'z=' in l ][-1]
-#         wl = [i for i,l in enumerate(lines) if 'wall time' in l ][0]
-#         log_lines = np.array(log_lines)[[zl-1,zl]+[wl-1,wl]]
-#         info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
-#     return np.array(info,dtype=float)
 
 def update_df_info(df_path,hostpath=None,files=[]):
     df = pd.read_pickle(df_path)

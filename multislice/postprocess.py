@@ -55,6 +55,7 @@ def import_beams(file,slice_thick=1,iBs=[],tol=1e-2,Obeam=False,pImax=False):
 #### def : DataFrame utilities
 #########################################################################
 def rock_load(datpath,tag=''):
+    if tag:tag+='_'
     with open(datpath+tag+'rock.pkl','rb') as f : rock = pickle5.load(f)
     return rock
 

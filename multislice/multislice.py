@@ -881,14 +881,15 @@ class Rocking:
             - float - constant value
             - list or np.ndarray : actual list of tilts
         - ty : tilt parameters around y(same behaviour as tx)
-        - tag : tag will then be 'tag_tilt<nb>'
+        - tag : tag will then be '<tag>_tilt<nb>'
         '''
+        if tag:tag+='_'
         self.path = name
         self.tag  = tag
         self.df_path = self.path+self.tag+'tilts.pkl'
         self.tx,self.ty = tx,ty
         self.tilts = get_tilts(tx,ty)
-        self.df = sweep_var(name,param='tilt',vals=self.tilts,tail=tag,df='tilts.pkl',
+        self.df = sweep_var(name,param='tilt',vals=self.tilts,tail=self.tag,df=self.tag+'tilts.pkl',
             **kwargs)
         self.save(v=1)
 
@@ -928,7 +929,6 @@ class Rocking:
 
         cs,ms,plts = dsp.getCs('jet',nbs), dsp.markers,[]
         legElt = { '%s' %hk[i]:[cs[i],'-'] for i,iB in enumerate(iBs)}
-        print(z[iZs])
         for iz,iZ in enumerate(z[iZs]):
             legElt.update({'$z=%d nm$' %(iZ/10):['k',ms[iz]+'-']})
             plts += [[ts,I[:,i,iz],[cs[i],ms[iz]+'-'],''] for i,iB in enumerate(iBs)]

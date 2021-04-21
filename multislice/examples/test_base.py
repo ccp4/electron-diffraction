@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     xyz = name+'Si001.xyz'
     mut.gen_xyz('Si',n=[0,0,1],theta=0,rep=[1,1,1],pad=0,xyz=xyz)
-    mut.show_grid(xyz,opts='xy')
+    # mut.show_grid(xyz,opts=['xy','xz'])
     # mut.show_grid(xyz,opts='yz')
     mut.show_grid(xyz,opts='xz')#,xylims=[])
     # mut.show_grid3(xyz)

@@ -224,7 +224,13 @@ def show_grid(file,opts='',**kwargs):
     with open(file,'r') as f:l=list(map(lambda s:s.strip().split(' '),f.readlines()))
     lat_params = np.array(l[1],dtype=float)
     pattern   = np.array(l[2:-1],dtype=float)
-    plot_grid(pattern,lat_params,opts,**kwargs)
+    if isinstance(opts,list):
+        fig,axs = dsp.create_fig(figsize='21',rc=[1,len(opts)])
+        for axi,opts_i in zip(axs,opts):
+            plot_grid(pattern,lat_params,opts_i,ax=axi,setPos=0,opt='',**kwargs)
+        fig.show()
+    else:
+        plot_grid(pattern,lat_params,opts,**kwargs)
 
 def plot_grid(pattern,lat_params,opts,**kwargs):
     #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters

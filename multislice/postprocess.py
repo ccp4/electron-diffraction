@@ -59,7 +59,7 @@ def rock_load(datpath,tag=''):
     with open(datpath+tag+'rock.pkl','rb') as f : rock = pickle5.load(f)
     return rock
 
-def load(datpath,tail='',tag=None):
+def load(datpath,tail='',tag=None,v=0):
     if tag:tail=tag
     filename = datpath
     pkls = glob.glob(datpath+'*.pkl')
@@ -70,11 +70,13 @@ def load(datpath,tail='',tag=None):
         if len(file_idx)>1:print(colors.red+'several matches for tail : ',file_dx+colors.black)
         filename=pkls[file_idx[0]]
         print(colors.green+'loading ' +colors.yellow+filename+colors.black )
-        return load_multi_obj(filename)
+        multi = load_multi_obj(filename)
+        if v : print('simu status : ',multi.check_simu_state())
+        if v>1 : multi.log_info(v=1);
+        return multi
     else:
         print(colors.red+'warning: tail "%s" not found in %s' %(tail,datpath)+colors.black )
         print(colors.green+'available tails:'+colors.yellow,tails,colors.black)
-
 
 def load_multi_obj(filename):
     '''load a saved Multislice object

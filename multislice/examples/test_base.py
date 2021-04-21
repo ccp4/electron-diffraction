@@ -53,9 +53,10 @@ if __name__ == '__main__':
     # rock.update(v=1);
     # rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=None,zs=[5,15,38])
 
-    xyz = name+'Si001.xyz'
-    mut.gen_xyz('Si',n=[0,0,1],theta=0,rep=[1,1,1],pad=0,xyz=xyz)
+    # xyz = name+'Si001.xyz'
+    # mut.gen_xyz('Si',n=[0,0,1],theta=0,rep=[1,1,1],pad=0,xyz=xyz)
     # mut.show_grid(xyz,opts=['xy','xz'])
     # mut.show_grid(xyz,opts='yz')
-    mut.show_grid(xyz,opts='xz')#,xylims=[])
+    # mut.show_grid(xyz,opts='xz')#,xylims=[])
     # mut.show_grid3(xyz)
+    multi = pp.load(name,tag='tx_tilt0',v=2)

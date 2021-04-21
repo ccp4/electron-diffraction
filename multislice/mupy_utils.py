@@ -150,7 +150,7 @@ def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],theta=0,rep=[1,1,1],pad=0
     coords = pattern[:,1:4]
     Nx,Ny,Nz = rep
     ax0,by0,cz0 = lat_params
-    # ax,by,cz = lat_params
+    ax,by,cz = lat_params
     #replicate
     if sum(rep)>3 :
         ni,nj,nk = np.meshgrid(range(Nx),range(Ny),range(Nz))

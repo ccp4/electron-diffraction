@@ -373,7 +373,7 @@ class Multislice:
 
 
 
-    def pattern(self,file='',Iopt='Incsl',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
+    def pattern(self,file='',Iopt='IncslQ',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
         cmap='binary',pOpt='im',**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
@@ -440,13 +440,15 @@ class Multislice:
                     im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
             im0 = np.log10(im0)
 
-        if out : return h/Nh/ax, k/Nk/by, im0
+        qx,qy = h/Nh/ax,k/Nk/by
+        if out : return qx,qy,im0
         N = [1,4]['q' in Iopt]
+
         t = np.linspace(0,2*np.pi/N,100)
         ct,st = np.cos(t),np.sin(t)
         plts = [[r*ct,r*st,'g--',''] for r in rings]
         if v:print('displaying pattern:',im0.shape)
-        return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[h/Nh/ax,k/Nk/by,im0],
+        return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[qx,qy,im0],
             cmap=cmap,pOpt=pOpt,**kwargs)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
@@ -524,7 +526,7 @@ class Multislice:
         info = np.array(info,dtype=float)
         if v:
             # print(info,log_lines)
-            print('Imax=%.4f,zmax=%.1f,cpuT=%.1f,wallT=%.1f' %tuple(info))
+            print('zmax=%.1f,Imax=%.4f,cpuT=%.1f,wallT=%.1f' %tuple(info))
         return info
 
     def wait_simu(self,ssh_alias='',t=1,hostpath=''):

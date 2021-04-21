@@ -171,13 +171,14 @@ def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],theta=0,rep=[1,1,1],pad=0
         st,ct = np.sin(t),np.cos(t)
         coords = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]).dot(coords.T).T
     #apply padding
-    if pad:
-        coords[:,0] += Nx*ax0*pad
-        coords[:,1] += Ny*by0*pad
-        coords[:,2] += Nz*cz0*pad
-        ax *= 1+2*pad
-        by *= 1+2*pad
-        cz *= 1+2*pad
+    if isinstance(pad,int) or isinstance(pad,float):pad=[pad]*3
+    if sum(pad)>0:
+        coords[:,0] += Nx*ax0*pad[0]
+        coords[:,1] += Ny*by0*pad[1]
+        coords[:,2] += Nz*cz0*pad[2]
+        ax *= 1+2*pad[0]
+        by *= 1+2*pad[1]
+        cz *= 1+2*pad[2]
     pattern = np.hstack([Za[:,None],coords,occ[:,None],bfact[:,None]])
     # ax,by,cz = lat_params
     lat_params = (ax,by,cz)

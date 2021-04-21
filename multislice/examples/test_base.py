@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=None,zs=[5,15,38])
 
     xyz = name+'Si110.xyz'
-    mut.gen_xyz('Si',n=[0,0,1],theta=45,rep=[20,20,5],pad=2,xyz=xyz)
+    mut.gen_xyz('Si',n=[0,0,1],theta=45,rep=[20,20,1],pad=[2,2,0],xyz=xyz)
     mut.show_grid(xyz,opts='xy')
     # mut.show_grid(xyz,opts='yz')
     mut.show_grid(xyz,opts='xz')#,xylims=[])

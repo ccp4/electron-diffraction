@@ -940,7 +940,6 @@ class Rocking:
     #### misc
     #############################################################################
     def _init_rocking(self,iBs,iZs,zs):
-        self.update(v=0)
         multi = pp.load_multi_obj(self.path+self.df.index[0])
         hk,z,re,im,Ib = multi.beam_vs_thickness(bOpt='o',iBs=iBs)
         if isinstance(zs,float) or isinstance(zs,float):zs = [zs]

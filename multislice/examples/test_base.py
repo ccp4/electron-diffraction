@@ -2,6 +2,7 @@ import importlib as imp
 from utils import*
 import multislice.multislice as mupy;imp.reload(mupy)
 import multislice.postprocess as pp ;imp.reload(pp)
+import multislice.mupy_utils as mut ;imp.reload(mut)
 plt.close('all')
 
 def test_base(name,**kwargs):
@@ -48,6 +49,13 @@ if __name__ == '__main__':
     # rock = mupy.Rocking(name,tx=np.arange(3)*0.05,ty=0,tag='tx',
     #     NxNy=256,repeat=[1,1,10],Nhk=3,
     #     opt = 'sr')
-    rock = pp.rock_load(name,'tx')
-    rock.update(v=1);
-    rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=None,zs=[5,15,38])
+    # rock = pp.rock_load(name,'tx')
+    # rock.update(v=1);
+    # rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=None,zs=[5,15,38])
+
+    xyz = name+'Si110.xyz'
+    mut.gen_xyz('Si',n=[0,0,1],theta=45,rep=[20,20,5],pad=2,xyz=xyz)
+    mut.show_grid(xyz,opts='xy')
+    # mut.show_grid(xyz,opts='yz')
+    mut.show_grid(xyz,opts='xz')#,xylims=[])
+    # mut.show_grid3(xyz)

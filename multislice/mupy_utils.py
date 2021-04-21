@@ -12,6 +12,9 @@ from . import postprocess as pp             #; imp.reload(pp)
 from . import multi_3D as MS3D              ;imp.reload(MS3D)
 from . import pymultislice                  ;imp.reload(pymultislice)
 
+cs = {1:colors.unicolor(0.75),3:(1,0,0),
+      6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),14:(1,0,1),17:(0,1,1)}
+
 def multi3D(name='./unknwon',filename='',load_opt=0,**kwargs):
     if filename :
         name=filename.replace('_3D.pkl','')
@@ -93,6 +96,30 @@ def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
 ################################################################################
 #### coordinate file generation from cif files
 ################################################################################
+def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',**kwargs):
+    ''' convert cif file into autoslic .xyz input file
+    - file : cif_file
+    - rep : super cell repeat
+    - n : reorient of the z axis into n
+    - pad : amount of padding on each side (in unit of super cell size)
+    '''
+    if isinstance(file,str):
+        tail = ''.join(np.array(n,dtype=str)) + '.xyz'
+        if file.split('.')[-1]=='cif':
+            crys = Crystal.from_cif(file)
+            if not xyz : xyz = file.replace('.cif',tail)
+        elif sum(np.array(list(Crystal.builtins))==file):
+            crys = Crystal.from_database(file)
+            if not xyz : xyz = file+tail
+        lat_vec    = np.array(crys.lattice_vectors)
+        lat_params = crys.lattice_parameters[:3]
+        pattern    = np.array([[a.atomic_number]+list(a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
+    else:
+        if not xyz: raise Exception('xyz filename required')
+        pattern = file
+    make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,**kwargs)
+
+
 def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail=''):
     ''' convert cif file into autoslic .xyz input file
     - file : cif_file
@@ -108,7 +135,7 @@ def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail='
     if xyz:make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,fmt='%.4f',dopt=dopt)
     return pattern #,lat_params #pattern,crys # file
 
-def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],rep=[1,1,1],pad=0,fmt='%.4f',dopt='s'):
+def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],theta=0,rep=[1,1,1],pad=0,fmt='%.4f',dopt='s'):
     '''Creates the.xyz file from a given compound and orientation
     - name       : Full path to the file to save
     - pattern    : Nx6 ndarray - Z,x,y,z,occ,wobble format
@@ -122,7 +149,8 @@ def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],rep=[1,1,1],pad=0,fmt='%.
     Za,occ,bfact = pattern[:,[0,4,5]].T
     coords = pattern[:,1:4]
     Nx,Ny,Nz = rep
-    ax,by,cz = lat_params
+    ax0,by0,cz0 = lat_params
+    # ax,by,cz = lat_params
     #replicate
     if sum(rep)>3 :
         ni,nj,nk = np.meshgrid(range(Nx),range(Ny),range(Nz))
@@ -132,23 +160,27 @@ def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],rep=[1,1,1],pad=0,fmt='%.
         Za     = np.tile(Za   ,[ni.size])
         occ    = np.tile(occ  ,[ni.size])
         bfact  = np.tile(bfact,[ni.size])
-        lat_params[0] = Nx*ax
-        lat_params[1] = Ny*by
-        lat_params[2] = Nz*cz
-
-    #apply padding
-    if pad:
-        coords[:,0] += Nx*ax*pad
-        coords[:,1] += Ny*by*pad
-        coords[:,2] += Nz*cz*pad
-        lat_params[0] *= 1+2*pad
-        lat_params[1] *= 1+2*pad
-        lat_params[2] *= 1+2*pad
+        ax = Nx*ax0
+        by = Ny*by0
+        cz = Nz*cz0
 
     #orient
     coords = rcc.orient_crystal(coords,n_u=n)
+    if theta :
+        t = np.deg2rad(theta)
+        st,ct = np.sin(t),np.cos(t)
+        coords = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]).dot(coords.T).T
+    #apply padding
+    if pad:
+        coords[:,0] += Nx*ax0*pad
+        coords[:,1] += Ny*by0*pad
+        coords[:,2] += Nz*cz0*pad
+        ax *= 1+2*pad
+        by *= 1+2*pad
+        cz *= 1+2*pad
     pattern = np.hstack([Za[:,None],coords,occ[:,None],bfact[:,None]])
-    ax,by,cz = lat_params
+    # ax,by,cz = lat_params
+    lat_params = (ax,by,cz)
     #write to file
     if 's' in dopt :
         dir=''.join(np.array(n,dtype=str))
@@ -195,8 +227,6 @@ def show_grid(file,opts='',**kwargs):
 
 def plot_grid(pattern,lat_params,opts,**kwargs):
     #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
-    cs = {1:colors.unicolor(0.75),3:(1,0,0),
-          6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),17:(0,1,1)}
     xij = {'x':1,'y':2,'z':3}
     if opts:
         x1,x2 = opts
@@ -228,7 +258,6 @@ def show_grid3(xyz_file,ms=1,**kwargs):
     xyz_file : .xyz file
     '''
     pattern,lat_params = import_xyz(xyz_file)
-    cs = {1:tuple([0.75]*3),6:tuple([0.25]*3),7:(0,0,1),8:(1,0,0),16:(1,1,0),17:(0,1,1)}
     Z = np.array(pattern[:,0],dtype=int)
     C = [cs[E] for E in Z]
 

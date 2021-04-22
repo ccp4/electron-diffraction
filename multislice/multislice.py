@@ -19,7 +19,6 @@ import importlib as imp
 import pickle,socket,time
 import pandas as pd
 import numpy as np
-from matplotlib import rc
 from math import ceil,nan
 from subprocess import Popen,check_output,PIPE
 from glob import glob as lsfiles
@@ -100,21 +99,14 @@ class Multislice:
     '''
     def __init__(self,name,mulslice=False,tail='',tag=None,data=None,
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
-                keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,dz=None,i_slice=100,
+                keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,dz=None,i_slice=1000,
                 hk=[(0,0)],Nhk=0,hk_sym=0,prev=None,
                 opt='sr',fopt='',ppopt='uwP',v=1,
                 ssh=None,hostpath='',cluster=False,cif_file=None):
-        #output options
-        if isinstance(v,bool) : v=['','nctrdD'][v]
-        if isinstance(v,int) : v=''.join(['nctr','DR','d'][:min(v,3)])
-        save_deck,save_obj,do_run,do_pp = [s in opt for s in 'dsrp']
-        save_deck |= do_run
-        if 'f' in opt: fopt += 'f'
-        if 'w' in opt: fopt += 'w'
-        vopt=('r' in v and 'R' not in v) + 2*('R' in v)
 
+        v = self._get_verbose_options(v)
         #attributes
-        self.version     = '1.4.2'
+        self.version     = '1.4.3a'
         self.name        = dsp.basename(name)                       #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.cif_file    = self.get_cif_file(cif_file)              #;print(self.cif_file)
@@ -140,12 +132,7 @@ class Multislice:
         self.p           = None
 
         ## make decks and run if required
-        if save_deck : self.make_decks(save_deck,prev=prev,v=v)
-        if save_obj : self.save(v=v)
-        if 'd' in v : self.print_datafiles()
-        if 'D' in v : self.print_decks()
-        if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster)
-        if do_pp : self.postprocess(ppopt,ssh,hostpath=hostpath)
+        self.execute(opt,fopt,ppopt,v, ssh,cluster,hostpath,prev)
 
     ########################################################################
     ##### Public functions
@@ -173,6 +160,39 @@ class Multislice:
         with open(file,'wb') as out :
             pickle.dump(self, out, pickle.HIGHEST_PROTOCOL)
         if v:print(colors.green+"object saved\n"+colors.yellow+file+colors.black)
+
+    def execute(self,opt='sr',fopt='',ppopt='w',v=1, ssh='',cluster=False,hostpath='',prev=None):
+        # save_deck,save_obj,do_run,do_pp,fopt,vopt = self._get_run_options(opt,fopt,v)
+        save_deck,save_obj,do_run,do_pp = [s in opt for s in 'dsrp']
+        save_deck |= do_run
+        if 'f' in opt: fopt += 'f'
+        if 'w' in opt: fopt += 'w'
+        vopt=('r' in v and 'R' not in v) + 2*('R' in v)
+
+        if save_deck : self.make_decks(save_deck,prev=prev,v=v)
+        if save_obj : self.save(v=v)
+        if 'd' in v : self.print_datafiles()
+        if 'D' in v : self.print_decks()
+        if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster)
+        if do_pp : self.postprocess(ppopt,ssh,hostpath=hostpath)
+
+    def resume(self,Nz,v=1,opt='sr',
+        hk=None,Nhk=None,hk_sym=0,i_slice=None,prev=1,
+        **kwargs):
+        ''' resume a simulation from its last point
+        - Nz : number of unit cells to run
+        - hk,Nhk,hk_sym,i_slice : values which can be set
+        - **kwargs : opt,fopt,ppopt,v, ssh,cluster,hostpath
+        '''
+        v = self._get_verbose_options(v=v)
+        prev = self._set_prev(prev)
+        self.repeat = self.repeat[:2]+(Nz,)
+        if hk or Nhk : self.hk = self._set_hk(hk,Nhk,hk_sym)
+        if i_slice : self.i_slice = i_slice
+        self.thickness += self._get_thickness('t' in v)
+        self.execute(v=v,prev=prev,opt='sr'+opt,**kwargs)
+        self.merged=0
+        self.merge_beams()
 
     def run(self,v=1,fopt='w',ssh_alias=None,hostpath=None,cluster=False):
         '''run the simulation with temsim
@@ -309,7 +329,7 @@ class Multislice:
         # print("creating the gif")
         # print(check_output(cmd,shell=True).decode())
 
-    def beam_vs_thickness(self,bOpt='',iBs=[],tol=1e-2,**kwargs):
+    def beam_vs_thickness(self,bOpt='',orig=0,iBs=[],tol=1e-2,**kwargs):
         ''' plot beam vs thickness
         - bOpt : O(include Origin),p(print Imax),n or f(force new)
         - iBs : beams (recorded beams are found in self.hk)
@@ -320,6 +340,7 @@ class Multislice:
         hk,t,re,im,Ib = np.load(self._outf('beams'),allow_pickle=True)
         # hk,t,re,im,Ib = self.get_beams(iBs=[],tol=1e-5,bOpt='fa')
         # print(hk)
+        if orig:bOpt+='O'
         if any(iBs) :
             if isinstance(iBs[0],str) :
                 iBs = [ (iB==hk).argmax() for iB in iBs if (iB==hk).sum()]
@@ -336,6 +357,25 @@ class Multislice:
         else:
             pp.plot_beam_thickness(beams,**kwargs)
 
+    def merge_beams(self):
+        if not self.merged:
+            beamnpy = self._outf('beams')
+            p = Popen('cp %s %s' %(beamnpy,beamnpy+'%s' %str(int(self.thickness)).zfill(4)),stderr=PIPE,stdout=PIPE,shell=True)
+            p.wait();p.communicate()
+            beams_files = np.sort(lsfiles(self._outf('beams')+'*'))[1:]     #; print(beams_files)
+            hk,t,re,im,I  = np.load(beams_files[0],allow_pickle=True)
+            z=t.max()
+            for file in beams_files[1:]:
+                hk_i,t_i,re_i,im_i,I_i = np.load(file,allow_pickle=True)
+                t_i +=z                                                     #;print(file,z)
+                t,I = np.hstack([t,t_i]),np.hstack([I,I_i])
+                z   += t_i.max()
+            # self.merged=1
+            np.save(beamnpy,[hk,t,re,im,I])
+            print(colors.green+'beams file merged : \n'+colors.yellow+beamnpy+colors.black)
+        else:
+            print(colors.pruple + 'beams already merged' + colors.black)
+
     def get_beams(self,iBs=[],tol=1e-2,bOpt=''):
         ''' get the beams as recorded during:\n
         - iBs : selected beam indices : default=Ibeams.max()>tol
@@ -351,29 +391,41 @@ class Multislice:
         beams = np.load(self._outf('beams'),allow_pickle=True)
         return beams
 
-    def save_patterns(self):
+    def save_patterns(self,v=1):
         i_files = [f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')]
         for i in i_files :
-            self.save_pattern(i)
-    def show_patterns(self,**kwargs):
-        patterns = lsfiles(self._outf('pattern').replace('.txt','')+'*.npy')
-        return Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
+            self.save_pattern(i,v)
 
-    def save_pattern(self,i=''):
+    def save_pattern(self,i='',v=1):
         print('loading pattern %s' %i)
         txt_file=self._outf('pattern')+i
         im = np.loadtxt(txt_file)
         print('saving')
         real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
         im = real**2+imag**2
-        #im = np.fft.fftshift(im)
         npy_file=self._outf('pattern').replace('.txt','')+i.replace('.','')+'.npy'
         np.save(npy_file,im,allow_pickle=True)
-        print(colors.green+'file saved : ' +colors.yellow+npy_file+colors.black)
+        if v:print(colors.green+'file saved : ' +colors.yellow+npy_file+colors.black)
 
+    def show_patterns(self,**kwargs):
+        patterns = lsfiles(self._outf('pattern').replace('.txt','')+'0*.npy')
+        return pp.Multi_Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
 
+    def patterns2gif(self,name,v=1,**kwargs):
+        if v>1:
+            print(colors.blue+'...saving patterns to npy...'+colors.black)
+            self.save_patterns(v=0)
 
-    def pattern(self,file='',Iopt='IncslQ',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
+        name = name.replace('.gif','')
+        patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))[1:]
+        if v:print(colors.blue+'...saving patterns to png...'+colors.black)
+        for iz in range(len(patterns)):
+            figname='%s%s.png' %(name,str(iz).zfill(4))
+            self.pattern(iz=iz,name=figname,opt='sc',**kwargs)
+        if v:print(colors.blue+'...saving patterns to gif...'+colors.black)
+        dsp.im2gif(name,'png')
+
+    def pattern(self,iz=None,file=None,Iopt='IncslQ',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
         cmap='binary',pOpt='im',**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
@@ -385,6 +437,9 @@ class Multislice:
         '''
         # if not exists(self._outf('patternnpy')):self.save_pattern()
         if not file : file = self._outf('patternnpy')
+        if iz:
+            patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))
+            file = patterns[min(patterns.size-1,iz)]
         im = np.load(file)
         if v>1:print('original image shape',im.shape)
         ax,by = self.cell_params[:2]
@@ -395,14 +450,19 @@ class Multislice:
         # if 'I' in Iopt :
             # real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
             # im = real**2+imag**2
-        if 'n' in Iopt : #normalize
+
             #print('normalizing')
+        if 'N' in Iopt:
+            im/=(4*Nx*Ny)**2
+            # print(im.max())
+        elif 'n' in Iopt : #normalize:
             im00 = im[0,0];im[0,0] = 0
             mMax = im.max();im /= mMax
             if 'l' in Iopt :
                 im[0,0] = im00/mMax
             else:
                 im[0,0] = 1
+
         if 'c' in Iopt and not Nmax:
             #print('croping')
             idx = im[:Nx,:Ny]>tol#*im.max()
@@ -578,6 +638,18 @@ class Multislice:
     ########################################################################
     ######## Private functions
     ########################################################################
+    def _get_verbose_options(self,v):
+        if isinstance(v,bool) : v=['','nctrdD'][v]
+        if isinstance(v,int) : v=''.join(['nctr','DR','d'][:min(v,3)])
+        return v
+    # def _get_run_options(self,opt,fopt):
+    #     save_deck,save_obj,do_run,do_pp = [s in opt for s in 'dsrp']
+    #     save_deck |= do_run
+    #     if 'f' in opt: fopt += 'f'
+    #     if 'w' in opt: fopt += 'w'
+    #     vopt=('r' in v and 'R' not in v) + 2*('R' in v)
+    #     return save_deck,save_obj,do_run,do_pp,fopt,vopt
+
     def _get_datafiles(self,data):
         dat_type = ['xyz','dat'][self.is_mulslice]
         err_msg=colors.red+'no *.' +dat_type+' files found in :\n'+colors.yellow+self.datpath+colors.black
@@ -653,8 +725,27 @@ class Multislice:
     def _get_thickness(self,v=True):
         cz = np.array(self.cell_params[2]).sum()
         thickness = self.repeat[2]*cz
-        if v : print('thickness = %.3f A'%thickness)
+        if v : print('simulated thickness = %.3f A, nslices=%d' %(thickness,thickness/self.slice_thick))
         return thickness
+    def _set_prev(self,prev):
+        zstr = str(int(self.thickness)).zfill(4)
+        if isinstance(prev,bool) or isinstance(prev,int):
+            if prev:
+                prev = self.outf['image']+zstr
+        if prev:
+            files = ['log', 'patternnpy','patternS','image','beams']
+            cmd = ''
+            for ext in files:
+                file = self._outf(ext)
+                old_file = file + zstr
+                cmd += "if [ -f %s ]; then cp %s %s;fi\n" %(file,file,old_file)
+            # files = list(self.outf.keys());files.remove('obj');files.remove('data');files.remove('beamstxt')
+            # for ext in files:
+            #     file = self._outf(ext)
+            #     cmd += "if [ -f %s ]; then rm %s;fi\n" %(file,file)
+            p = Popen(cmd,shell=True,stderr=PIPE,stdout=PIPE)
+            p.wait();p.communicate()
+        return prev
 
     ########################################################################
     #### Job
@@ -797,8 +888,9 @@ class Multislice:
         deck += "%s\n" %self._outf('image')     #image file
         deck += "n\n"                           #partial coherence
         deck += prev_run                        #start previous run
-        deck += "%.4f\n" %self.keV              #wavelength
-        deck += "%d %d\n" %self.NxNy            #sampling
+        if not prev:
+            deck += "%.4f\n" %self.keV              #wavelength
+            deck += "%d %d\n" %self.NxNy            #sampling
         deck += "%.4f %.4f \n" %self.tilt       #beam tilt
         deck += "%f\n" %(self.slice_thick)      #slice thickness
         deck += "y\n"                           #record beams

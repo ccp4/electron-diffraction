@@ -7,7 +7,7 @@ plt.close('all')
 
 def test_base(name,**kwargs):
     multi=mupy.Multislice(name,keV=200,
-        repeat=[2,2,10],NxNy=512,slice_thick=1.3575,Nhk=3,
+        repeat=[1,1,10],NxNy=512,slice_thick=1.3575,Nhk=6,
         **kwargs)
     return multi
 
@@ -37,7 +37,7 @@ def test_get_tilts():
 if __name__ == '__main__':
     name  = '../dat/test/'
     #
-    # multi = test_base(name,mulslice=False,opt='dsrp',fopt='f',ppopt='uwBP',v=2)
+    # multi = test_base(name,mulslice=False,opt='dsrfp',ppopt='w',tag='resume',i_slice=20,v=1)
     # multi = test_base(name,mulslice=False,opt='dsrp',fopt='f',ppopt='uwB',v=2,ssh='tarik-CCP4home')
     # multi = test_base(name,mulslice=False,opt='dsrp ',fopt='f',ppopt='uwBP',v=2,ssh='badb')
     # multi = test_base(name,mulslice=False,fopt='f',opt='dsr',ppopt='',ssh='tarik-CCP4home',v='nctrdDR')
@@ -59,4 +59,15 @@ if __name__ == '__main__':
     # mut.show_grid(xyz,opts='yz')
     # mut.show_grid(xyz,opts='xz')#,xylims=[])
     # mut.show_grid3(xyz)
-    multi = pp.load(name,tag='tx_tilt0',v=2)
+
+    multi = pp.load(name,tag='resume',v=0)
+    # multi.resume(opt='srfp',ppopt='w',Nz=30,i_slice=20)#Nhk=4)
+    # multi.save_patterns()
+    # multi.pattern(Iopt='cns')
+    # multi.get_beams(bOpt='fa');
+    # multi.merged=0
+    # multi.merge_beams()
+    # multi.beam_vs_thickness(orig=1,tol=1e-3)
+    # multi.pattern(iz=3,Iopt='sNc',Nmax=100,cmap='viridis',caxis=[0,0.25],xylims=5)
+    multi.patterns2gif('dat/test.gif', Iopt='scN',Nmax=100,xylims=2,caxis=[0,0.25])#,pOpt='X')
+    # multi.show_patterns(Iopt='s',caxis=[0,1e10],xylims=5)

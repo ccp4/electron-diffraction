@@ -1,5 +1,6 @@
 import pickle5,os,glob
 import matplotlib.pyplot as plt
+from matplotlib import rc
 import pandas as pd
 import numpy as np
 from utils import displayStandards as dsp
@@ -141,6 +142,62 @@ def plot_pattern_section(file='si_autoslic100.tif'):
     im=plt.imread(datpath+file)
     N=im.shape[0]
     std.stddisp([range(N),im[:,0],'b','$I_{h0}$'])
+
+
+
+
+class Multi_Pattern_viewer():
+    def __init__(self,multi,patterns,figpath,i=0,**args):
+        ''' View cbf files
+        - exp_path : path to images
+        - figpath : place to save the figures
+        - i : starting image
+        '''
+        self.multi = multi
+        self.figpath = figpath
+        self.patterns  = np.sort(patterns);#print(patterns)
+        self.args = args
+        self.nfigs = self.patterns.size
+        self.fig,self.ax = dsp.stddisp() #caxis=[0,1],pOpt='im')#,caxis=[0,0.001])
+        cid = self.fig.canvas.mpl_connect('key_press_event', self)
+        self.i=i     #starting image
+        self.inc=1   #increment(use 'p' or 'm' to change)
+        self.mode=1
+        # rc('text', usetex=False)
+        # self.multi.pattern(fig=self.fig,ax=self.ax,file=self.patterns[self.i],
+        #     title='pattern %d' %self.i,**self.args)
+        self.update()
+
+    def update(self):
+        self.ax.cla()
+        print("%d/%d" %(self.i,self.nfigs))
+        zi = self.multi.i_slice*self.multi.slice_thick*(self.i+1)
+        tle = 'z=%d A' %(zi)
+        # tle = r'%s' %dsp.basename(self.patterns[self.i]).replace('_',' ')
+        self.multi.pattern(fig=self.fig,ax=self.ax,file=self.patterns[self.i],
+            title=tle,opt='',pOpt='tX',imOpt='',**self.args)
+        self.fig.canvas.draw()
+
+    def __call__(self, event):
+        # print(event.key)
+        if event.key in ['up','right']:
+            self.i=min(self.i+self.inc,self.nfigs-1)
+            self.mode=1
+            self.update()
+        elif event.key in ['left','down']:
+            self.i=max(0,self.i-self.inc)
+            self.mode=-1
+            self.update()
+
+        if event.key=='s':
+            dsp.saveFig(self.figpath+'pattern%s.png' %str(self.i).zfill(3),ax=self.ax)
+
+        if event.key=='p':
+            self.inc=min(self.inc+1,100);print(self.inc)
+        if event.key=='m':
+            self.inc=max(1,self.inc-1);print(self.inc)
+
+
 
 ###########################################################################
 #### def : test

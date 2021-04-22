@@ -666,7 +666,7 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
 
         scale = 1.0F / ( ((float)nx) * ((float)ny) );
 
-        zslice = 0.75*deltaz;  /*  start a little before top of unit cell */
+        zslice = 0.0075*deltaz;  /*  start a little before top of unit cell */
         istart = 0;
         islice = 1;
         int i_diff=0;
@@ -688,17 +688,16 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
 
                 wave *= trans;    //  transmit
 
-                sprintf(filename,"translayer.%03d",i_diff);
-                cout << "writing trans layer "<< filename << "  to file ..." <<endl;
-                FILE *fp3 = fopen(filename,"w");
-                diff_pattern.resize(nx,ny);
-                for( ix=0; ix<nx; ix++) {
-          	       for( iy=0; iy<ny; iy++) {
-          	          fprintf(fp3,"%g %g ", trans.re(ix,iy),trans.im(ix,iy));
-          	       }
-          	       fprintf(fp3,"\n");
-                }
-                fclose(fp3);
+                // sprintf(filename,"translayer.%03d",i_diff);
+                // cout << "writing trans layer "<< filename << "  to file ..." <<endl;
+                // FILE *fp3 = fopen(filename,"w");
+                // for( ix=0; ix<nx; ix++) {
+          	    //    for( iy=0; iy<ny; iy++) {
+          	    //       fprintf(fp3,"%g %g ", trans.re(ix,iy),trans.im(ix,iy));
+          	    //    }
+          	    //    fprintf(fp3,"\n");
+                // }
+                // fclose(fp3);
             }
 
             /*  bandwidth limit */

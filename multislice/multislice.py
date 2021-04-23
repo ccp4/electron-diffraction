@@ -175,6 +175,7 @@ class Multislice:
         if 'D' in v : self.print_decks()
         if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster)
         if do_pp : self.postprocess(ppopt,ssh,hostpath=hostpath)
+        self.patterns_saved=0
 
     def resume(self,Nz,v=1,opt='sr',
         hk=None,Nhk=None,hk_sym=0,i_slice=None,prev=1,
@@ -391,10 +392,13 @@ class Multislice:
         beams = np.load(self._outf('beams'),allow_pickle=True)
         return beams
 
-    def save_patterns(self,v=1):
-        i_files = [f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')]
-        for i in i_files :
-            self.save_pattern(i,v)
+    def save_patterns(self,force=0,v=0):
+        if force : self.patterns_saved=0
+        if not self.patterns_saved:
+            i_files = [f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')]
+            for i in i_files :
+                self.save_pattern(i,v)
+            self.patterns_saved=1
 
     def save_pattern(self,i='',v=1):
         print('loading pattern %s' %i)
@@ -412,21 +416,20 @@ class Multislice:
         return pp.Multi_Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
 
     def patterns2gif(self,name,v=1,**kwargs):
-        if v>1:
-            print(colors.blue+'...saving patterns to npy...'+colors.black)
-            self.save_patterns(v=0)
+        if v>1:print(colors.blue+'...saving patterns to npy...'+colors.black)
+        self.save_patterns(v=0)
 
         name = name.replace('.gif','')
         patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))[1:]
         if v:print(colors.blue+'...saving patterns to png...'+colors.black)
         for iz in range(len(patterns)):
             figname='%s%s.png' %(name,str(iz).zfill(4))
-            self.pattern(iz=iz,name=figname,opt='sc',**kwargs)
+            self.pattern(iz=iz,name=figname,opt='sc',v=v,**kwargs)
         if v:print(colors.blue+'...saving patterns to gif...'+colors.black)
         dsp.im2gif(name,'png')
 
-    def pattern(self,iz=None,file=None,Iopt='IncslQ',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
-        cmap='binary',pOpt='im',**kwargs):
+    def pattern(self,iz=None,file=None,Iopt='Ncs',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
+        cmap='binary',pOpt='im',title='',**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
@@ -436,10 +439,15 @@ class Multislice:
         returns : [qx,qy,I]
         '''
         # if not exists(self._outf('patternnpy')):self.save_pattern()
-        if not file : file = self._outf('patternnpy')
+        if not file :
+            file = self._outf('patternnpy')
+            zi = self.thickness
         if iz:
             patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))
             file = patterns[min(patterns.size-1,iz)]
+            zi = self.i_slice*self.slice_thick*(iz+1)
+        if not title:title = 'z=%d A' %(zi)
+
         im = np.load(file)
         if v>1:print('original image shape',im.shape)
         ax,by = self.cell_params[:2]
@@ -509,7 +517,7 @@ class Multislice:
         plts = [[r*ct,r*st,'g--',''] for r in rings]
         if v:print('displaying pattern:',im0.shape)
         return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[qx,qy,im0],
-            cmap=cmap,pOpt=pOpt,**kwargs)
+            cmap=cmap,pOpt=pOpt,title=title,**kwargs)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities

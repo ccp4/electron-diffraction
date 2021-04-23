@@ -68,6 +68,6 @@ if __name__ == '__main__':
     # multi.merged=0
     # multi.merge_beams()
     # multi.beam_vs_thickness(orig=1,tol=1e-3)
-    # multi.pattern(iz=3,Iopt='sNc',Nmax=100,cmap='viridis',caxis=[0,0.25],xylims=5)
-    multi.patterns2gif('dat/test.gif', Iopt='scN',Nmax=100,xylims=2,caxis=[0,0.25])#,pOpt='X')
+    multi.pattern(iz=3,Iopt='sNc',Nmax=100,cmap='viridis',caxis=[0,0.25],xylims=5)
+    # multi.patterns2gif('dat/test.gif', Iopt='scN',Nmax=100,xylims=2,caxis=[0,0.25])#,pOpt='X')
     # multi.show_patterns(Iopt='s',caxis=[0,1e10],xylims=5)

@@ -6,6 +6,7 @@ from utils import displayStandards as dsp   ; imp.reload(dsp)
 from utils import glob_colors as colors
 from crystals import Crystal
 from matplotlib import rc
+from scipy.spatial import ConvexHull, convex_hull_plot_2d
 from . import multislice as mupy            ; imp.reload(mupy)
 from . import rotating_crystal as rcc       #; imp.reload(rcc)
 from . import postprocess as pp             #; imp.reload(pp)
@@ -216,33 +217,43 @@ def make_mulslice_datfile(dat_file,cif_file):
 ################################################################################
 #### display coordinate file
 ################################################################################
-def show_grid(file,opts='',**kwargs):
+def show_grid(file,opts='',hull_opt=0,figs='21',**kwargs):
     '''
     file : path to .xyz file
     opt : str format 'x1x2' - 'xy','xz','yz','zx',...
     '''
-    with open(file,'r') as f:l=list(map(lambda s:s.strip().split(' '),f.readlines()))
+    print('...loading file...')
+    with open(file,'r') as f:
+        l=list(map(lambda s:s.strip().split(' '),f.readlines()))
+
     lat_params = np.array(l[1],dtype=float)
     pattern   = np.array(l[2:-1],dtype=float)
     if isinstance(opts,list):
-        fig,axs = dsp.create_fig(figsize='21',rc=[1,len(opts)])
+        fig,axs = dsp.create_fig(figsize=figs,rc=[1,len(opts)])
         for axi,opts_i in zip(axs,opts):
-            plot_grid(pattern,lat_params,opts_i,ax=axi,setPos=0,opt='',**kwargs)
+            plot_grid(pattern,lat_params,opts_i,hull_opt=hull_opt,ax=axi,setPos=0,opt='',**kwargs)
         fig.show()
     else:
         plot_grid(pattern,lat_params,opts,**kwargs)
 
-def plot_grid(pattern,lat_params,opts,**kwargs):
+def plot_grid(pattern,lat_params,opts,hull_opt,**kwargs):
     #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
     xij = {'x':1,'y':2,'z':3}
     if opts:
         x1,x2 = opts
         i,j = xij[x1],xij[x2]
         Z = np.array(pattern[:,0],dtype=int)
-        C = [cs[E] for E in Z]
+        # print('...assigning colors...')
+        C = np.array([cs[E] for E in Z])
         pps = [dsp.Rectangle((0,0),lat_params[i-1],lat_params[j-1],linewidth=2,edgecolor='b',alpha=0.1)]
-        scat = [pattern[:,i],pattern[:,j],C]
-
+        if hull_opt :
+            # print('...finding convex hull...')
+            hull = ConvexHull(pattern[:,[i,j]])#,incremental=True)
+            idx = hull.vertices#;print(idx)
+            # scat = ([pattern[:,i],pattern[:,j],10,'b','x'],[pattern[idx,i],pattern[idx,j],50,C[idx],'o'],)
+        else:
+            scat = [pattern[:,i],pattern[:,j],C]
+        print('...plotting...')
         return dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,
             **kwargs)
 

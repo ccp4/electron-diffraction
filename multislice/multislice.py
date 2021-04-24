@@ -173,9 +173,9 @@ class Multislice:
         if save_obj : self.save(v=v)
         if 'd' in v : self.print_datafiles()
         if 'D' in v : self.print_decks()
+        self.patterns_saved = 0
         if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster)
         if do_pp : self.postprocess(ppopt,ssh,hostpath=hostpath)
-        self.patterns_saved=0
 
     def resume(self,Nz,v=1,opt='sr',
         hk=None,Nhk=None,hk_sym=0,i_slice=None,prev=1,
@@ -453,7 +453,7 @@ class Multislice:
         ax,by = self.cell_params[:2]
         Nh,Nk = self.repeat[:2];
         Nx,Ny = np.array(np.array(self.NxNy)/2,dtype=int)
-        NMAX = 512
+        NMAX = 1024
         if Nmax : Nmax = min(Nmax,Nx,Ny)
         # if 'I' in Iopt :
             # real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
@@ -587,11 +587,15 @@ class Multislice:
             info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
             info = [log_lines[0].strip().split(',')[0].replace('slice','')]+info #zmax
         else:
-            zl = [i for i,l in enumerate(lines) if 'z=' in l ][-1]
-            wl = [i for i,l in enumerate(lines) if 'wall time' in l ][0]
-            log_lines = np.array(lines)[[zl,zl+1]+[wl-1,wl]]
-            info = [l.strip().split('=')[-1].split(' ')[1] for l in log_lines]
-        info = np.array(info,dtype=float)
+            state = self.check_simu_state()
+            zmax,Imax,cpuT,wallT='0','1','0','0'
+            if not state=='init':
+                zl = [i for i,l in enumerate(lines) if 'z=' in l ][-1]
+                zmax,Imax =[l.strip().split('=')[-1].split(' ')[1] for l in lines[zl:zl+2]]
+            if state=='done':
+                wl = [i for i,l in enumerate(lines) if 'wall time' in l ][0]
+                cpuT,wallT = [l.strip().split('=')[-1].split(' ')[1] for l in lines[wl-1:wl+1]]
+        info = np.array([zmax,Imax,cpuT,wallT],dtype=float)
         if v:
             # print(info,log_lines)
             print('zmax=%.1f,Imax=%.4f,cpuT=%.1f,wallT=%.1f' %tuple(info))
@@ -787,8 +791,8 @@ class Multislice:
         multi = pp.load_multi_obj('%s');
         multi.datpath='./';
         multi.get_beams(bOpt='fa');
-        multi.save_pattern();
-        qx,qy,It1 = multi.pattern(Iopt='Ics',out=True,Nmax=260);
+        multi.save_patterns();
+        qx,qy,It1 = multi.pattern(Iopt='Ncs',out=True,Nmax=260);
         np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])
         job +='%s -c "%s" >>%s 2>&1 \n' %(pyexe, pycode.replace('\n',''),logfile)

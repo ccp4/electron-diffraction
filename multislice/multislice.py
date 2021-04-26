@@ -635,7 +635,7 @@ class Multislice:
                 else:
                     zl = [i for i,l in enumerate(lines) if 'z=' in l ]
                     if len(zl) :
-                        l1=zl[-1]
+                        l1=lines[zl[-1]]
                         state="%d%%" %int(100*float(l1[3:8])/self.thickness)
                     else:
                         if 'END' in l2 : state='done'

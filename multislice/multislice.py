@@ -90,7 +90,7 @@ class Multislice:
         - '' : The simulation will not be run again
         - 'w' is on  (default case) : the user will be asked to confirm whether he wants to run it again
         - 'f' in fopt : The simulation is rerun
-    - `ppopt` : u(update),w(wait), I(image) B(beam) P(pattern) A(azim_avg)
+    - `ppopt` : u(update),w(wait), I(image) B(beam) P(pattern) A(azim_avg) S(reduced pattern) s(save_patterns in job)
     - `ssh` : ip address or alias of the machine on which to run the job
     - `cif_file` : name of .cif file corresponding to structure in path
     ### OBSOLETE
@@ -168,13 +168,14 @@ class Multislice:
         if 'f' in opt: fopt += 'f'
         if 'w' in opt: fopt += 'w'
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
-        self.patterns_saved = 0
+        patterns_opt= 's' in ppopt
+        self.patterns_saved = patterns_opt
 
         if save_deck : self.make_decks(save_deck,prev=prev,v=v)
         if save_obj : self.save(v=v)
         if 'd' in v : self.print_datafiles()
         if 'D' in v : self.print_decks()
-        if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster)
+        if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster,patterns_opt=patterns_opt)
         if do_pp : self.postprocess(ppopt,ssh,hostpath=hostpath)
 
     def resume(self,Nz,v=1,opt='sr',
@@ -195,18 +196,22 @@ class Multislice:
         self.merged=0
         self.merge_beams()
 
-    def run(self,v=1,fopt='w',ssh_alias=None,hostpath=None,cluster=False):
+    def run(self,v=1,fopt='w',ssh_alias=None,hostpath=None,cluster=False,patterns_opt=False,):
         '''run the simulation with temsim
         - fopt : f(force rerun), w(warn ask rerun already done)
         - ssh : name of the host to run the job
         '''
         if isinstance(fopt,int):fopt='f'
         run = True
-        if self.check_simu_state(v=0,ssh_alias='') == 'done' :
+        if self.check_simu_state(v=0,ssh_alias=''):
             if v>0 : print(colors.red+"Simulation already performed in the past."+colors.black)
             if 'f' in fopt :
-                msg='Force re-running. Deleting logfile'
-                p = Popen('if [ -f %s ];then rm %s;fi' %(self._outf('log'),self._outf('log')), shell=True,stderr=PIPE,stdout=PIPE)
+                msg='Force re-running'
+                cmd = '''echo Deleting logfile and patterns
+                if [ -f %s ];then rm %s;fi
+                rm %s
+                '''%(self._outf('log'),self._outf('log'),self._outf('pattern')+'*')
+                p = Popen(cmd, shell=True,stderr=PIPE,stdout=PIPE)
                 p.wait();p.communicate()
             else :
                 if 'w' in fopt :
@@ -219,11 +224,11 @@ class Multislice:
         if run:
             if ssh_alias :
                 if ssh_alias=='badb':cluster=1
-                cmd = self._get_job_ssh(ssh_alias,hostpath=hostpath,v=v>2,cluster=cluster)
+                cmd = self._get_job_ssh(ssh_alias,hostpath=hostpath,v=v>2,cluster=cluster,patterns_opt=patterns_opt)
                 #time.sleep(1)
                 #self.check_simu_state(v=0,ssh_alias=ssh_alias,hostpath=hostpath)
             else :
-                self._get_job(cluster=cluster)
+                self._get_job(cluster=cluster, patterns_opt=patterns_opt)
                 cmd = 'bash %s' %self._outf('job')
             p = Popen(cmd,shell=True) #; print(cmd)
             if v>0 : print(colors.green+self.name+" job submitted at %s" %time.ctime()+colors.black)
@@ -395,7 +400,7 @@ class Multislice:
     def save_patterns(self,force=0,v=0):
         if force : self.patterns_saved=0
         if not self.patterns_saved:
-            i_files = [f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')]
+            i_files = np.sort([f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')])
             for i in i_files :
                 self.save_pattern(i=i,v=v)
             self.patterns_saved=1
@@ -444,13 +449,20 @@ class Multislice:
         returns : [qx,qy,I]
         '''
         # if not exists(self._outf('patternnpy')):self.save_pattern()
-        if not file :
+        if iz:
+            patterns = np.sort(lsfiles(self._outf('pattern')+'.*'))
+            izs = np.array([p.split('.')[-1] for p in patterns],dtype=int)
+            # print(izs,patterns)
+            idx = np.where(izs-iz==0)[0]
+            if idx:
+                # patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))
+                file = patterns[idx[0]].replace('.txt.','')+'.npy'
+                zi = self.i_slice*self.slice_thick*(iz+1)
+        if not file:
             file = self._outf('patternnpy')
             zi = self.thickness
-        if iz:
-            patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))
-            file = patterns[min(patterns.size-1,iz)]
-            zi = self.i_slice*self.slice_thick*(iz+1)
+        else:
+            zi = self.thickness
         if not title:title = 'z=%d A' %(zi)
 
         if v>1:print('loading %s' %file)
@@ -774,7 +786,7 @@ class Multislice:
     ########################################################################
     #### Job
     ########################################################################
-    def _get_job(self,temsim=None,cluster=False,datpath=None):
+    def _get_job(self,temsim=None,cluster=False,datpath=None,patterns_opt=False):
         logfile     = self.outf['log'] #self._outf('log')
         simu_deck   = self.outf['simu_deck'] #self._outf('simu_deck')
         prog        = ['autoslic','mulslice'][self.is_mulslice]
@@ -803,10 +815,11 @@ class Multislice:
         multi = pp.load_multi_obj('%s');
         multi.datpath='./';
         multi.get_beams(bOpt='fa');
-        multi.save_patterns();
         qx,qy,It1 = multi.pattern(Iopt='Ncs',out=True,Nmax=260);
         np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])
+        if patterns_opt:
+            pycode+='''multi.save_patterns();'''
         job +='%s -c "%s" >>%s 2>&1 \n' %(pyexe, pycode.replace('\n',''),logfile)
         job+='printf "END" >>%s\n' %(logfile)
 
@@ -815,7 +828,7 @@ class Multislice:
         with open(datpath+self.outf['job'],'w') as f : f.write(job)
         print(colors.red+colors.yellow+datpath+self.outf['job']+colors.black)
 
-    def _get_job_ssh(self,ssh_alias,hostpath=None,v=False,cluster=False):
+    def _get_job_ssh(self,ssh_alias,hostpath=None,v=False,cluster=False,patterns_opt=False):
         #save local datpath
         datpath  = self.datpath
         hostpath = self._get_hostpath(ssh_alias,hostpath)
@@ -824,7 +837,7 @@ class Multislice:
         #save updated deck and job
         host    = ssh_hosts[ssh_alias]
         temsim  = temsim_hosts[host]
-        self._get_job(temsim,cluster,datpath)
+        self._get_job(temsim,cluster,datpath,patterns_opt=patterns_opt)
         self.make_decks(save=True,datpath=datpath)
 
         #create directory on remote if does not exist

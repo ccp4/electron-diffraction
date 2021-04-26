@@ -8,7 +8,7 @@ plt.close('all')
 
 def test_base(name,**kwargs):
     multi=mupy.Multislice(name,keV=200,
-        repeat=[1,1,10],NxNy=512,slice_thick=1.3575,Nhk=6,
+        repeat=[1,1,100],NxNy=512,slice_thick=1.3575,Nhk=6,
         **kwargs)
     return multi
 
@@ -38,7 +38,7 @@ def test_get_tilts():
 if __name__ == '__main__':
     name  = '../dat/test/'
     #
-    # multi = test_base(name,mulslice=False,opt='dsrfp',ppopt='w',tag='resume',i_slice=20,v=1)
+    multi = test_base(name,mulslice=False,opt='dsrfp',ppopt='w',tag='base',i_slice=20,v=1)
     # multi = test_base(name,mulslice=False,opt='dsrp',fopt='f',ppopt='uwB',v=2,ssh='tarik-CCP4home')
     # multi = test_base(name,mulslice=False,opt='dsrp ',fopt='f',ppopt='uwBP',v=2,ssh='badb')
     # multi = test_base(name,mulslice=False,fopt='f',opt='dsr',ppopt='',ssh='tarik-CCP4home',v='nctrdDR')
@@ -67,9 +67,8 @@ if __name__ == '__main__':
     # mut.show_grid(xyz,opts='xz')#,xylims=[])
     # mut.show_grid3(xyz)
 
-    multi = pp.load(name,tag='resume',v=2)
+    multi = pp.load(name,tag='base',v=2)
     # multi.resume(opt='srfp',ppopt='w',Nz=30,i_slice=20)#Nhk=4)
-    multi.patterns_saved=0
     multi.save_pattern(iz=9)
     # multi.pattern(Iopt='cns')
     # multi.get_beams(bOpt='fa');

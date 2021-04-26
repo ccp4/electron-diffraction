@@ -140,7 +140,7 @@ def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=0,fmt='%.4f',opts=''):
     #### save
     if 'v' in opts:print('...saving to file ...')
     dir=''.join(np.array(n,dtype=str))
-    header = 'one unit cell of %s at %s, %.1f degree\n' %(dsp.basename(file),str(n),theta)
+    header = 'one unit cell of %s at %s, %.1f degree\n' %(dsp.basename(file),str(n_u),theta)
     header+= ' '.join([fmt]*3) %(ax,by,cz)
     np.savetxt(xyz,pattern,footer='-1',header=header,fmt='%d '+' '.join([fmt]*5),comments='')
     print(colors.green+"coords file saved : \n"+colors.yellow+xyz+colors.black)

@@ -631,11 +631,16 @@ class Multislice:
                 elif 'elapsed time' in l2 : state='done'
                 else : state='init'
             else:
-                # if not sum(['Sorting' in l for l in lines]) : state='init'
-                if 'z=' == l1[:2] : state="%d%%" %int(100*float(l1[3:8])/self.thickness)
-                elif 'END' in l2 : state='done'
-                elif sum(['wall time' in l for l in lines]) : state='processing'
-                else:state='init'
+                if not sum(['Sorting atoms' in l for l in lines]) : state='init'
+                else:
+                    zl = [i for i,l in enumerate(lines) if 'z=' in l ]
+                    if len(zl) :
+                        l1=zl[-1]
+                        state="%d%%" %int(100*float(l1[3:8])/self.thickness)
+                    else:
+                        if 'END' in l2 : state='done'
+                        elif sum(['wall time' in l for l in lines]) : state='processing'
+                        else:state='undefined'
 
             #print state info
             if v :

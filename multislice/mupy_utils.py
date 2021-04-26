@@ -97,6 +97,93 @@ def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
 ################################################################################
 #### coordinate file generation from cif files
 ################################################################################
+def import_crys(file):
+    if file.split('.')[-1]=='cif':
+        crys = Crystal.from_cif(file)
+    elif sum(np.array(list(Crystal.builtins))==file):
+        crys = Crystal.from_database(file)
+    else:
+        raise Exception('cannot import %s' %file)
+    return crys
+
+def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=0,fmt='%.4f',opts=''):
+    if 'v' in opts:print('...import file...')
+    crys = import_crys(file)
+    n_u = n
+    pattern = np.array([[a.atomic_number]+list(a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
+    lat_vec = np.array(crys.lattice_vectors)
+    coords = pattern[:,1:4]
+    Za,occ,bfact = pattern[:,[0,4,5]].T
+    ax,by,cz = lat_params
+
+    #### replicate
+    if 'v' in opts:print('...finding unit cells index...')
+    l,m,n = find_xyz(lat_vec,lat_params,n_u,theta,plot='p' in opts)
+    a1,a2,a3 = np.array(lat_vec)
+    coords = np.vstack([coords + i*a1+j*a2+k*a3 for i,j,k in zip(l,m,n)])
+    Za     = np.tile(Za   ,[n.size])
+    occ    = np.tile(occ  ,[n.size])
+    bfact  = np.tile(bfact,[n.size])
+
+    ###orient
+    coords = rcc.orient_crystal(coords,n_u=n_u,theta=theta)
+
+    #### apply padding
+    if isinstance(pad,int) or isinstance(pad,float):pad=[pad]*2
+    if sum(pad)>0:
+        coords[:,0] += ax*pad[0]
+        coords[:,1] += by*pad[1]
+        ax *= 1+2*pad[0]
+        by *= 1+2*pad[1]
+
+    pattern = np.hstack([Za[:,None],coords,occ[:,None],bfact[:,None]])
+    #### save
+    if 'v' in opts:print('...saving to file ...')
+    dir=''.join(np.array(n,dtype=str))
+    header = 'one unit cell of %s at %s, %.1f degree\n' %(dsp.basename(file),str(n),theta)
+    header+= ' '.join([fmt]*3) %(ax,by,cz)
+    np.savetxt(xyz,pattern,footer='-1',header=header,fmt='%d '+' '.join([fmt]*5),comments='')
+    print(colors.green+"coords file saved : \n"+colors.yellow+xyz+colors.black)
+    # if 'p' in dopt :
+    #     with open(name,'r') as f : print(''.join(f.readlines()))
+
+def find_xyz(lat_vec,lat_params,n_u,theta,plot=0):
+    ax,by,cz = lat_params
+    rot_vec = rcc.orient_crystal(lat_vec,n_u=n_u,T=True,theta=theta)
+    # ra1,ra2,ra3 = rot_vec
+
+    #### brute force unit cells generation
+    N = np.ceil(1.5*max(lat_params)/min(np.linalg.norm(lat_vec,axis=0)))
+    u1 = np.arange(-N,N+1)
+    l,m,n = np.meshgrid(u1,u1,u1)
+    #### l*a1+m*a2+n*a3
+    lmn = np.vstack([l.flatten(),m.flatten(),n.flatten()]).T
+    xyz  = lmn.dot(rot_vec)
+    x,y,z = xyz.T
+    idx = (x>0) & (y>0) & (z>0) & (x<ax) & (y<by) & (z<cz)
+    lmn = lmn[idx]
+
+    if plot:
+        l,m,n = lmn.T
+        x,y,z = xyz[idx].T
+        # print(l.min(),l.max(),m.min(),m.max(),n.min(),n.max())
+
+        #### generate super cell corners
+        l0,m0,n0 = np.meshgrid([0,1],[0,1],[0,1])
+        ax,by,cz = np.diag(lat_params)
+        sc = np.vstack([ax*i+by*j+cz*k for i,j,k in zip(l0.flatten(),m0.flatten(),n0.flatten())])
+        x0,y0,z0 = sc.T
+        # nlm1 = np.array([np.round(rot_vec.dot(v)/lat_p2) for v in sc])
+        #### get actual corners
+        # x1,y1,z1 = nlm1.dot(rot_vec).T
+
+        scat = ()
+        scat+=([x0,y0,z0,50,'b','o'],)
+        scat+=([x,y,z,50,'r','s'],)
+        dsp.stddisp(rc='3d',scat=scat)
+    return lmn.T
+
+
 def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',**kwargs):
     ''' convert cif file into autoslic .xyz input file
     - file : cif_file
@@ -119,7 +206,6 @@ def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',**kwargs):
         if not xyz: raise Exception('xyz filename required')
         pattern = file
     make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,**kwargs)
-
 
 def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail=''):
     ''' convert cif file into autoslic .xyz input file
@@ -217,12 +303,12 @@ def make_mulslice_datfile(dat_file,cif_file):
 ################################################################################
 #### display coordinate file
 ################################################################################
-def show_grid(file,opts='',hull_opt=0,figs='21',**kwargs):
+def show_grid(file,opts='',popts='pv',figs='21',**kwargs):
     '''
     file : path to .xyz file
     opt : str format 'x1x2' - 'xy','xz','yz','zx',...
     '''
-    print('...loading file...')
+    if 'v' in popts:print('...loading file...')
     with open(file,'r') as f:
         l=list(map(lambda s:s.strip().split(' '),f.readlines()))
 
@@ -231,14 +317,15 @@ def show_grid(file,opts='',hull_opt=0,figs='21',**kwargs):
     if isinstance(opts,list):
         fig,axs = dsp.create_fig(figsize=figs,rc=[1,len(opts)])
         for axi,opts_i in zip(axs,opts):
-            plot_grid(pattern,lat_params,opts_i,hull_opt=hull_opt,ax=axi,setPos=0,opt='',**kwargs)
+            plot_grid(pattern,lat_params,opts_i,popts=popts,ax=axi,setPos=0,opt='',**kwargs)
         fig.show()
     else:
         plot_grid(pattern,lat_params,opts,**kwargs)
 
-def plot_grid(pattern,lat_params,opts,hull_opt,**kwargs):
+def plot_grid(pattern,lat_params,opts,popts='pv',**kwargs):
     #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
     xij = {'x':1,'y':2,'z':3}
+    vopt = 'v' in popts
     if opts:
         x1,x2 = opts
         i,j = xij[x1],xij[x2]
@@ -246,16 +333,18 @@ def plot_grid(pattern,lat_params,opts,hull_opt,**kwargs):
         # print('...assigning colors...')
         C = np.array([cs[E] for E in Z])
         pps = [dsp.Rectangle((0,0),lat_params[i-1],lat_params[j-1],linewidth=2,edgecolor='b',alpha=0.1)]
-        if hull_opt :
-            # print('...finding convex hull...')
-            hull = ConvexHull(pattern[:,[i,j]])#,incremental=True)
-            idx = hull.vertices#;print(idx)
-            # scat = ([pattern[:,i],pattern[:,j],10,'b','x'],[pattern[idx,i],pattern[idx,j],50,C[idx],'o'],)
-        else:
+        scat=[]
+        if 'p' in popts:
             scat = [pattern[:,i],pattern[:,j],C]
-        print('...plotting...')
+        if 'h' in popts :
+            if vopt:print('...finding convex hull...')
+            hull = ConvexHull(pattern[:,[i,j]])#,incremental=True)
+            idx = hull.vertices #;print(idx)
+            points = np.array([pattern[idx,i],pattern[idx,j]]).T
+            pps+=[dsp.matplotlib.patches.Polygon(points,linewidth=2,facecolor='r',edgecolor='r',alpha=0.2)]
+        if vopt:print('...plotting...')
         return dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,
-            **kwargs)
+            xylims=[0,lat_params[i-1],0,lat_params[j-1]],**kwargs)
 
     # return lat_params,pattern
 

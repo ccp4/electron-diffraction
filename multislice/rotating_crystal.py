@@ -15,11 +15,11 @@ Rot = lambda a:np.array([[np.cos(a),0,np.sin(a)],[0,1,0],[-np.sin(a),0,np.cos(a)
 
 ##########################################################################
 # orient crystal along n_u
-def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True):
+def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True,theta=0):
     ''' Rotate the object so that n_u becomes e_z [1] :\n
     - coords : 3xN (or Nx3 array if T=True)
     - n : axis to align e_z against
-    - T : transpose if True
+    - T : transpose if True (input is Nx3)
     [1] [rotation matrix from axis and angle](https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle)
     '''
     e_z,n = np.array(ez)/np.linalg.norm(ez),np.array(n_u)/np.linalg.norm(n_u)
@@ -39,6 +39,13 @@ def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True):
             coords = R.dot(coords.T).T
         else:
             coords = R.dot(coords)
+    if theta :
+        t = np.deg2rad(theta)
+        st,ct = np.sin(t),np.cos(t)
+        if T :
+            coords = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]).dot(coords.T).T
+        else:
+            coords = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]).dot(coords)
     return coords
 
 # rotate crysral for periodic run

@@ -157,9 +157,9 @@ def find_xyz(lat_vec,lat_params,n_u,theta,plot=0):
     ax,by,cz = lat_params
     rot_vec = rcc.orient_crystal(lat_vec,n_u=n_u,T=True,theta=theta)
     # ra1,ra2,ra3 = rot_vec
-
     #### brute force unit cells generation
     N = np.ceil(1.5*max(lat_params)/min(np.linalg.norm(lat_vec,axis=0)))
+
     u1 = np.arange(-N,N+1)
     l,m,n = np.meshgrid(u1,u1,u1)
     #### l*a1+m*a2+n*a3
@@ -170,22 +170,27 @@ def find_xyz(lat_vec,lat_params,n_u,theta,plot=0):
     lmn = lmn[idx]
 
     if plot:
+        print('N',N)
+        print('rot_vec',rot_vec)
         l,m,n = lmn.T
         x,y,z = xyz[idx].T
-        # print(l.min(),l.max(),m.min(),m.max(),n.min(),n.max())
+        print('lminmax',l.min(),l.max(),m.min(),m.max(),n.min(),n.max())
 
         #### generate super cell corners
         l0,m0,n0 = np.meshgrid([0,1],[0,1],[0,1])
         ax,by,cz = np.diag(lat_params)
         sc = np.vstack([ax*i+by*j+cz*k for i,j,k in zip(l0.flatten(),m0.flatten(),n0.flatten())])
         x0,y0,z0 = sc.T
-        # nlm1 = np.array([np.round(rot_vec.dot(v)/lat_p2) for v in sc])
         #### get actual corners
-        # x1,y1,z1 = nlm1.dot(rot_vec).T
+        lat_p2 = np.linalg.norm(rot_vec,axis=0)**2
+        nlm1 = np.array([np.round(rot_vec.dot(v)/lat_p2) for v in sc])
+        print('corners' ,nlm1)
+        x1,y1,z1 = nlm1.dot(rot_vec).T
 
         scat = ()
         scat+=([x0,y0,z0,50,'b','o'],)
-        scat+=([x,y,z,50,'r','s'],)
+        scat+=([x0,y0,z0,50,'g','d'],)
+        scat+=([x,y,z,20,'r','s'],)
         dsp.stddisp(rc='3d',scat=scat)
     return lmn.T
 
@@ -337,7 +342,7 @@ def show_grid(file,opts='',popts='pv',figs='21',**kwargs):
     else:
         plot_grid(pattern,lat_params,opts,**kwargs)
 
-def plot_grid(pattern,lat_params,opts,popts='pv',**kwargs):
+def plot_grid(pattern,lat_params,opts,popts='pv',xylims=[],**kwargs):
     #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
     xij = {'x':1,'y':2,'z':3}
     vopt = 'v' in popts
@@ -358,8 +363,9 @@ def plot_grid(pattern,lat_params,opts,popts='pv',**kwargs):
             points = np.array([pattern[idx,i],pattern[idx,j]]).T
             pps+=[dsp.matplotlib.patches.Polygon(points,linewidth=2,facecolor='r',edgecolor='r',alpha=0.2)]
         if vopt:print('...plotting...')
+        if not xylims : xylims = [0,lat_params[i-1],0,lat_params[j-1]]
         return dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,
-            xylims=[0,lat_params[i-1],0,lat_params[j-1]],**kwargs)
+            xylims=xylims,**kwargs)
 
     # return lat_params,pattern
 

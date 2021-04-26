@@ -56,25 +56,26 @@ if __name__ == '__main__':
 
     # file = '../../tests/multislice/dat/alpha_glycine.cif'
     # xyz = 'dat/alpha_gly.xyz'
-    file = 'Si'
-    xyz = name+'Si111large.xyz'
-    crys = mut.import_crys(file)
-    lat_params = [100,100,100]
-    mut.gen_xyz2(file,xyz,lat_params,n=[1,1,1],theta=0,pad=1,opts='p')
+    # file = 'Si'
+    # xyz = name+'Si111large.xyz'
+    # crys = mut.import_crys(file)
+    # lat_params = [100,100,100]
+    # mut.gen_xyz2(file,xyz,lat_params,n=[1,1,1],theta=0,pad=1,opts='p')
     # mut.gen_xyz('Si',n=[1,1,1],theta=0,rep=[20,20,100],pad=[2,2,0],xyz=xyz)
     # mut.show_grid(xyz,opts=['xy','xz'],popts='hv',figs='f')#,xylims=[0,1000,0,1000])
     # mut.show_grid(xyz,opts='yz')
     # mut.show_grid(xyz,opts='xz')#,xylims=[])
     # mut.show_grid3(xyz)
 
-    # multi = pp.load(name,tag='resume',v=2)
+    multi = pp.load(name,tag='resume',v=2)
     # multi.resume(opt='srfp',ppopt='w',Nz=30,i_slice=20)#Nhk=4)
-    # multi.save_patterns()
+    multi.patterns_saved=0
+    multi.save_pattern(iz=9)
     # multi.pattern(Iopt='cns')
     # multi.get_beams(bOpt='fa');
     # multi.merged=0
     # multi.merge_beams()
     # multi.beam_vs_thickness(orig=1,tol=1e-3)
-    # multi.pattern(Iopt='sNc',Nmax=100,cmap='viridis',caxis=[0,0.25],xylims=5)
+    multi.pattern(iz=9,Iopt='sNc',Nmax=100,cmap='viridis',caxis=[0,0.25],xylims=5)
     # multi.patterns2gif('dat/test.gif', Iopt='scN',Nmax=100,xylims=2,caxis=[0,0.25])#,pOpt='X')
     # multi.show_patterns(Iopt='s',caxis=[0,1e10],xylims=5)

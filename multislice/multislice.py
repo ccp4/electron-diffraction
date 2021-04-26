@@ -168,12 +168,12 @@ class Multislice:
         if 'f' in opt: fopt += 'f'
         if 'w' in opt: fopt += 'w'
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
+        self.patterns_saved = 0
 
         if save_deck : self.make_decks(save_deck,prev=prev,v=v)
         if save_obj : self.save(v=v)
         if 'd' in v : self.print_datafiles()
         if 'D' in v : self.print_decks()
-        self.patterns_saved = 0
         if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster)
         if do_pp : self.postprocess(ppopt,ssh,hostpath=hostpath)
 
@@ -397,12 +397,17 @@ class Multislice:
         if not self.patterns_saved:
             i_files = [f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')]
             for i in i_files :
-                self.save_pattern(i,v)
+                self.save_pattern(i=i,v=v)
             self.patterns_saved=1
 
-    def save_pattern(self,i='',v=1):
-        print('loading pattern %s' %i)
-        txt_file=self._outf('pattern')+i
+    def save_pattern(self,iz=None,i='',v=1):
+        if iz:
+            patterns = np.sort(lsfiles(self._outf('pattern')+'*'))
+            txt_file = patterns[min(patterns.size-1,iz+1)]
+            i=str(iz).zfill(3)
+        else:
+            txt_file=self._outf('pattern')+i
+        print('loading pattern %s' %txt_file)
         im = np.loadtxt(txt_file)
         print('saving')
         real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
@@ -448,6 +453,7 @@ class Multislice:
             zi = self.i_slice*self.slice_thick*(iz+1)
         if not title:title = 'z=%d A' %(zi)
 
+        if v>1:print('loading %s' %file)
         im = np.load(file)
         if v>1:print('original image shape',im.shape)
         ax,by = self.cell_params[:2]
@@ -631,17 +637,15 @@ class Multislice:
                 elif 'elapsed time' in l2 : state='done'
                 else : state='init'
             else:
+                zl = [i for i,l in enumerate(lines) if 'z=' in l ]
                 if not sum(['Sorting atoms' in l for l in lines]) : state='init'
+                elif 'END' in l2 : state='done'
+                elif sum(['wall time' in l for l in lines]) : state='processing'
+                elif len(zl) :
+                    l1=lines[zl[-1]]
+                    state="%d%%" %int(100*float(l1[3:8])/self.thickness)
                 else:
-                    zl = [i for i,l in enumerate(lines) if 'z=' in l ]
-                    if len(zl) :
-                        l1=lines[zl[-1]]
-                        state="%d%%" %int(100*float(l1[3:8])/self.thickness)
-                    else:
-                        if 'END' in l2 : state='done'
-                        elif sum(['wall time' in l for l in lines]) : state='processing'
-                        else:state='undefined'
-
+                    state='undefined'
             #print state info
             if v :
                 if state=='init': print(colors.green+"Initializing..."+colors.black)

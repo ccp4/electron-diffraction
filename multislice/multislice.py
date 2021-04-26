@@ -100,7 +100,7 @@ class Multislice:
     def __init__(self,name,mulslice=False,tail='',tag=None,data=None,
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
                 keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,dz=None,i_slice=1000,
-                hk=[(0,0)],Nhk=0,hk_sym=0,prev=None,
+                hk=[(0,0)],Nhk=0,hk_pad=None,hk_sym=0,prev=None,
                 opt='sr',fopt='',ppopt='uwP',v=1,
                 ssh=None,hostpath='',cluster=False,cif_file=None):
 
@@ -123,7 +123,7 @@ class Multislice:
         self.keV         = keV
         self.repeat      = tuple(repeat)
         self.NxNy        = self._set_NxNy(NxNy)
-        self.hk          = self._set_hk(hk,Nhk,hk_sym)
+        self.hk          = self._set_hk(hk,Nhk,hk_sym,hk_pad)
         self.cell_params = self._get_cell_params('c' in v)
         self.slice_thick = self._set_slice_thick(slice_thick,dz)
         self.i_slice     = i_slice
@@ -724,9 +724,12 @@ class Multislice:
         if isinstance(NxNy,int) or  isinstance(NxNy,np.int64) :
             NxNy = [NxNy,NxNy]
         return tuple(NxNy)
-    def _set_hk(self,hk,Nhk,sym=0):
+    def _set_hk(self,hk,Nhk,sym=0,hk_pad=None):
+        Nh,Nk,Nl=self.repeat
+        if hk_pad:
+            if isinstance(hk_pad,int):hk_pad=[hk_pad]*2
+            Nh,Nk=hk_pad
         if Nhk:
-            Nh,Nk,Nl=self.repeat
             h,k = np.meshgrid(range(-sym*Nhk,Nhk),range(-sym*Nhk,Nhk))
             hk=[(Nh*h,Nk*k) for h,k in zip(h.flatten(),k.flatten())];#print(hk)
         return hk

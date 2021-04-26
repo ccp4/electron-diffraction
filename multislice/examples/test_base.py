@@ -60,9 +60,9 @@ if __name__ == '__main__':
     # xyz = name+'Si111large.xyz'
     crys = mut.import_crys(file)
     lat_params = [50,50,200]
-    mut.gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=1)
+    mut.gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=1,opts='')
     # mut.gen_xyz('Si',n=[1,1,1],theta=0,rep=[20,20,100],pad=[2,2,0],xyz=xyz)
-    mut.show_grid(xyz,opts=['xy','xz'],popts='hp',figs='f')#,xylims=[0,1000,0,1000])
+    mut.show_grid(xyz,opts=['xy','xz'],popts='hv',figs='f')#,xylims=[0,1000,0,1000])
     # mut.show_grid(xyz,opts='yz')
     # mut.show_grid(xyz,opts='xz')#,xylims=[])
     # mut.show_grid3(xyz)

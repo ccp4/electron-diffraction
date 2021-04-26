@@ -144,6 +144,12 @@ def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=0,fmt='%.4f',opts=''):
     header+= ' '.join([fmt]*3) %(ax,by,cz)
     np.savetxt(xyz,pattern,footer='-1',header=header,fmt='%d '+' '.join([fmt]*5),comments='')
     print(colors.green+"coords file saved : \n"+colors.yellow+xyz+colors.black)
+    npy_file = xyz.replace('.xyz','.npy')
+    np.save(npy_file,[(ax,by,cz),pattern])
+    print(colors.green+'binary coords file saved :'+colors.yellow+npy_file+colors.black)
+    # if 'v' in opts:
+    print('number of coordinates = %d' %pattern.shape[0])
+    print('number of unit cells  = %d' %l.shape[0])
     # if 'p' in dopt :
     #     with open(name,'r') as f : print(''.join(f.readlines()))
 
@@ -205,7 +211,10 @@ def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',**kwargs):
     else:
         if not xyz: raise Exception('xyz filename required')
         pattern = file
-    make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,**kwargs)
+    pattern,lat = make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,**kwargs)
+    npy_file = xyz.replace('.xyz','.npy')
+    np.save(npy_file,[lat,pattern])
+    print(colors.green+'binary coords file saved :'+colors.yellow+npy_file+colors.black)
 
 def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail=''):
     ''' convert cif file into autoslic .xyz input file
@@ -309,11 +318,17 @@ def show_grid(file,opts='',popts='pv',figs='21',**kwargs):
     opt : str format 'x1x2' - 'xy','xz','yz','zx',...
     '''
     if 'v' in popts:print('...loading file...')
-    with open(file,'r') as f:
-        l=list(map(lambda s:s.strip().split(' '),f.readlines()))
+    npy_file = file.replace('.xyz','.npy')
+    if os.path.exists(npy_file):
+        lat_params,pattern = np.load(npy_file,allow_pickle=True)
+    else:
+        with open(file,'r') as f:
+            l=list(map(lambda s:s.strip().split(' '),f.readlines()))
+            lat_params = np.array(l[1],dtype=float)
+            pattern   = np.array(l[2:-1],dtype=float)
+            np.save(npy_file,[lat_params,pattern])
+            print(colors.green+'binary coords file saved :'+colors.yellow+npy_file+colors.black)
 
-    lat_params = np.array(l[1],dtype=float)
-    pattern   = np.array(l[2:-1],dtype=float)
     if isinstance(opts,list):
         fig,axs = dsp.create_fig(figsize=figs,rc=[1,len(opts)])
         for axi,opts_i in zip(axs,opts):

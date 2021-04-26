@@ -448,7 +448,6 @@ class Multislice:
         - kwargs : see stddisp
         returns : [qx,qy,I]
         '''
-        # if not exists(self._outf('patternnpy')):self.save_pattern()
         if iz:
             patterns = np.sort(lsfiles(self._outf('pattern')+'.*'))
             izs = np.array([p.split('.')[-1] for p in patterns],dtype=int)
@@ -460,8 +459,6 @@ class Multislice:
                 zi = self.i_slice*self.slice_thick*(iz+1)
         if not file:
             file = self._outf('patternnpy')
-            zi = self.thickness
-        else:
             zi = self.thickness
         if not title:title = 'z=%d A' %(zi)
 
@@ -815,6 +812,7 @@ class Multislice:
         multi = pp.load_multi_obj('%s');
         multi.datpath='./';
         multi.get_beams(bOpt='fa');
+        multi.save_pattern()
         qx,qy,It1 = multi.pattern(Iopt='Ncs',out=True,Nmax=260);
         np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])

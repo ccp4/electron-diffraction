@@ -153,19 +153,20 @@ def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=0,fmt='%.4f',opts=''):
     # if 'p' in dopt :
     #     with open(name,'r') as f : print(''.join(f.readlines()))
 
-def find_xyz(lat_vec,lat_params,n_u,theta,plot=0):
+def find_xyz(lat_vec,lat_params,n_u,theta,plot=0,v=0):
     ax,by,cz = lat_params
     rot_vec = rcc.orient_crystal(lat_vec,n_u=n_u,T=True,theta=theta)
     # ra1,ra2,ra3 = rot_vec
     #### brute force unit cells generation
     N = np.ceil(1.5*max(lat_params)/min(np.linalg.norm(lat_vec,axis=0)))
-
     u1 = np.arange(-N,N+1)
     l,m,n = np.meshgrid(u1,u1,u1)
     #### l*a1+m*a2+n*a3
     lmn = np.vstack([l.flatten(),m.flatten(),n.flatten()]).T
+    if v:print('... orienting full mesh N=%d...' %N)
     xyz  = lmn.dot(rot_vec)
     x,y,z = xyz.T
+    if v:print('... keeping unit cells...')
     idx = (x>0) & (y>0) & (z>0) & (x<ax) & (y<by) & (z<cz)
     lmn = lmn[idx]
 

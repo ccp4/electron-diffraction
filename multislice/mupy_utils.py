@@ -118,7 +118,7 @@ def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=0,fmt='%.4f',opts=''):
 
     #### replicate
     if 'v' in opts:print('...finding unit cells index...')
-    l,m,n = find_xyz(lat_vec,lat_params,n_u,theta,plot='p' in opts)
+    l,m,n = find_xyz(lat_vec,lat_params,n_u,theta,plot='p' in opts,v='v' in opts)
     a1,a2,a3 = np.array(lat_vec)
     coords = np.vstack([coords + i*a1+j*a2+k*a3 for i,j,k in zip(l,m,n)])
     Za     = np.tile(Za   ,[n.size])
@@ -163,10 +163,10 @@ def find_xyz(lat_vec,lat_params,n_u,theta,plot=0,v=0):
     l,m,n = np.meshgrid(u1,u1,u1)
     #### l*a1+m*a2+n*a3
     lmn = np.vstack([l.flatten(),m.flatten(),n.flatten()]).T
-    if v:print('... orienting full mesh N=%d...' %N)
+    if v:print('...\torienting full mesh N=%d...' %N)
     xyz  = lmn.dot(rot_vec)
     x,y,z = xyz.T
-    if v:print('... keeping unit cells...')
+    if v:print('...\tkeeping valid unit cells...')
     idx = (x>0) & (y>0) & (z>0) & (x<ax) & (y<by) & (z<cz)
     lmn = lmn[idx]
 

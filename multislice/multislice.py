@@ -404,7 +404,7 @@ class Multislice:
             for i in i_files :
                 self.save_pattern(i=i,v=v)
             self.patterns_saved=1
-
+            self.save(v=1)
     def save_pattern(self,iz=None,i='',v=1):
         if iz:
             patterns = np.sort(lsfiles(self._outf('pattern')+'*'))
@@ -456,13 +456,13 @@ class Multislice:
             if idx:
                 # patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))
                 file = patterns[idx[0]].replace('.txt.','')+'.npy'
-                zi = self.i_slice*self.slice_thick*(iz+1)
+                zi = self.i_slice*self.slice_thick*(iz)#;print(zi)
         if not file:
             file = self._outf('patternnpy')
             zi = self.thickness
         if not title:title = 'z=%d A' %(zi)
 
-        if v>1:print('loading %s' %file)
+        if v>1:print('loading %s at z=%.1fA' %(file,zi))
         im = np.load(file)
         if v>1:print('original image shape',im.shape)
         ax,by = self.cell_params[:2]
@@ -812,7 +812,7 @@ class Multislice:
         multi = pp.load_multi_obj('%s');
         multi.datpath='./';
         multi.get_beams(bOpt='fa');
-        multi.save_pattern()
+        multi.save_pattern();
         qx,qy,It1 = multi.pattern(Iopt='Ncs',out=True,Nmax=260);
         np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])

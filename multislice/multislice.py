@@ -477,7 +477,7 @@ class Multislice:
             #print('normalizing')
         if 'N' in Iopt:
             im/=(4*Nx*Ny)**2
-            # print(im.max())
+            if v>1:print(im.max(),im.sum())
         elif 'n' in Iopt : #normalize:
             im00 = im[0,0];im[0,0] = 0
             mMax = im.max();im /= mMax
@@ -508,19 +508,19 @@ class Multislice:
         if 'r' in Iopt :
             r = np.sqrt(h**2+k**2);r[r==0]=1
             im0 += np.random.rand(im0.shape[0],im0.shape[1])/(10*r)
+        if 'g' in Iopt:
+            i,j = np.where(im0>10*tol) #index of spots
+        im0[im0<tol] = tol*1e-2
+        if 'g' in Iopt:
+            x,y = np.meshgrid(range(-5,6),range(-5,6))
+            Pb = np.exp(-gs*(x**2+y**2)**2)
+            # Pb = 1/(x**2+y**2+0.01)**10
+            for i0,j0 in zip(i,j):
+                im00 = im0[i0,j0]
+                im0[i0+x,j0+y] += im0[i0,j0]*Pb
+                im0[i0,j0] = im00
+                im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
         if 'l' in Iopt : #logscale the data
-            if 'g' in Iopt:
-                i,j = np.where(im0>10*tol) #index of spots
-            im0[im0<tol] = tol*1e-2
-            if 'g' in Iopt:
-                x,y = np.meshgrid(range(-5,6),range(-5,6))
-                Pb = np.exp(-gs*(x**2+y**2)**2)
-                # Pb = 1/(x**2+y**2+0.01)**10
-                for i0,j0 in zip(i,j):
-                    im00 = im0[i0,j0]
-                    im0[i0+x,j0+y] += im0[i0,j0]*Pb
-                    im0[i0,j0] = im00
-                    im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
             im0 = np.log10(im0)
 
         qx,qy = h/Nh/ax,k/Nk/by

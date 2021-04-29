@@ -427,8 +427,7 @@ class Multislice:
     def patterns2gif(self,name=None,v=1,**kwargs):
         if v>1:print(colors.blue+'...saving patterns to npy...'+colors.black)
         if not name:
-            if not exist
-            Popen()'mkdir %s ' figures
+            if not os.path.exists():Popen('mkdir %s ' figures,shell=True)
             name=self.datpath+'figures/'+self.name+'_pattern.gif'
         self.save_patterns(v=0)
 

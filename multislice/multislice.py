@@ -168,9 +168,7 @@ class Multislice:
         if 'f' in opt: fopt += 'f'
         if 'w' in opt: fopt += 'w'
         vopt=('r' in v and 'R' not in v) + 2*('R' in v)
-        patterns_opt= 's' in ppopt
-        self.patterns_saved = patterns_opt
-
+        self.patterns_saved,patterns_opt=0,'s' in ppopt         #patterns_saved set to 1 during job postprocess
         if save_deck : self.make_decks(save_deck,prev=prev,v=v)
         if save_obj : self.save(v=v)
         if 'd' in v : self.print_datafiles()
@@ -397,14 +395,14 @@ class Multislice:
         beams = np.load(self._outf('beams'),allow_pickle=True)
         return beams
 
-    def save_patterns(self,force=0,v=0):
+    def save_patterns(self,force=0,save_opt=1,v=0):
         if force : self.patterns_saved=0
         if not self.patterns_saved:
             i_files = np.sort([f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')])
             for i in i_files :
                 self.save_pattern(i=i,v=v)
             self.patterns_saved=1
-            self.save(v=1)
+            if save_opt:self.save(v=1)
     def save_pattern(self,iz=None,i='',v=1):
         if iz:
             patterns = np.sort(lsfiles(self._outf('pattern')+'*'))
@@ -810,6 +808,7 @@ class Multislice:
         job+='printf "\n\tPOSTPROCESSING\n"  >> %s \n\n' %(logfile)
         pycode='''import multislice.postprocess as pp;import numpy as np;
         multi = pp.load_multi_obj('%s');
+        datpath = multi.datpath
         multi.datpath='./';
         multi.get_beams(bOpt='fa');
         multi.save_pattern();
@@ -817,7 +816,8 @@ class Multislice:
         np.save(multi.outf['patternS'],[qx,qy,It1]);
         ''' %(self.outf['obj'])
         if patterns_opt:
-            pycode+='''multi.save_patterns();'''
+            pycode+='''multi.save_patterns(save_opt=0);'''
+            pycode+='''multi.datpath = datpath;mutli.save();'''
         job +='%s -c "%s" >>%s 2>&1 \n' %(pyexe, pycode.replace('\n',''),logfile)
         job+='printf "END" >>%s\n' %(logfile)
 

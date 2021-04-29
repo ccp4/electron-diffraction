@@ -423,8 +423,13 @@ class Multislice:
         patterns = lsfiles(self._outf('pattern').replace('.txt','')+'0*.npy')
         return pp.Multi_Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
 
-    def patterns2gif(self,name,v=1,**kwargs):
+    def _create_figdir(self):
+    def patterns2gif(self,name=None,v=1,**kwargs):
         if v>1:print(colors.blue+'...saving patterns to npy...'+colors.black)
+        if not name:
+            if not exist
+            Popen()'mkdir %s ' figures
+            name=self.datpath+'figures/'+self.name+'_pattern.gif'
         self.save_patterns(v=0)
 
         name = name.replace('.gif','')
@@ -808,7 +813,7 @@ class Multislice:
         job+='printf "\n\tPOSTPROCESSING\n"  >> %s \n\n' %(logfile)
         pycode='''import multislice.postprocess as pp;import numpy as np;
         multi = pp.load_multi_obj('%s');
-        datpath = multi.datpath
+        datpath = multi.datpath;
         multi.datpath='./';
         multi.get_beams(bOpt='fa');
         multi.save_pattern();

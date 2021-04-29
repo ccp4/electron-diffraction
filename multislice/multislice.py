@@ -423,7 +423,7 @@ class Multislice:
         patterns = lsfiles(self._outf('pattern').replace('.txt','')+'0*.npy')
         return pp.Multi_Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
 
-    def _create_figdir(self):
+    # def _create_figdir(self):
     def patterns2gif(self,name=None,v=1,**kwargs):
         if v>1:print(colors.blue+'...saving patterns to npy...'+colors.black)
         if not name:

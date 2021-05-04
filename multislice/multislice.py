@@ -398,6 +398,7 @@ class Multislice:
     def save_patterns(self,force=0,save_opt=1,v=0):
         if force : self.patterns_saved=0
         if not self.patterns_saved:
+            print(colors.blue+'...saving patterns to npy...'+colors.black)
             i_files = np.sort([f.replace(self._outf('pattern'),'') for f in lsfiles(self._outf('pattern')+'*')])
             for i in i_files :
                 self.save_pattern(i=i,v=v)
@@ -410,9 +411,8 @@ class Multislice:
             i=str(iz).zfill(3)
         else:
             txt_file=self._outf('pattern')+i
-        print('loading pattern %s' %txt_file)
+        if v:print('loading pattern %s' %txt_file)
         im = np.loadtxt(txt_file)
-        print('saving')
         real,imag = im[:,0:-1:2],im[:,1::2];#print(real.max())
         im = real**2+imag**2
         npy_file=self._outf('pattern').replace('.txt','')+i.replace('.','')+'.npy'
@@ -424,21 +424,24 @@ class Multislice:
         return pp.Multi_Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
 
     # def _create_figdir(self):
-    def patterns2gif(self,name=None,v=1,**kwargs):
-        if v>1:print(colors.blue+'...saving patterns to npy...'+colors.black)
+    def patterns2gif(self,name=None,v=0,**kwargs):
         if not name:
-            if not os.path.exists():Popen('mkdir %s ' %(self.datpath+'figures'),shell=True)
-            name=self.datpath+'figures/'+self.name+'_pattern.gif'
+            figpath = self.datpath+'figures/'
+            if not exists(figpath):
+                Popen('mkdir %s ' %(figpath),shell=True)
+            name=figpath+self.name+'_pattern.gif'
         self.save_patterns(v=0)
 
         name = name.replace('.gif','')
         patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))[1:]
-        if v:print(colors.blue+'...saving patterns to png...'+colors.black)
+        print(colors.blue+'...saving patterns to png...'+colors.black)
         for iz in range(len(patterns)):
             figname='%s%s.png' %(name,str(iz).zfill(4))
-            self.pattern(iz=iz,name=figname,opt='sc',v=v,**kwargs)
-        if v:print(colors.blue+'...saving patterns to gif...'+colors.black)
-        dsp.im2gif(name,'png')
+            # self.pattern(iz=iz,name=figname,opt='sc',v=v,**kwargs)
+        print(colors.blue+'...saving patterns to gif...'+colors.black)
+        cmd='im2gif '+name +' png'
+        out=check_output(['/bin/bash','-i','-c',cmd]).decode()
+        print(colors.green+out+colors.black)
 
     def pattern(self,iz=None,file=None,Iopt='Ncs',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
         cmap='binary',pOpt='im',title='',**kwargs):
@@ -447,6 +450,7 @@ class Multislice:
         - Nmax : crop display beyond Nmax
         - rings : list or array - of resolutions for rings to display
         - gs     : broadening parameter
+        - r : add random noise
         - kwargs : see stddisp
         returns : [qx,qy,I]
         '''
@@ -464,7 +468,7 @@ class Multislice:
             zi = self.thickness
         if not title:title = 'z=%d A' %(zi)
 
-        if v>1:print('loading %s at z=%.1fA' %(file,zi))
+        if v:print('loading %s at z=%.1fA' %(file,zi))
         im = np.load(file)
         if v>1:print('original image shape',im.shape)
         ax,by = self.cell_params[:2]
@@ -512,7 +516,6 @@ class Multislice:
             im0 += np.random.rand(im0.shape[0],im0.shape[1])/(10*r)
         if 'g' in Iopt:
             i,j = np.where(im0>10*tol) #index of spots
-        im0[im0<tol] = tol*1e-2
         if 'g' in Iopt:
             x,y = np.meshgrid(range(-5,6),range(-5,6))
             Pb = np.exp(-gs*(x**2+y**2)**2)
@@ -523,6 +526,7 @@ class Multislice:
                 im0[i0,j0] = im00
                 im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
         if 'l' in Iopt : #logscale the data
+            im0[im0<tol] = tol*1e-2
             im0 = np.log10(im0)
 
         qx,qy = h/Nh/ax,k/Nk/by

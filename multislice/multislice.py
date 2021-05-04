@@ -437,7 +437,7 @@ class Multislice:
         print(colors.blue+'...saving patterns to png...'+colors.black)
         for iz in range(len(patterns)):
             figname='%s%s.png' %(name,str(iz).zfill(4))
-            # self.pattern(iz=iz,name=figname,opt='sc',v=v,**kwargs)
+            self.pattern(iz=iz,name=figname,opt='sc',v=v,**kwargs)
         print(colors.blue+'...saving patterns to gif...'+colors.black)
         cmd='im2gif '+name +' png'
         out=check_output(['/bin/bash','-i','-c',cmd]).decode()

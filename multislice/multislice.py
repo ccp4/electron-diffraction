@@ -443,14 +443,14 @@ class Multislice:
         out=check_output(['/bin/bash','-i','-c',cmd]).decode()
         print(colors.green+out+colors.black)
 
-    def pattern(self,iz=None,file=None,Iopt='Ncs',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
+    def pattern(self,iz=None,file=None,rmax=10,Iopt='Ncs',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
         cmap='binary',pOpt='im',title='',**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
         - rings : list or array - of resolutions for rings to display
-        - gs     : broadening parameter
-        - r : add random noise
+        - gs    : broadening range
+        - rmax  : indicative of noise level fall off
         - kwargs : see stddisp
         returns : [qx,qy,I]
         '''
@@ -511,20 +511,34 @@ class Multislice:
             im0 = im[Nx-Nmax:Nx+Nmax,Ny-Nmax:Ny+Nmax];del(im)#;print(im0.shape)
             h,k = np.meshgrid(np.arange(-Nmax,Nmax),np.arange(-Nmax,Nmax))
 
-        if 'r' in Iopt :
-            r = np.sqrt(h**2+k**2);r[r==0]=1
-            im0 += np.random.rand(im0.shape[0],im0.shape[1])/(10*r)
         if 'g' in Iopt:
             i,j = np.where(im0>10*tol) #index of spots
+            # print(i,j)
+            im00 = im0.copy()
         if 'g' in Iopt:
-            x,y = np.meshgrid(range(-5,6),range(-5,6))
-            Pb = np.exp(-gs*(x**2+y**2)**2)
+            gs3 = gs
+            dqx,dqy = Nh/ax,Nk/by
+            nx,ny = int(np.floor(gs3/dqx)),int(np.floor(gs3/dqy)) ;
+            if v: print('Gaussian window function size : ', nx,ny)
+            ix,iy = np.meshgrid(range(-nx,nx+1),range(-ny,ny+1))
+            x,y = ix*dqx,iy*dqy
+            Pb = np.exp(-(x**2+y**2)/(gs3/3)**2)#;dsp.stddisp(im=[x,y,Pb],pOpt='im')
             # Pb = 1/(x**2+y**2+0.01)**10
+            # print((Pb/Pb.sum()).max())
             for i0,j0 in zip(i,j):
-                im00 = im0[i0,j0]
-                im0[i0+x,j0+y] += im0[i0,j0]*Pb
-                im0[i0,j0] = im00
-                im0[i0+x,j0+y] = np.maximum(im0[i0+x,j0+y],tol*1e-2)
+                i0x,j0y = i0+ix,j0+iy #;print(i0x,j0y)
+                idx         =  (i0x>=0) & (j0y>=0)  & (i0x<2*Nmax) & (j0y<2*Nmax)
+                i0x,j0y     = i0+ix[idx],j0+iy[idx]
+                # print(idx)#i0x,j0y)
+                im0[i0,j0] -= im00[i0,j0]
+                im0[i0x,j0y] += Pb[idx]/Pb[idx].sum()*im00[i0,j0]
+                # im0[i0,j0] = 100#im00
+                # im0[i0x,j0y] = np.maximum(im0[i0x,j0y],tol*1e-2)
+
+        if 'r' in Iopt :
+            r = np.sqrt(h**2+k**2);r[r==0]=1
+            im0 += np.random.rand(im0.shape[0],im0.shape[1])/(rmax*r)
+
         if 'l' in Iopt : #logscale the data
             im0[im0<tol] = tol*1e-2
             im0 = np.log10(im0)

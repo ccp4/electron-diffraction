@@ -70,7 +70,8 @@ if __name__ == '__main__':
     multi = pp.load(name,tag='base',v=2)
     # multi.resume(opt='srfp',ppopt='w',Nz=30,i_slice=20)#Nhk=4)
     # multi.save_pattern(iz=15)
-    multi.pattern(Iopt='ncsrg',Nmax=256,gs=0.3,rmax=20,tol=1e-3,xylims=2,v=1,caxis=[0,0.1])
+    multi.pattern(Iopt='ncsgt',iz=5,Nmax=64,Imax=3e4,gs=0.3,
+        rmax=100,tol=1e-3,v=1,)#xylims=2,caxis=[0,0.1])
     # qx,qy,I = multi.pattern(Iopt='cns',gs=2,rmax=20,out=1)
     # ss = [np.s_[i+int(qx.shape[0]/2),:] for i in range(4)]
     # cs = dsp.getCs('Blues',4)

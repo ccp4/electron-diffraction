@@ -16,13 +16,13 @@ multi.beam_vs_thickness(bOpt='f')
 ```
 '''
 import importlib as imp
-import pickle,socket,time
+import pickle,socket,time,tifffile
 import pandas as pd
 import numpy as np
 from math import ceil,nan
 from subprocess import Popen,check_output,PIPE
 from glob import glob as lsfiles
-from os.path import dirname,realpath,exists
+from os.path import dirname,realpath,exists,basename
 from string import ascii_uppercase as SLICES #ascii_letters
 from string import ascii_letters
 # from matplotlib.animation import FuncAnimation
@@ -175,6 +175,7 @@ class Multislice:
         if 'D' in v : self.print_decks()
         if do_run : self.p = self.run(v=vopt, fopt=fopt,ssh_alias=ssh,hostpath=hostpath,cluster=cluster,patterns_opt=patterns_opt)
         if do_pp : self.postprocess(ppopt,ssh,hostpath=hostpath)
+        self._set_figpath()
 
     def resume(self,Nz,v=1,opt='sr',
         hk=None,Nhk=None,hk_sym=0,i_slice=None,prev=1,
@@ -423,13 +424,10 @@ class Multislice:
         patterns = lsfiles(self._outf('pattern').replace('.txt','')+'0*.npy')
         return pp.Multi_Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
 
-    # def _create_figdir(self):
     def patterns2gif(self,name=None,v=0,**kwargs):
         if not name:
-            figpath = self.datpath+'figures/'
-            if not exists(figpath):
-                Popen('mkdir %s ' %(figpath),shell=True)
-            name=figpath+self.name+'_pattern.gif'
+            self._set_figpath()
+            name=self.figpath+self.name+'_pattern.gif'
         self.save_patterns(v=0)
 
         name = name.replace('.gif','')
@@ -443,10 +441,10 @@ class Multislice:
         out=check_output(['/bin/bash','-i','-c',cmd]).decode()
         print(colors.green+out+colors.black)
 
-    def pattern(self,iz=None,file=None,rmax=10,Iopt='Ncs',out=0,tol=1e-6,qmax=None,Nmax=None,gs=3,rings=[],v=1,
-        cmap='binary',pOpt='im',title='',**kwargs):
+    def pattern(self,iz=None,file=None,rmax=10,Iopt='Ncs',out=0,tol=1e-6,Nmax=None,gs=3,Imax=3e4,
+        rings=[],v=1,cmap='binary',pOpt='im',title='',name=None,**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
-        - Iopt : I(intensity), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
+        - Iopt : t(tiff), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
         - rings : list or array - of resolutions for rings to display
         - gs    : broadening range
@@ -547,12 +545,21 @@ class Multislice:
         N = [1,4]['q' in Iopt]
         if out : return qx,qy,im0
 
+        self._set_figpath()
+        if not name:name=self.figpath+basename(file).replace('.npy','.png')
+        if 't' in Iopt:
+            I = np.array(im0*Imax,dtype='uint16')
+            tiff_file = name.replace('.png','.tif')
+            tifffile.imwrite(tiff_file,I)
+            print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
+
         t = np.linspace(0,2*np.pi/N,100)
         ct,st = np.cos(t),np.sin(t)
         plts = [[r*ct,r*st,'g--',''] for r in rings]
         if v:print('displaying pattern:',im0.shape)
+
         return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[qx,qy,im0],
-            cmap=cmap,pOpt=pOpt,title=title,**kwargs)
+            cmap=cmap,pOpt=pOpt,title=title,name=name,**kwargs)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities
@@ -733,6 +740,11 @@ class Multislice:
         else :
             outf['data'] = self.data[0]
         return outf
+
+    def _set_figpath(self):
+        self.figpath = self.datpath+'figures/'
+        if not exists(self.figpath):
+            Popen('mkdir %s ' %(self.figpath),shell=True)
 
     def _get_cell_params(self,v=False):
         if self.is_mulslice :

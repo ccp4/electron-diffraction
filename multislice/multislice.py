@@ -544,8 +544,8 @@ class Multislice:
             im0 = np.log10(im0)
 
         qx,qy = h/Nh/ax,k/Nk/by
-        if out : return qx,qy,im0
         N = [1,4]['q' in Iopt]
+        if out : return qx,qy,im0
 
         t = np.linspace(0,2*np.pi/N,100)
         ct,st = np.cos(t),np.sin(t)
@@ -839,7 +839,7 @@ class Multislice:
         ''' %(self.outf['obj'])
         if patterns_opt:
             pycode+='''multi.save_patterns(save_opt=0);'''
-            pycode+='''multi.datpath = datpath;mutli.save();'''
+            pycode+='''multi.datpath = datpath;multi.save();'''
         job +='%s -c "%s" >>%s 2>&1 \n' %(pyexe, pycode.replace('\n',''),logfile)
         job+='printf "END" >>%s\n' %(logfile)
 

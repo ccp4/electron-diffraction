@@ -37,7 +37,7 @@ def get_reciprocal(abc):
     b1 = np.cross(a2,a3)/(a1.dot(np.cross(a2,a3)))
     b2 = np.cross(a3,a1)/(a2.dot(np.cross(a3,a1)))
     b3 = np.cross(a1,a2)/(a3.dot(np.cross(a1,a2)))
-    abc_star = np.vstack([b1,b2,b3])#/(2*np.pi)
+    abc_star = np.vstack([b1,b2,b3])#*(2*np.pi)
     return abc_star
 
 def ewald_sphere(lat_params,lam=0.025,tmax=7,T=0.2,nx=20,ny=10,**kwargs):
@@ -65,8 +65,8 @@ def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
     **kwargs):
     '''
     runs a set of similar simulations with one varying parameter
-    - datpath       : path to the simulation folder
-    - param,vals    : the parameters and values to sweep
+    - datpath    : path to the simulation folder
+    - param,vals : the parameters and values to sweep
     - df :
         - int - create and save the new dataframe if 1
         - pd.Dataframe - to update(since parsed as a reference)

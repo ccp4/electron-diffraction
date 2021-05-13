@@ -4,6 +4,7 @@ import os,matplotlib,cbf,re,glob
 from subprocess import check_output
 from utils import displayStandards as dsp   ; imp.reload(dsp)
 from utils import glob_colors as colors
+import utils.handler3D as h3d
 from crystals import Crystal
 from matplotlib import rc
 from scipy.spatial import ConvexHull, convex_hull_plot_2d
@@ -29,8 +30,6 @@ def multi3D(name='./unknwon',filename='',load_opt=0,**kwargs):
         else:
             print(colors.red+'file not found : '+colors.yellow+filename+colors.black)
     return MS3D.Multi3D(name=name,**kwargs)
-
-
 
 def get_reciprocal(abc):
     a1,a2,a3 = abc
@@ -59,7 +58,6 @@ def ewald_sphere(lat_params,lam=0.025,tmax=7,T=0.2,nx=20,ny=10,**kwargs):
     fig,ax = dsp.stddisp(plts,scat=scat,labs=['$q_x$','$q_y$'],
         lw=3,#,xylims=[-nx*b1,nx*b1,-b2,ny*b2],xyTickLabs=[[],[]],
         **kwargs)
-
 
 def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
     **kwargs):
@@ -93,7 +91,6 @@ def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
         return df
 
 
-
 ################################################################################
 #### coordinate file generation from cif files
 ################################################################################
@@ -106,7 +103,7 @@ def import_crys(file):
         raise Exception('cannot import %s' %file)
     return crys
 
-def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=0,fmt='%.4f',opts=''):
+def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0, ff=0,fmt='%.4f',opts=''):
     if 'v' in opts:print('...import file...')
     crys = import_crys(file)
     n_u = n
@@ -150,8 +147,6 @@ def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0,pad=0,fmt='%.4f',opts=''):
     # if 'v' in opts:
     print('number of coordinates = %d' %pattern.shape[0])
     print('number of unit cells  = %d' %l.shape[0])
-    # if 'p' in dopt :
-    #     with open(name,'r') as f : print(''.join(f.readlines()))
 
 def find_xyz(lat_vec,lat_params,n_u,theta,plot=0,v=0):
     ax,by,cz = lat_params
@@ -195,7 +190,6 @@ def find_xyz(lat_vec,lat_params,n_u,theta,plot=0,v=0):
         dsp.stddisp(rc='3d',scat=scat)
     return lmn.T
 
-
 def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',**kwargs):
     ''' convert cif file into autoslic .xyz input file
     - file : cif_file
@@ -235,7 +229,8 @@ def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail='
     pattern    = np.array([[a.atomic_number]+list(lfact*a.coords_cartesian)+[a.occupancy,1.0] for a in crys.atoms])
 
     if xyz:make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,fmt='%.4f',dopt=dopt)
-    return pattern #,lat_params #pattern,crys # file
+    pattern[:,1:4] = rcc.orient_crystal(pattern[:,1:4],n_u=n) #,lat_params #pattern,crys # file
+    return pattern
 
 def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],theta=0,rep=[1,1,1],pad=0,fmt='%.4f',dopt='s'):
     '''Creates the.xyz file from a given compound and orientation
@@ -312,12 +307,81 @@ def make_mulslice_datfile(dat_file,cif_file):
         deck+=xyz+'\n'
     deck+='\n\nComment here'
     with open(dat_file,'w') as f : f.write(deck)
-    # with open(datpath,'r') as f :print(f.readlines())
 
+def get_unit_cell(cell_mesh,n):
+    alpha,lw,c = 0.1,2,'c'
+    x,y,z = cell_mesh
+    planes_coords,ncells = [], x.shape[0]
+    for i in range(ncells):
+        planes_coords+=[[x[i,:,:],y[i,:,:],z[i,:,:]],
+                        [x[:,i,:],y[:,i,:],z[:,i,:]],
+                        [x[:,:,i],y[:,:,i],z[:,:,i]]]
+    surfs = []
+    for plane_coords in planes_coords :
+        x,y,z  = plane_coords
+        p_shape = x.shape
+        coords = np.array([x.flatten(),y.flatten(),z.flatten()]);#print(coords.shape)
+        x,y,z  = rcc.orient_crystal(coords,n_u=n,T=False);
+        x,y,z  = np.reshape(x,p_shape),np.reshape(y,p_shape),np.reshape(z,p_shape)
+        surfs += [[x,y,z,c,alpha,lw,c]]
+    return surfs
+
+def get_arrow_3d(n,x0,rc=0.1,h=0.2):
+    '''for trihedron'''
+    nu,nv = 15,2; #print(u)
+    shape = (nu,nv)
+    u = np.linspace(0,2*np.pi,nu)
+    v = np.linspace(0,np.pi/2,nv)
+    x = np.outer(np.cos(u),np.sin(v))*h/2
+    y = np.outer(np.sin(u),np.sin(v))*h/2
+    z = np.outer(np.ones(u.shape),np.cos(v))*h
+    coords = np.array([x.flatten(),y.flatten(),z.flatten()]);#print(coords.shape)
+    #uvec = np.array(n);print(n)
+    x,y,z = rcc.orient_crystal(coords,n,[0,0,1],T=False)
+    x,y,z = np.reshape(x,shape),np.reshape(y,shape),np.reshape(z,shape)
+
+    O = np.array([0,0,0]);#print(x0)#,x0 + np.array([O,n]))
+    xl,yl,zl = (x0 + np.array([O,n])).T ;#print(xl,yl,zl)
+    return [x+x0[0]+n[0],y+x0[1]+n[1],z+x0[2]+n[2]],[xl,yl,zl]
+
+
+def get_vec(n,crys,bopt) :
+    if isinstance(n,int) : n = crys.lattice_vectors[n]
+    if bopt : n = np.array(n).dot(np.array(crys.lattice_vectors))
+    return n
 
 ################################################################################
 #### display coordinate file
 ################################################################################
+def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],h3D=1,xylims=None,**kwargs):
+    '''Show unit cell and coords from cif file '''
+    crys = Crystal.from_cif(file)
+    n    = get_vec(n,crys,bopt)
+
+    #unit cells,lattice vectors,atom coordinates
+    cell_mesh = crys.mesh(range(rep[0]+1),range(rep[1]+1),range(rep[2]+1))
+    surfs     = get_unit_cell(cell_mesh,n)
+    uvw       = rcc.orient_crystal(np.array(crys.lattice_vectors),n_u=n,T=True)
+    pattern   = import_cif(file,n=n,rep=rep)
+    E,X,Y,Z   = pattern[:,:4].T
+    scat      = [X,Y,Z, [cs[int(e)] for e in E]]
+
+    #display options
+    if x0==None : x0 = -1
+    if isinstance(x0,float) or isinstance(x0,int) : x0=np.array([x0]*3)
+    if not xylims:
+        c1,c2,c3 = (X.min()+X.max())/2,(Y.min()+Y.max())/2,(Z.min()+Z.max())/2
+        w = 0.75*max(X.max()-X.min(),Y.max()-Y.min(),Z.max()-Z.min())
+        xylims=[c1-w/2,c1+w/2,c2-w/2,c2+w/2,c3-w/2,c3+w/2]
+        # print(xylims)
+    fig,ax=dsp.stddisp(scat=scat,ms=100,surfs=surfs,rc='3d',std=0)
+    show_trihedron(ax,uvw=uvw,x0=[0,0,0],cs=['r','g','b'],labs=['$a$','$b$','$c$'],lw=2,rc=0.1,h=0.2)
+    show_trihedron(ax,x0=x0,labs=['$x$','$y$','$z$'],lw=2,rc=0.1,h=0.2)
+    dsp.stddisp(ax=ax,xylims=xylims,axPos=[0,0,1,1],
+        pOpt='Xpt',**kwargs)
+
+    if h3D:hdl = h3d.handler_3d(fig,persp=False)
+
 def show_grid(file,opts='',popts='pv',figs='21',**kwargs):
     '''
     file : path to .xyz file
@@ -342,6 +406,7 @@ def show_grid(file,opts='',popts='pv',figs='21',**kwargs):
         fig.show()
     else:
         plot_grid(pattern,lat_params,opts,**kwargs)
+
 
 def plot_grid(pattern,lat_params,opts,popts='pv',xylims=[],**kwargs):
     #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
@@ -368,8 +433,6 @@ def plot_grid(pattern,lat_params,opts,popts='pv',xylims=[],**kwargs):
         return dsp.stddisp(labs=['$%s$'%x1,'$%s$'%x2],patches=pps,scat=scat,
             xylims=xylims,**kwargs)
 
-    # return lat_params,pattern
-
 def import_xyz(xyz_file):
     '''import .xyz file
     - xyz_file : file to import
@@ -393,6 +456,29 @@ def show_grid3(xyz_file,ms=1,**kwargs):
     scat = [pattern[:,1],pattern[:,2],pattern[:,3],ms,C]
     return dsp.stddisp(scat=scat,labs=['$x$','$y$','$z$'],rc='3d',**kwargs)
 
+
+
+def show_trihedron(ax,uvw=None,x0=[0,0,0],cs=None,clabs=None,lw=2,rc=0.1,h=0.2,**kwargs):
+    '''
+    x0 : position of trihedron
+    uvw : Nx3 ndarray
+    ll,rc,h : length,radius and height af arrow/cones
+    cs,labs : colors and labels of cones (default black and None)
+    '''
+    if not isinstance(uvw,np.ndarray) : uvw = np.identity(3)
+    txts,x0=[],np.array(x0)
+    if not cs : cs=['k']*uvw.shape[0]
+    if clabs :
+        xtxt = x0 + 1.1*uvw
+        for i in range(len(clabs)):
+            xt0,yt0,zt0 = xtxt[i,:]
+            txts += [[xt0,yt0,zt0,clabs[i],cs[i][0]]]
+    plots,surfs = [],[]
+    for u,cu in zip(uvw,cs) :
+        (x,y,z),(xl,yl,zl) = get_arrow_3d(u,x0,rc=0.1,h=0.2)
+        plots += [[xl,yl,zl,cu]]
+        surfs += [[x,y,z,cu[0],None,lw,cu[0]]]
+    dsp.stddisp(ax=ax,texts=txts,plots=plots,surfs=surfs,lw=lw,**kwargs)
 
 ################################################################################
 ################################################################################
@@ -468,9 +554,6 @@ class Image_viewer:
         return dsp.stddisp(im=[X,Y,image],labs=labs,
             pOpt='ptX',title="%s" %os.path.basename(file),**kwargs)
 
-
-
-#######
 class Viewer_cbf:
     '''similar to adxv. Works with raw cbf'''
     def __init__(self,exp_path,figpath,i=0):

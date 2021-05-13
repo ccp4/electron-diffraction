@@ -140,62 +140,6 @@ def show_grid(file,opt='',**kwargs):
     #     ax=ax,labs=['$z$','$x$'],lw=2,
     #     pOpt='tG',pad=1,xyTicks=[1.5,5.0],xylims=[-6,15,0,21])#,xyTicksm=1.0,xylims=[0,100,0,100])
 
-def get_vec(n,crys,bopt) :
-    if isinstance(n,int) : n = crys.lattice_vectors[n]
-    if bopt : n = np.array(n).dot(np.array(crys.lattice_vectors))
-    return n
-
-def get_unit_cell(cell_mesh,n):
-    alpha,lw,c = 0.1,2,'c'
-    x,y,z = cell_mesh
-    planes_coords,ncells = [], x.shape[0]
-    for i in range(ncells):
-        planes_coords+=[[x[i,:,:],y[i,:,:],z[i,:,:]],
-                        [x[:,i,:],y[:,i,:],z[:,i,:]],
-                        [x[:,:,i],y[:,:,i],z[:,:,i]]]
-    surfs = []
-    for plane_coords in planes_coords :
-        x,y,z  = plane_coords
-        p_shape = x.shape
-        coords = np.array([x.flatten(),y.flatten(),z.flatten()]);#print(coords.shape)
-        x,y,z  = orient_crystal(coords,n_u=n,T=False);
-        x,y,z  = np.reshape(x,p_shape),np.reshape(y,p_shape),np.reshape(z,p_shape)
-        surfs += [[x,y,z,c,alpha,lw,c]]
-    return surfs
-
-def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],**kwargs):
-    '''Show unit cell and coords from cif file '''
-    crys = Crystal.from_cif(file)
-    tail = ''.join(np.array(n,dtype=str))
-    n    = get_vec(n,crys,bopt)
-
-    #unit cells,lattice vectors,atom coordinates
-    cell_mesh   = crys.mesh(range(rep[0]+1),range(rep[1]+1),range(rep[2]+1))
-    surfs       = get_unit_cell(cell_mesh,n)
-    uvw         = orient_crystal(np.array(crys.lattice_vectors),n_u=n,T=True)
-    pattern     = import_cif(file,n=n,rep=rep,dopt='',tail=tail)
-    E,X,Y,Z     = pattern[:,:4].T
-    scat        = [X,Y,Z, [cs[int(e)] for e in E]]
-    scat2=[]
-    # pattern2,lat_params = APAP_xyz(name,n,rep,dopt='')
-    # E2,X2,Y2,Z2 = pattern2[:,:4].T
-    # scat2       = [X2,Y2,Z2, [cs[int(e)] for e in E2]];#print(E2)
-
-    #display options
-    if x0==None : x0 = -1
-    if isinstance(x0,float) or isinstance(x0,int) : x0=np.array([x0]*3)
-    c1,c2,c3 = (X.min()+X.max())/2,(Y.min()+Y.max())/2,(Z.min()+Z.max())/2
-    w = 0.75*max(X.max()-X.min(),Y.max()-Y.min(),Z.max()-Z.min())
-    xylims=[c1-w/2,c1+w/2,c2-w/2,c2+w/2,c3-w/2,c3+w/2]
-    fig,ax=dsp.stddisp(scat=scat,ms=100,surfs=surfs,rc='3d',std=0)
-    show_trihedron(ax,uvw=uvw,x0=[0,0,0],cs=['r','g','b'],labs=['$a$','$b$','$c$'],lw=2,rc=0.1,h=0.2)
-    show_trihedron(ax,x0=x0,labs=['$x$','$y$','$z$'],lw=2,rc=0.1,h=0.2)
-    dsp.stddisp(ax=ax,ms=50,scat=scat2,xylims=xylims,axPos=[0,0,1,1],
-        pOpt='eXp',**kwargs)
-
-    hdl = h3d.handler_3d(fig,persp=False)
-
-
 def show_unit_cell(ax,n=[0,0,1],ez=[0,0,1],a=0.2,c='b',lw=2,ls='-',lat_params=[1,1,1]):
     '''Orthorombic unit cell from lattice parameters  '''
     Xfaces = get_cubic_cell_mesh(lat_params)
@@ -232,46 +176,6 @@ def get_cubic_cell_mesh(lat_params,opt=0):
 
     return Xfaces
 
-
-def show_trihedron(ax,uvw=None,x0=[0,0,0],cs=None,clabs=None,lw=2,rc=0.1,h=0.2,**kwargs):
-    '''
-    x0 : position of trihedron
-    uvw : Nx3 ndarray
-    ll,rc,h : length,radius and height af arrow/cones
-    cs,labs : colors and labels of cones (default black and None)
-    '''
-    if not isinstance(uvw,np.ndarray) : uvw = np.identity(3)
-    txts,x0=[],np.array(x0)
-    if not cs : cs=['k']*uvw.shape[0]
-    if clabs :
-        xtxt = x0 + 1.1*uvw
-        for i in range(len(clabs)):
-            xt0,yt0,zt0 = xtxt[i,:]
-            txts += [[xt0,yt0,zt0,clabs[i],cs[i][0]]]
-    plots,surfs = [],[]
-    for u,cu in zip(uvw,cs) :
-        (x,y,z),(xl,yl,zl) = get_arrow_3d(u,x0,rc=0.1,h=0.2)
-        plots += [[xl,yl,zl,cu]]
-        surfs += [[x,y,z,cu[0],None,lw,cu[0]]]
-    dsp.stddisp(ax=ax,texts=txts,plots=plots,surfs=surfs,lw=lw,**kwargs)
-
-def get_arrow_3d(n,x0,rc=0.1,h=0.2):
-    '''for trihedron'''
-    nu,nv = 15,2; #print(u)
-    shape = (nu,nv)
-    u = np.linspace(0,2*np.pi,nu)
-    v = np.linspace(0,np.pi/2,nv)
-    x = np.outer(np.cos(u),np.sin(v))*h/2
-    y = np.outer(np.sin(u),np.sin(v))*h/2
-    z = np.outer(np.ones(u.shape),np.cos(v))*h
-    coords = np.array([x.flatten(),y.flatten(),z.flatten()]);#print(coords.shape)
-    #uvec = np.array(n);print(n)
-    x,y,z = orient_crystal(coords,n,[0,0,1],T=False)
-    x,y,z = np.reshape(x,shape),np.reshape(y,shape),np.reshape(z,shape)
-
-    O = np.array([0,0,0]);#print(x0)#,x0 + np.array([O,n]))
-    xl,yl,zl = (x0 + np.array([O,n])).T ;#print(xl,yl,zl)
-    return [x+x0[0]+n[0],y+x0[1]+n[1],z+x0[2]+n[2]],[xl,yl,zl]
 
 
 ##########################################################################
@@ -315,7 +219,7 @@ def get_cylinder(ti,tf,r0=1,h=1,npts=10,x0=[0,0,0]):
 
 
 ########################################################################
-# def : test
+# def : tests
 ########################################################################
 def bcc_coords():
     (x,y,z),xc  = np.meshgrid([0,1],[0,1],[0,1]), [0.5,0.5,0.5] #bcc

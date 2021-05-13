@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # rock.update(v=1);
     # rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=None,zs=[5,15,38])
 
-    # file = '../../tests/multislice/dat/alpha_glycine.cif'
+    file = '../../tests/multislice/dat/alpha_glycine.cif'
     # xyz = 'dat/alpha_gly.xyz'
     # file = 'Si'
     # xyz = name+'Si111large.xyz'
@@ -66,12 +66,13 @@ if __name__ == '__main__':
     # mut.show_grid(xyz,opts='yz')
     # mut.show_grid(xyz,opts='xz')#,xylims=[])
     # mut.show_grid3(xyz)
+    mut.show_cell(file,n=[1,1,1])
 
-    multi = pp.load(name,tag='base',v=2)
+    # multi = pp.load(name,tag='base',v=2)
     # multi.resume(opt='srfp',ppopt='w',Nz=30,i_slice=20)#Nhk=4)
     # multi.save_pattern(iz=15)
-    multi.pattern(Iopt='ncsgt',iz=5,Nmax=64,Imax=3e4,gs=0.3,
-        rmax=100,tol=1e-3,v=1,)#xylims=2,caxis=[0,0.1])
+    # multi.pattern(Iopt='ncsgt',iz=5,Nmax=64,Imax=3e4,gs=0.3,
+    #     rmax=100,tol=1e-3,v=1,)#xylims=2,caxis=[0,0.1])
     # qx,qy,I = multi.pattern(Iopt='cns',gs=2,rmax=20,out=1)
     # ss = [np.s_[i+int(qx.shape[0]/2),:] for i in range(4)]
     # cs = dsp.getCs('Blues',4)

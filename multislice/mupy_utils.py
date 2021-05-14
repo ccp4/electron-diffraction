@@ -353,7 +353,8 @@ def get_vec(n,crys,bopt) :
 ################################################################################
 #### display coordinate file
 ################################################################################
-def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],h3D=1,xylims=None,**kwargs):
+def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],h3D=1,
+    xylims=None,axPos=[],**kwargs):
     '''Show unit cell and coords from cif file '''
     crys = Crystal.from_cif(file)
     n    = get_vec(n,crys,bopt)
@@ -374,10 +375,11 @@ def show_cell(file,n=[0,0,1],bopt=1,x0=None,rep=[1,1,1],h3D=1,xylims=None,**kwar
         w = 0.75*max(X.max()-X.min(),Y.max()-Y.min(),Z.max()-Z.min())
         xylims=[c1-w/2,c1+w/2,c2-w/2,c2+w/2,c3-w/2,c3+w/2]
         # print(xylims)
+    if not axPos:axPos=[0,0,1,0.95]
     fig,ax=dsp.stddisp(scat=scat,ms=100,surfs=surfs,rc='3d',std=0)
     show_trihedron(ax,uvw=uvw,x0=[0,0,0],cs=['r','g','b'],labs=['$a$','$b$','$c$'],lw=2,rc=0.1,h=0.2)
     show_trihedron(ax,x0=x0,labs=['$x$','$y$','$z$'],lw=2,rc=0.1,h=0.2)
-    dsp.stddisp(ax=ax,xylims=xylims,axPos=[0,0,1,1],
+    dsp.stddisp(ax=ax,xylims=xylims,axPos=axPos,
         pOpt='Xpt',**kwargs)
 
     if h3D:hdl = h3d.handler_3d(fig,persp=False)

@@ -48,6 +48,30 @@ def orient_crystal(coords,ez=[0,0,1],n_u=[0,0,1],T=True,theta=0):
             coords = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]).dot(coords)
     return coords
 
+
+def get_crystal_rotation(u=None,omega=0,eo='z',alpha=0):
+    '''Return the rotation matrix of alpha about u
+    - alpha : float - rotation angle
+    - u     : [ux,uy,uz] - rotation axis
+    - omega : float - angle of rotation of the rotation axis
+    - eo    : 'x','y','z' - normal plane to the rotation for computing u from omega
+    '''
+    omega,alpha = np.deg2rad(omega),np.deg2rad(alpha)
+    if not u:
+        if   eo=='x':u = [0,np.cos(omega),np.sin(omega)]
+        elif eo=='y':u = [np.cos(omega),0,np.sin(omega)]
+        elif eo=='z':u = [np.cos(omega),np.sin(omega),0]
+    u = np.array(u)
+    ux,uy,uz = u
+    ux2,uy2,uz2 = u**2
+    ct,st = np.cos(alpha),np.sin(alpha)
+    R = np.array([
+            [ct+ux2*(1-ct), ux*uy*(1-ct)-uz*st, ux*uz*(1-ct)+uy*st ],
+            [uy*ux*(1-ct)+uz*st, ct+uy2*(1-ct), uy*uz*(1-ct)-ux*st ],
+            [uz*ux*(1-ct)-uy*st, uz*uy*(1-ct)+ux*st, ct+uz2*(1-ct) ],
+            ])
+    return R
+
 # rotate crysral for periodic run
 def rotate_xyz(file,nx,nz,Nx=40,Nz=5,name='',opt='',**kwargs):
     '''Generates .xyz files corresponding to individual rotation
@@ -114,7 +138,6 @@ def rotate_xyz(file,nx,nz,Nx=40,Nz=5,name='',opt='',**kwargs):
         # make_xyz(xyz,pattern[idc,:],np.diag(lat_vec),n,fmt='%.4f',dopt='s')
         files+=[xyz] #dsp.basename(xyz)]
     return files
-
 
 
 ##########################################################################

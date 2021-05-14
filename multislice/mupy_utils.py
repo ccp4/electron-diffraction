@@ -1,6 +1,6 @@
 import importlib as imp
 import pandas as pd, numpy as np
-import os,matplotlib,cbf,re,glob
+import os,matplotlib,cbf,tifffile,re,glob
 from subprocess import check_output
 from utils import displayStandards as dsp   ; imp.reload(dsp)
 from utils import glob_colors as colors
@@ -556,43 +556,48 @@ class Image_viewer:
         return dsp.stddisp(im=[X,Y,image],labs=labs,
             pOpt='ptX',title="%s" %os.path.basename(file),**kwargs)
 
-class Viewer_cbf:
-    '''similar to adxv. Works with raw cbf'''
-    def __init__(self,exp_path,figpath,i=0):
+
+
+class Viewer:
+    '''similar to adxv. Works with raw cbf/tiff'''
+    def __init__(self,exp_path,figpath='',i=0):
         ''' View cbf files
         - exp_path : path to images
         - figpath : place to save the figures
         - i : starting image
         '''
-        self.exp_path = exp_path
-        self.figpath = figpath
-        self.figs  = np.sort(os.listdir(exp_path));print(self.figs)
+        d_fmt = {'cbf':self.load_cbf,'tiff':self.load_tif,'tif':self.load_tif}
+        self.supported_fmts = d_fmt.keys()
+
+        self.exp_path = os.path.realpath(exp_path)
+        self.figpath  = figpath
+        self.fmt      = self.find_format()
+        self.figs     = np.sort(glob.glob(self.exp_path+'/*.%s' %self.fmt))#;print(self.figs)
+        self.load     = d_fmt[self.fmt]
+
         self.nfigs = self.figs.size
         self.fig,self.ax = dsp.stddisp()
         cid = self.fig.canvas.mpl_connect('key_press_event', self)
-        self.i=i     #starting image
+        self.i=i-1     #starting image
         self.inc=1   #increment(use 'p' or 'm' to change)
         self.mode=1
+        self.cutoff = 50
         rc('text', usetex=False)
         self.import_exp()
+        self.show_help()
 
+    ###############################################################
+    #### display
+    ###############################################################
     def import_exp(self):
-        print(colors.yellow+self.figs[self.i]+colors.black)
-        try:
-            content = cbf.read(self.exp_path+self.figs[self.i])
-        except:#UnicodeDecodeError
-            self.i=self.i+self.mode
-            print(colors.red+'error reading file'+colors.black)
-            self.import_exp()
-            return
-        numpy_array_with_data = content.data
-        header_metadata = content.metadata
-        print(colors.blue,header_metadata,colors.black)
+        fig=self.figs[self.i]
+        figname = os.path.basename(fig)
+        print(colors.yellow+fig+colors.black)
+        A = self.load(fig)
+
         self.ax.cla()
-
-
-        dsp.stddisp(fig=self.fig,ax=self.ax,im=[numpy_array_with_data],
-            cmap='gray',caxis=[0,50],pOpt='t',title="image %d:%s" %(self.i,self.figs[self.i]),opt='')
+        dsp.stddisp(fig=self.fig,ax=self.ax,im=[A],
+            cmap='gray',caxis=[0,self.cutoff],pOpt='t',title="image %d:%s" %(self.i,figname),opt='')
         self.fig.canvas.draw()
 
     def __call__(self, event):
@@ -604,12 +609,73 @@ class Viewer_cbf:
         elif event.key in ['left','down']:
             self.i=max(0,self.i-self.inc)
             self.mode=-1
-            self.import_exp()
 
         if event.key=='s':
             dsp.saveFig(self.figpath+'exp_%s.png' %str(self.i).zfill(3),ax=self.ax)
 
+        #increment rate
         if event.key=='p':
             self.inc=min(self.inc+1,100);print(self.inc)
         if event.key=='m':
             self.inc=max(1,self.inc-1);print(self.inc)
+        if event.key=='ctrl+r':
+            self.inc=1;print(self.inc)
+        #brightness
+        if event.key=='pageup':
+            self.cutoff=min(self.cutoff+5,500)  ;print(self.cutoff)
+        if event.key=='pagedown':
+            self.cutoff=max(1,self.cutoff-5)    ;print(self.cutoff)
+        if event.key=='r':
+            self.cutoff=50                      ;print(self.cutoff)
+
+        if event.key=='h':self.show_help()
+        if event.key in ['pageup','pagedown','r','left','right','down','up']:
+            self.import_exp()
+
+    ###############################################################
+    #### misc
+    ###############################################################
+    def show_help(self):
+        msg = '''
+    'up or right'  : show frame+1
+    'down or left' : show frame-1
+    #
+    'p' : increase increment rate
+    'm' : decrease increment rate
+    ##
+    'pageup'   : increae cutoff brightness
+    'pagedown' : decrease cutoff brightness
+    'r'        : reset cutoff brightness
+    ###
+    's' : save image
+    'h' : show help
+        '''
+        print(colors.green+'shortcuts : '+colors.blue+msg+colors.black)
+
+    def find_format(self):
+        fmts = np.unique([f.split('.')[-1] for f in os.listdir(self.exp_path)])
+        fmts = [fmt for fmt in fmts if fmt in self.supported_fmts]
+        if not len(fmts):
+            raise Exception('no supported format found in %s. Supported formats :' %(self.exp_path),self.supported_fmts)
+        fmt = fmts[0]
+        if len(fmts)>1:
+            print('warning multiple formats found',fmts)
+            print('using %s' %fmt)
+        print('%s format detected' %fmt)
+        return fmt
+
+    def load_cbf(self,fig):
+        try:
+            content = cbf.read(fig)
+        except:#UnicodeDecodeError
+            self.i=self.i+self.mode
+            print(colors.red+'error reading file'+colors.black)
+            self.import_exp()
+            return
+        numpy_array_with_data = content.data
+        header_metadata = content.metadata
+        # print(colors.blue,header_metadata,colors.black)
+        return numpy_array_with_data
+
+    def load_tif(self,fig):
+        return tifffile.imread(fig)

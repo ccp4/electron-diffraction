@@ -12,7 +12,7 @@ class Pets:
         '''
         - pts_file : str - full path to .pts file
         - cif_file : str - full path to .cif file (automatically found if None)
-        - gen      : bool - regenerate if True  
+        - gen      : bool - regenerate if True
         '''
         self.name  = os.path.basename(pts_file).split('.pts')[0] #;print(self.name)
         self.path  = os.path.dirname(pts_file)
@@ -223,6 +223,8 @@ class Pets:
         o,e = p.communicate();
         print(o.decode())
 
+    def show_exp(self,frame=1):
+        mut.Viewer(self.path+'/tiff',i=frame)
 
     ###########################################################################
     #### compare :

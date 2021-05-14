@@ -1113,8 +1113,6 @@ class Rocking:
         nzs = z[iZs].size
         return nbs,nzs,iZs
 
-
-
 def sweep_var(name,param,vals,df=1,ssh='',tail='',do_prev=0,**kwargs):
     '''runs a set of similar simulations with one varying parameter
     - name          : path to the simulation folder

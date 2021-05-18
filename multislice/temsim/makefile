@@ -7,7 +7,8 @@
 CC = g++ -O3
 DEL = rm  # unix
 #FFTDIR=/home/tarik/Documents/fftw-3.3.8
-# FFTDIR=/home/tarik/Documents/git/github/fftw/fftw-3.3.8
+#FFTDIR=/home/tarik/Documents/git/github/fftw/fftw-3.3.8
+FFTDIR=/home/lii26466/fftw/fftw-3.3.8
 CCFLAGS=-I${FFTDIR}/api -L${FFTDIR}/.libs -L${FFTDIR}/threads/.libs
 #
 ODIR=../bin/obj

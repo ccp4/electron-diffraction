@@ -3,6 +3,8 @@
 */dat
 */figures
 */docs_fig
+*.ipynb
+!*_.ipynb
 
 tests/dials
 tests/*/dat
@@ -10,6 +12,9 @@ multislice/examples/dat
 multislice/temsim/makefile
 multislice/data_2D
 blochwave
+
+multislice/notebooks/multislice/.ipynb_checkpoints/
+multislice/notebooks/multislice/figures
 
 ## Python
 */__pycache__

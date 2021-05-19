@@ -152,9 +152,14 @@ class Pets:
         plts +=[[ [0,ez[0]],[0,ez[1]],[0,ez[2]] , 'r' ]]
         dsp.stddisp(plots=plts,labs=['x','y','z'],rc='3d',lw=4)
 
-    def show_xyz(self):
+    def show_xyz(self,**kwargs):
         x,y,z = self.XYZ
-        fig2,ax = dsp.stddisp(rc='3d',scat=[x,y,z,2,'b'],labs=['x','y','z'])
+        fig2,ax = dsp.stddisp(rc='3d',scat=[x,y,z,2,'b'],labs=['x','y','z'],**kwargs)
+        h3d2 = h3D.handler_3d(fig2,persp=False)
+
+    def show_hkl(self,**kwargs):
+        h,k,l,I = self.HKL[['h','k','l','I']].values.T
+        fig2,ax = dsp.stddisp(rc='3d',scat=[h,k,l,I,'b'],labs=['h','k','l'],**kwargs)
         h3d2 = h3D.handler_3d(fig2,persp=False)
 
     def show_frame(self,frame=0,show_hkl=True,print_hkl=False,qopt=True,rings=True,
@@ -259,7 +264,7 @@ class Pets:
             if   view=='x':labs,scat = ['y','z'],([y,z,Im,'b','o'],[y0,z0,Im,'r','o'])
             elif view=='y':labs,scat = ['x','z'],([x,z,Im,'b','o'],[x0,z0,Im,'r','o'])
             elif view=='z':labs,scat = ['x','y'],([x,y,Im,'b','o'],[x0,y0,Im,'r','o'])
-            dsp.stddisp(xylims=1.5,scat=scat,labs=labs,**kwargs)
+            dsp.stddisp(xylims=1.5,scat=scat,labs=labs,legElt={'pxpy':'bo','xyz':'ro'},**kwargs)
         else:
             scat = ([x,y,z,Im,'b','o'],[x0,y0,z0,Im,'r','o'])
             fig,ax  = dsp.stddisp(rc='3d',view=view,xylims=1.5,scat=scat,labs=['x','y','z'],**kwargs)

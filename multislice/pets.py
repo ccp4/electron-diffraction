@@ -1,4 +1,3 @@
-import importlib as imp
 import os,glob, numpy as np, pandas as pd
 from subprocess import Popen,PIPE
 from crystals import Crystal
@@ -37,17 +36,17 @@ class Pets:
         p = Popen(cmd,shell=True,stdout=PIPE,stderr=PIPE);p.wait();o,e=p.communicate()
         print(o.decode()) #; print(e.decode())
 
+        A = np.loadtxt(self.out+'UB.txt')
+        np.save(self.out+'UB.npy',np.reshape(A,(3,3)))
+        self.load_all()
+
+    def load_all(self):
         lam,omega,aper = np.loadtxt(self.out+'pts.txt')
         self.omega = omega
         self.aper  = aper
         self.lam   = lam
         self.K0    = 1/self.lam
 
-        A = np.loadtxt(self.out+'UB.txt')
-        np.save(self.out+'UB.npy',np.reshape(A,(3,3)))
-        self.load_all()
-
-    def load_all(self):
         self.frames = pd.read_csv(self.out+'iml.txt',sep=',',names=['name','alpha','beta','domega','scale','calibration','ellipA','ellipP','used'])
         self.rpl = pd.read_csv(self.out+'rpl.txt',sep=',',names=['x','y','z','I','i','px','py','rpx','rpy','alpha','Im','F'])
         self.cor = pd.read_csv(self.out+'cor.txt',sep=',',names=['x','y','z','I','i','px','py','rpx','rpy','alpha','Im','F'])
@@ -98,7 +97,7 @@ class Pets:
         K = self.get_beam(uvw)
         Kx,Ky,Kz = K
 
-        theta,phi = np.linspace(0,np.pi,50),np.linspace(0,2*np.pi,100)
+        theta,phi = np.linspace(0,np.pi,100),np.linspace(0,2*np.pi,200)
         x = Kx+self.K0*np.outer(np.sin(theta),np.cos(phi))
         y = Ky+self.K0*np.outer(np.sin(theta),np.sin(phi))
         z = Kz+self.K0*np.outer(np.cos(theta),np.ones(phi.shape))
@@ -229,13 +228,14 @@ class Pets:
     ###########################################################################
     #### compare :
     ###########################################################################
-    def compare_xyz_pxpy(self,frame=32,opts='ma'):
+    def compare_xyz_pxpy(self,frame=32,opts='ma',view=[90,90],**kwargs):
         rpl0    = self.rpl.loc[self.rpl.F==frame]
         pxc,pyc = self.cen.iloc[frame-1][['px','py']].values.T
         alpha   = rpl0.alpha.iloc[0]
 
         pxy0  = rpl0[['px','py']].values
         sxy   = self.aper*(pxy0-[pxc,pyc])
+        # sxy[:,1] *=-1
         xyz0  = np.hstack([sxy,np.zeros((sxy.shape[0],1))]).T
         # x0,y0,z0 = xyz0
 
@@ -243,9 +243,10 @@ class Pets:
         if 'a' in opts:
             Ro    = get_crystal_rotation(u=[-1,0,0],alpha=alpha)
         if 'm' in opts:
-            R180  = get_crystal_rotation(omega=65,alpha=180)
+            # R180  = get_crystal_rotation(omega=230,alpha=0)
+            R180  = get_crystal_rotation(omega=65,alpha=180,eo='z')
             Ro    = Ro.dot(R180)
-        # Ro = get_crystal_rotation(omega=230,eo='x',alpha=-qrpl0.alpha.iloc[0])
+        Ro = get_crystal_rotation(omega=230,eo='z',alpha=alpha)
         x0,y0,z0  = Ro.dot(xyz0)
 
         xyz   = rpl0[['x','y','z']].values.T
@@ -253,9 +254,15 @@ class Pets:
         x,y,z = xyz
 
         Im = np.array(rpl0.Im.values/10,dtype=int)
-        scat = ([x,y,z,Im,'b','o'],[x0,y0,z0,Im,'r','o'])
-        fig,ax  = dsp.stddisp(rc='3d',view=[-90,-90],xylims=1.5,scat=scat,labs=['x','y','z'])
-        h3d = h3D.handler_3d(fig,persp=False)
+        if isinstance(view,str):
+            if   view=='x':labs,scat = ['y','z'],([y,z,Im,'b','o'],[y0,z0,Im,'r','o'])
+            elif view=='y':labs,scat = ['x','z'],([x,z,Im,'b','o'],[x0,z0,Im,'r','o'])
+            elif view=='z':labs,scat = ['x','y'],([x,y,Im,'b','o'],[x0,y0,Im,'r','o'])
+            dsp.stddisp(xylims=1.5,scat=scat,labs=labs,**kwargs)
+        else:
+            scat = ([x,y,z,Im,'b','o'],[x0,y0,z0,Im,'r','o'])
+            fig,ax  = dsp.stddisp(rc='3d',view=view,xylims=1.5,scat=scat,labs=['x','y','z'],**kwargs)
+            h3d = h3D.handler_3d(fig,persp=False)
 
     def compare_hkl(self,frame,eps=None,Smax=0.025,Nmax=5,v=0):
         uvw = self.get_beam_dir(frame=frame)
@@ -285,6 +292,16 @@ class Pets:
             print('from excitation errors    :');
             print(df.iloc[ridx][['h','k','l','Sw']])
             return df.iloc[ridx][['h','k','l','Sw']]
+
+    def check_orientation_matrix(self):
+        lab = np.identity(3)
+        cry = self.A.dot(self.lattice_vectors)
+        # cr2 = self.A.dot(self.reciprocal_vectors).T).T
+        plts  = [ [[0,ai[0]],[0,ai[1]],[0,ai[2]],c,'$%s$' %l]  for i,(ai,c,l) in enumerate(zip(lab,['r','g','b'],['x','y','z'])) ]
+        # plts += [ [[0,ai[0]],[0,ai[1]],[0,ai[2]],[c,'--'],'$%s$' %l]  for i,(ai,c,l) in enumerate(zip(cry,['r','g','b'],['a','b','c'])) ]
+        x0,y0,z0 = [0.5]*3
+        plts += [ [[x0,ai[0]+x0],[y0,ai[1]+y0],[z0,ai[2]+z0],[c,'--'],'$%s^{*}$' %l]  for i,(ai,c,l) in enumerate(zip(cr2,['r','g','b'],['a','b','c'])) ]
+        # dsp.stddisp(plts,rc='3d',view=[0,0],name='figures/glycine_orient.png',opt='sc')
 
     ###########################################################################
     #### misc :

@@ -247,7 +247,7 @@ class Pets:
             # R180  = get_crystal_rotation(omega=230,alpha=0)
             R180  = get_crystal_rotation(omega=65,alpha=180,eo='z')
             Ro    = Ro.dot(R180)
-        Ro = get_crystal_rotation(omega=230,eo='z',alpha=alpha)
+        # Ro = get_crystal_rotation(omega=230,eo='z',alpha=alpha)
         x0,y0,z0  = Ro.dot(xyz0)
 
         xyz   = rpl0[['x','y','z']].values.T

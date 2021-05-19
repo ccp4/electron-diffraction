@@ -1,4 +1,4 @@
-import impotylib as imp
+import importlib as imp
 import os,glob, numpy as np, pandas as pd
 from subprocess import Popen,PIPE
 from crystals import Crystal

@@ -234,29 +234,30 @@ class Pets:
     ###########################################################################
     #### compare :
     ###########################################################################
-    def compare_xyz_pxpy(self,frame=32,opts='ma',view=[90,90],**kwargs):
+    def compare_xyz_pxpy(self,frame=32,opts='oa',view=[90,90],**kwargs):
         rpl0    = self.rpl.loc[self.rpl.F==frame]
         pxc,pyc = self.cen.iloc[frame-1][['px','py']].values.T
         alpha   = rpl0.alpha.iloc[0]
 
-        pxy0  = rpl0[['px','py']].values
-        sxy   = self.aper*(pxy0-[pxc,pyc])
-        # sxy[:,1] *=-1
-        xyz0  = np.hstack([sxy,np.zeros((sxy.shape[0],1))]).T
-        # x0,y0,z0 = xyz0
+        px,py = rpl0[['px','py']].values.T
+        px    =  self.aper*(px-pxc)
+        py    = -self.aper*(py-pyc)
+        xyz0  = np.vstack([px,py,np.zeros(px.shape)])
 
-        Ro = np.identity(3)
+        R = np.identity(3)
+        if 'o' in opts:
+            omega_r = np.deg2rad(self.omega)
+            ct,st  = np.cos(omega_r),np.sin(omega_r)
+            Romega = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]) #get_crystal_rotation(u=[0,0,-1],alpha=self.omega)
+            R = Romega
         if 'a' in opts:
-            Ro    = get_crystal_rotation(u=[-1,0,0],alpha=alpha)
-        if 'm' in opts:
-            # R180  = get_crystal_rotation(omega=230,alpha=0)
-            R180  = get_crystal_rotation(omega=65,alpha=180,eo='z')
-            Ro    = Ro.dot(R180)
-        # Ro = get_crystal_rotation(omega=230,eo='z',alpha=alpha)
-        x0,y0,z0  = Ro.dot(xyz0)
+            alpha_r = np.deg2rad(alpha)
+            ct,st   = np.cos(alpha_r),np.sin(alpha_r)
+            Ra = np.array([[1,0,0],[0,ct,st],[0,-st,ct]])
+            R  = Ra.dot(R)
+        x0,y0,z0  = R.dot(xyz0)
 
         xyz   = rpl0[['x','y','z']].values.T
-        # x,y,z  = Ro.dot(xyz)
         x,y,z = xyz
 
         Im = np.array(rpl0.Im.values/10,dtype=int)
@@ -268,7 +269,7 @@ class Pets:
         else:
             scat = ([x,y,z,Im,'b','o'],[x0,y0,z0,Im,'r','o'])
             fig,ax  = dsp.stddisp(rc='3d',view=view,xylims=1.5,scat=scat,labs=['x','y','z'],**kwargs)
-            h3d = h3D.handler_3d(fig,persp=False)
+            h3d = h3D.handler_3d(fig,persp=True)
 
     def compare_hkl(self,frame,eps=None,Smax=0.025,Nmax=5,v=0):
         uvw = self.get_beam_dir(frame=frame)

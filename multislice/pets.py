@@ -209,8 +209,9 @@ class Pets:
             scat+= ([px[ridx],py[ridx],20,'g','s'],)
 
         if not 'fonts' in kwargs.keys():kwargs['fonts']={'text':20}
+        if not 'xylims' in kwargs.keys():kwargs['xylims']=[-px.max(),px.max(),-py.max(),py.max()]
         dsp.stddisp(plts,ms=20,scat=scat,texts=txts,bgcol='k',gridOn=0,
-            labs=labs,xylims=[-px.max(),px.max(),-py.max(),py.max()],**kwargs)
+            labs=labs,**kwargs)
 
     def mp4_crystal_rotation(self,name,**kwargs):
         cif_file = self.cif_file

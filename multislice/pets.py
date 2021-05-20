@@ -228,8 +228,8 @@ class Pets:
         o,e = p.communicate();
         print(o.decode())
 
-    def show_exp(self,frame=1):
-        mut.Viewer(self.path+'/tiff',i=frame)
+    def show_exp(self,frame=1,**kwargs):
+        mut.Viewer(self.path+'/tiff',i=frame,**kwargs)
 
     ###########################################################################
     #### compare :

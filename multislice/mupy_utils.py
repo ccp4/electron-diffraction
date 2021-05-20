@@ -560,7 +560,7 @@ class Image_viewer:
 
 class Viewer:
     '''similar to adxv. Works with raw cbf/tiff'''
-    def __init__(self,exp_path,figpath='',i=0):
+    def __init__(self,exp_path,figpath='',i=0,v=1):
         ''' View cbf files
         - exp_path : path to images
         - figpath : place to save the figures
@@ -571,7 +571,7 @@ class Viewer:
 
         self.exp_path = os.path.realpath(exp_path)
         self.figpath  = figpath
-        self.fmt      = self.find_format()
+        self.fmt      = self.find_format(v)
         self.figs     = np.sort(glob.glob(self.exp_path+'/*.%s' %self.fmt))#;print(self.figs)
         self.load     = d_fmt[self.fmt]
 
@@ -584,7 +584,7 @@ class Viewer:
         self.cutoff = 50
         rc('text', usetex=False)
         self.import_exp()
-        self.show_help()
+        if v:self.show_help()
 
     ###############################################################
     #### display
@@ -652,7 +652,7 @@ class Viewer:
         '''
         print(colors.green+'shortcuts : '+colors.blue+msg+colors.black)
 
-    def find_format(self):
+    def find_format(self,v=1):
         fmts = np.unique([f.split('.')[-1] for f in os.listdir(self.exp_path)])
         fmts = [fmt for fmt in fmts if fmt in self.supported_fmts]
         if not len(fmts):
@@ -661,7 +661,7 @@ class Viewer:
         if len(fmts)>1:
             print('warning multiple formats found',fmts)
             print('using %s' %fmt)
-        print('%s format detected' %fmt)
+        if v:print('%s format detected' %fmt)
         return fmt
 
     def load_cbf(self,fig):

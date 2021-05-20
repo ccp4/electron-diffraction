@@ -162,8 +162,10 @@ class Pets:
         fig2,ax = dsp.stddisp(rc='3d',scat=[h,k,l,I,'b'],labs=['h','k','l'],**kwargs)
         h3d2 = h3D.handler_3d(fig2,persp=False)
 
-    def show_frame(self,frame=0,show_hkl=True,print_hkl=False,qopt=True,rings=True,
+    def show_frame(self,frame=0,rot=0,
+        opts=None,show_hkl=True,print_hkl=False,qopt=True,rings=True,
         Smax=None,Nmax=10,**kwargs):
+        if isinstance(opts,str):show_hkl,print_hkl,qopt,rings = [c in opts for c in 'hpqr']
         rpl0 = self.rpl.loc[self.rpl.F==frame]
         wm,txts = 5,[]
 

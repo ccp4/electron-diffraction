@@ -442,13 +442,14 @@ class Multislice:
         print(colors.green+out+colors.black)
 
     def pattern(self,iz=None,file=None,rmax=10,Iopt='Ncs',out=0,tol=1e-6,Nmax=None,gs=3,Imax=3e4,
-        rings=[],v=1,cmap='binary',pOpt='im',title='',name=None,**kwargs):
+        rot=0,rings=[],v=1,cmap='binary',pOpt='im',title='',name=None,**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
         - Iopt : t(tiff), c(crop I[r]<tol), n(normalize), s(fftshift), l(logscale), q(quarter only) r(rand) g(good)
         - Nmax : crop display beyond Nmax
         - rings : list or array - of resolutions for rings to display
         - gs    : broadening range
         - rmax  : indicative of noise level fall off
+        - rot   : rotate pattern anticlock by rot
         - kwargs : see stddisp
         returns : [qx,qy,I]
         '''
@@ -542,6 +543,10 @@ class Multislice:
             im0 = np.log10(im0)
 
         qx,qy = h/Nh/ax,k/Nk/by
+        if rot:
+            alpha = np.deg2rad(rot)
+            ct,st = np.cos(alpha),np.sin(alpha)
+            qx,qy = ct*qx-st*qy,st*qx+ct*qy
         N = [1,4]['q' in Iopt]
         if out : return qx,qy,im0
 

@@ -30,8 +30,9 @@ from string import ascii_letters
 from crystals import Crystal
 import utils.glob_colors as colors
 import utils.displayStandards as dsp                        ;imp.reload(dsp)
-from scattering.structure_factor import structure_factor3D
+# from scattering.structure_factor import structure_factor3D
 from . import postprocess as pp                             ;imp.reload(pp)
+from . import mupy_utils as mut                             ;imp.reload(mut)
 
 ssh_hosts = {
     'local_london':'BG-X550',
@@ -270,18 +271,19 @@ class Multislice:
         return self.datpath+cif_file
     def get_structure_factor(self,**sf_args):
         '''computes structure factor 3D
-        - sf_args : see (structure_factor3D)
+        - sf_args : see (mut.get_structure_factor3D)
         returns :
         - (qx,qy,qz),Fhkl
         '''
-        crys = Crystal.from_cif(self.cif_file)
-        pattern = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in crys.atoms] )
-        lat_vec = np.array(crys.reciprocal_vectors)
-        (h,k,l),Fhkl = structure_factor3D(pattern, lat_vec, **sf_args)
-        qx = h/crys.lattice_parameters[0]
-        qy = k/crys.lattice_parameters[1]
-        qz = l/crys.lattice_parameters[2]
-        return (qx,qy,qz),Fhkl
+        return mut.get_structure_factor(self.cif_file,**sf_args)
+        # crys = Crystal.from_cif(self.cif_file)
+        # pattern = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in crys.atoms] )
+        # lat_vec = np.array(crys.reciprocal_vectors)
+        # (h,k,l),Fhkl = structure_factor3D(pattern, lat_vec, **sf_args)
+        # qx = h/crys.lattice_parameters[0]
+        # qy = k/crys.lattice_parameters[1]
+        # qz = l/crys.lattice_parameters[2]
+        # return (qx,qy,qz),Fhkl
 
     def image(self,opt='I',cmap='jet',**kwargs):
         '''Displays the 2D image out of simulation

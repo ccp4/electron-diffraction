@@ -2,17 +2,18 @@ import importlib as imp
 import pandas as pd, numpy as np
 import os,matplotlib,cbf,tifffile,re,glob
 from subprocess import check_output
-from utils import displayStandards as dsp   ; imp.reload(dsp)
-from utils import glob_colors as colors
-import utils.handler3D as h3d
-from crystals import Crystal
 from matplotlib import rc
+from crystals import Crystal
 from scipy.spatial import ConvexHull, convex_hull_plot_2d
+from utils import displayStandards as dsp   ; imp.reload(dsp)
+from utils import glob_colors as colors,handler3D as h3d
+from utils import physicsConstants as cst
+from scattering.structure_factor import structure_factor3D
 from . import multislice as mupy            ; imp.reload(mupy)
 from . import rotating_crystal as rcc       #; imp.reload(rcc)
 from . import postprocess as pp             #; imp.reload(pp)
-from . import multi_3D as MS3D              ;imp.reload(MS3D)
-from . import pymultislice                  ;imp.reload(pymultislice)
+from . import multi_3D as MS3D              #;imp.reload(MS3D)
+from . import pymultislice                  #;imp.reload(pymultislice)
 
 cs = {1:colors.unicolor(0.75),3:(1,0,0),
       6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),14:(1,0,1),17:(0,1,1)}
@@ -39,25 +40,97 @@ def get_reciprocal(abc):
     abc_star = np.vstack([b1,b2,b3])#*(2*np.pi)
     return abc_star
 
-def ewald_sphere(lat_params,lam=0.025,tmax=7,T=0.2,nx=20,ny=10,**kwargs):
-    '''lam(wavelength Angstrum), tmax(angle degrees), T(Thickness mum)'''
-    a1,a2,a3 = lat_params
-    b1,b2,b3 = 1/a1,1/a2,1/a3
-    tmax, K=np.deg2rad(tmax), 1/lam
-    dqT = 10/(T*1e4)*np.array([-1,1])
-    #reciprocal lattice
-    h,k = np.meshgrid(b1*np.arange(-nx,nx+1),b2*np.arange(-1,ny))
-    #sphere
-    t = 3*np.pi/2+np.linspace(-tmax,tmax,100)
-    plts = [[K*np.cos(t),K*np.sin(t)+K,'r',r'$\lambda=%.2f\AA$' %lam]]
-    #rel rods
-    plts += [[ [h,h],k+dqT ,'b-',''] for h,k in zip(h.flatten(),k.flatten())]
+def get_lattice(lat_vec,Nmax=5):
+    '''Get a lattice up to Nmax points :
+    - lat_vec : reciprocal lattice vectors
+    - Nmax : max order '''
+    a1,b1,c1 = lat_vec
+    N = np.arange(-Nmax,Nmax+1)
+    h,k,l = np.meshgrid(N,N,N)
+    h,k,l = h.flatten(),k.flatten(),l.flatten()
+    qx = h*a1[0]+k*b1[0]+l*c1[0]
+    qy = h*a1[1]+k*b1[1]+l*c1[1]
+    qz = h*a1[2]+k*b1[2]+l*c1[2]
+    return (h,k,l),(qx,qy,qz)
 
-    #display
-    scat=[h,k,15,'b']
-    fig,ax = dsp.stddisp(plts,scat=scat,labs=['$q_x$','$q_y$'],
-        lw=3,#,xylims=[-nx*b1,nx*b1,-b2,ny*b2],xyTickLabs=[[],[]],
-        **kwargs)
+def get_ewald(K,nts=100,nps=200):
+    ''' Get ewald sphere coordinates
+    - K : reciprocal space beam vector
+    '''
+    Kx,Ky,Kz = K
+
+    theta,phi = np.linspace(0,np.pi,nts),np.linspace(0,2*np.pi,nps)
+    x = Kx+self.K0*np.outer(np.sin(theta),np.cos(phi))
+    y = Ky+self.K0*np.outer(np.sin(theta),np.sin(phi))
+    z = Kz+self.K0*np.outer(np.cos(theta),np.ones(phi.shape))
+    return x,y,z
+
+def get_excitation_errors(K,lat_vec,Nmax=5,Smax=0.02):
+    ''' get excitation errors for lattice lat_vec and beam K
+    - K : reciprocal space beam vector
+    - Nmax : max order of reflections(resolution)
+    - Smax : maximum excitation error to be included
+    '''
+    K0 = np.linalg.norm(K)
+    Kx,Ky,Kz = K
+
+    (h,k,l),(qx,qy,qz) = get_lattice(lat_vec,Nmax)
+
+    Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2+(Kz-qz)**2) - K0)
+    if Smax:
+        idx = Sw<Smax
+        h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
+        qx,qy,qz,Sw = qx[idx],qy[idx],qz[idx],Sw[idx]
+    d = dict(zip(['h','k','l','qx','qy','qz','Sw'],[h,k,l,qx,qy,qz,Sw]))
+    return pd.DataFrame.from_dict(d)
+
+def get_structure_factor(cif_file,dfout=0,**sf_args):
+    '''computes structure factor 3D
+    - sf_args : see (structure_factor3D)
+    returns :
+    - (qx,qy,qz),Fhkl
+    '''
+    crys = import_crys(cif_file)
+    pattern = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in crys.atoms] )
+    lat_vec = np.array(crys.reciprocal_vectors)
+    (h,k,l),Fhkl = structure_factor3D(pattern, lat_vec, **sf_args)
+    qx = h/crys.lattice_parameters[0]
+    qy = k/crys.lattice_parameters[1]
+    qz = l/crys.lattice_parameters[2]
+    if dfout:
+        data = [h.flatten(),k.flatten(),l.flatten(),qx.flatten(),qy.flatten(),qz.flatten(),Fhkl.flatten()]
+        d = dict(zip(['h','k','l','qx','qy','qz','Fhkl'],data))
+        return pd.DataFrame.from_dict(d)
+    else:
+        return (qx,qy,qz),Fhkl
+
+def get_kinematic_pattern(cif_file,K,thick,Nmax=5,Smax=None):
+    crys = import_crys(cif_file)
+    lat_vec = np.array(crys.reciprocal_vectors)/(2*np.pi)
+    df_Sw   = get_excitation_errors(K,lat_vec,Nmax,Smax)
+    df_Fhkl = get_structure_factor(cif_file,dfout=1,hklMax=Nmax+1)
+
+    hkl0 = df_Sw[['h','k','l']].values
+    hklF = df_Fhkl[['h','k','l']].values
+    ridx = []
+    for r in hkl0:
+        idx = np.where(np.linalg.norm(r-hklF,axis=1)==0)[0]
+        if idx.size:
+            ridx+=[idx[0]]
+
+    Sw     = df_Sw.Sw.values                   #;print(df_Sw)
+    Fhkl_0 = df_Fhkl.iloc[ridx]['Fhkl'].values #;print(df_Fhkl.iloc[ridx]);#print(ridx);print(df_Fhkl.shape)
+    K0  = np.linalg.norm(K)
+    sig = cst.keV2sigma(cst.lam2keV(1/K0))      #;print(sig)
+    # print(Sw)
+    gs = (sig*np.pi*thick*Sw)*np.sinc(thick*Sw)
+    I  = (np.abs(Fhkl_0)*gs)**2
+
+    df_Sw['Fhkl'] = Fhkl_0
+    df_Sw['I']    = I
+    return df_Sw
+
+
 
 def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
     **kwargs):
@@ -344,11 +417,11 @@ def get_arrow_3d(n,x0,rc=0.1,h=0.2):
     xl,yl,zl = (x0 + np.array([O,n])).T ;#print(xl,yl,zl)
     return [x+x0[0]+n[0],y+x0[1]+n[1],z+x0[2]+n[2]],[xl,yl,zl]
 
-
 def get_vec(n,crys,bopt) :
     if isinstance(n,int) : n = crys.lattice_vectors[n]
     if bopt : n = np.array(n).dot(np.array(crys.lattice_vectors))
     return n
+
 
 ################################################################################
 #### display coordinate file
@@ -409,7 +482,6 @@ def show_grid(file,opts='',popts='pv',figs='21',**kwargs):
     else:
         plot_grid(pattern,lat_params,opts,**kwargs)
 
-
 def plot_grid(pattern,lat_params,opts,popts='pv',xylims=[],**kwargs):
     #a1,a2,a3,alpha,beta,gamma=crys.lattice_parameters
     xij = {'x':1,'y':2,'z':3}
@@ -458,8 +530,6 @@ def show_grid3(xyz_file,ms=1,**kwargs):
     scat = [pattern[:,1],pattern[:,2],pattern[:,3],ms,C]
     return dsp.stddisp(scat=scat,labs=['$x$','$y$','$z$'],rc='3d',**kwargs)
 
-
-
 def show_trihedron(ax,uvw=None,x0=[0,0,0],cs=None,clabs=None,lw=2,rc=0.1,h=0.2,**kwargs):
     '''
     x0 : position of trihedron
@@ -482,7 +552,28 @@ def show_trihedron(ax,uvw=None,x0=[0,0,0],cs=None,clabs=None,lw=2,rc=0.1,h=0.2,*
         surfs += [[x,y,z,cu[0],None,lw,cu[0]]]
     dsp.stddisp(ax=ax,texts=txts,plots=plots,surfs=surfs,lw=lw,**kwargs)
 
+def show_ewald_sphere(lat_params,lam=0.025,tmax=7,T=0.2,nx=20,ny=10,**kwargs):
+    '''lam(wavelength Angstrum), tmax(angle degrees), T(Thickness mum)'''
+    a1,a2,a3 = lat_params
+    b1,b2,b3 = 1/a1,1/a2,1/a3
+    tmax, K=np.deg2rad(tmax), 1/lam
+    dqT = 10/(T*1e4)*np.array([-1,1])
+    #reciprocal lattice
+    h,k = np.meshgrid(b1*np.arange(-nx,nx+1),b2*np.arange(-1,ny))
+    #sphere
+    t = 3*np.pi/2+np.linspace(-tmax,tmax,100)
+    plts = [[K*np.cos(t),K*np.sin(t)+K,'r',r'$\lambda=%.2f\AA$' %lam]]
+    #rel rods
+    plts += [[ [h,h],k+dqT ,'b-',''] for h,k in zip(h.flatten(),k.flatten())]
+
+    #display
+    scat=[h,k,15,'b']
+    fig,ax = dsp.stddisp(plts,scat=scat,labs=['$q_x$','$q_y$'],
+        lw=3,#,xylims=[-nx*b1,nx*b1,-b2,ny*b2],xyTickLabs=[[],[]],
+        **kwargs)
+
 ################################################################################
+#### Class viewers
 ################################################################################
 class Image_viewer:
     '''a copy of dials.image_viewer'''
@@ -558,83 +649,71 @@ class Image_viewer:
 
 
 
-class Viewer:
-    '''similar to adxv. Works with raw cbf/tiff'''
-    def __init__(self,exp_path,figpath='',i=0,v=1):
-        ''' View cbf files
-        - exp_path : path to images
-        - figpath : place to save the figures
-        - i : starting image
-        '''
-        d_fmt = {'cbf':self.load_cbf,'tiff':self.load_tif,'tif':self.load_tif}
-        self.supported_fmts = d_fmt.keys()
 
-        self.exp_path = os.path.realpath(exp_path)
-        self.figpath  = figpath
-        self.fmt      = self.find_format(v)
-        self.figs     = np.sort(glob.glob(self.exp_path+'/*.%s' %self.fmt))#;print(self.figs)
-        self.load     = d_fmt[self.fmt]
 
-        self.nfigs = self.figs.size
+
+class Base_Viewer:
+    def __init__(self,figpath='',frame=None,thick=5,cutoff=50,i=0,v=1,pargs={}):#,fig=None,ax=None,):
         self.fig,self.ax = dsp.stddisp()
         cid = self.fig.canvas.mpl_connect('key_press_event', self)
-        self.i=i-1     #starting image
-        self.inc=1   #increment(use 'p' or 'm' to change)
-        self.mode=1
-        self.cutoff = 50
+        self.figpath = figpath
+        self.nfigs = self._get_nfigs()
+        if frame:i=min(max(frame,0),self.nfigs)-1
+        self.i    = frame       #starting image
+        self.inc  = 1           #increment(use 'p' or 'm' to change)
+        self.mode = 1
+        self.cutoff = cutoff
+        self.thick  = thick
+        self.pargs  = pargs
         rc('text', usetex=False)
-        self.import_exp()
+        self.show()
         if v:self.show_help()
-
-    ###############################################################
-    #### display
-    ###############################################################
-    def import_exp(self):
-        fig=self.figs[self.i]
-        figname = os.path.basename(fig)
-        print(colors.yellow+fig+colors.black)
-        A = self.load(fig)
-
-        self.ax.cla()
-        dsp.stddisp(fig=self.fig,ax=self.ax,im=[A],
-            cmap='gray',caxis=[0,self.cutoff],pOpt='t',title="image %d:%s" %(self.i,figname),opt='')
-        self.fig.canvas.draw()
 
     def __call__(self, event):
         # print(event.key)
         if event.key in ['up','right']:
             self.i=min(self.i+self.inc,self.nfigs-1)
             self.mode=1
-            self.import_exp()
         elif event.key in ['left','down']:
             self.i=max(0,self.i-self.inc)
             self.mode=-1
 
         if event.key=='s':
-            dsp.saveFig(self.figpath+'exp_%s.png' %str(self.i).zfill(3),ax=self.ax)
+            dsp.saveFig(self.figpath+'_%s.png' %str(self.i).zfill(3),ax=self.ax)
 
         #increment rate
         if event.key=='p':
-            self.inc=min(self.inc+1,100);print(self.inc)
+            self.inc=min(self.inc+1,100)        ;print('increment rate : %d' %self.inc)
         if event.key=='m':
-            self.inc=max(1,self.inc-1);print(self.inc)
+            self.inc=max(1,self.inc-1)          ;print('increment rate : %d' %self.inc)
         if event.key=='ctrl+r':
-            self.inc=1;print(self.inc)
+            self.inc=1                          ;print('increment rate : %d' %self.inc)
+
         #brightness
         if event.key=='pageup':
-            self.cutoff=min(self.cutoff+5,500)  ;print(self.cutoff)
+            self.cutoff=min(self.cutoff+5,500)  ;print('cutoff : %d' %self.cutoff)
         if event.key=='pagedown':
-            self.cutoff=max(1,self.cutoff-5)    ;print(self.cutoff)
+            self.cutoff=max(1,self.cutoff-5)    ;print('cutoff : %d' %self.cutoff)
         if event.key=='r':
-            self.cutoff=50                      ;print(self.cutoff)
+            self.cutoff=50                      ;print('cutoff : %d' %self.cutoff)
+
+        #thickness
+        if event.key=='ctrl+t':
+            self.thick+=5                       ;print('thickness : %d' %self.thick)
+        if event.key=='ctrl+T':
+            self.thick=max(self.thick-5,5)      ;print('thickness : %d' %self.thick)
 
         if event.key=='h':self.show_help()
-        if event.key in ['pageup','pagedown','r','left','right','down','up']:
-            self.import_exp()
 
-    ###############################################################
-    #### misc
-    ###############################################################
+        update_keys = ['ctrl+t','ctrl+T','pageup','pagedown','r','left','right','down','up']
+        if event.key in update_keys:
+            self.show()
+
+    def show(self):
+        self.ax.cla()
+        self.get_im(fig=self.fig,ax=self.ax,title="frame %d" %(self.i+1),opt='',**self.pargs)
+        self.fig.canvas.draw()
+
     def show_help(self):
         msg = '''
     'up or right'  : show frame+1
@@ -646,12 +725,63 @@ class Viewer:
     'pageup'   : increae cutoff brightness
     'pagedown' : decrease cutoff brightness
     'r'        : reset cutoff brightness
-    ###
+    ##
+    'ctrl+t'  : increase thickness
+    'ctrl+T' : decrease thickness
+    ##
     's' : save image
     'h' : show help
         '''
         print(colors.green+'shortcuts : '+colors.blue+msg+colors.black)
 
+
+class Kin_Viewer(Base_Viewer):
+    def __init__(self,pets,thick,rot=0,Nmax=5,Smax=0.02,Imag=10,**sargs):
+        self.pets   = pets
+        self.kargs  = {'rot':rot,'Nmax':Nmax,'Smax':Smax}
+        super().__init__(thick=thick,cutoff=Imag,**sargs)
+
+    def _get_nfigs(self):
+        return self.pets.nFrames
+
+    def get_im(self,**kwargs):
+        self.pets.show_kin_frame(frame=self.i+1,thick=self.thick,Imag=self.cutoff,
+            **self.kargs,**kwargs)
+
+class Viewer(Base_Viewer):
+    '''similar to adxv. Works with raw cbf/tiff'''
+    def __init__(self,exp_path,v=1,**sargs):
+        ''' View cbf files
+        - exp_path : path to images
+        - figpath : place to save the figures
+        - i : starting image
+        '''
+        d_fmt = {'cbf':self.load_cbf,'tiff':self.load_tif,'tif':self.load_tif}
+        self.supported_fmts = d_fmt.keys()
+
+        self.exp_path = os.path.realpath(exp_path)
+        self.fmt      = self.find_format(v)
+        self.figs     = np.sort(glob.glob(self.exp_path+'/*.%s' %self.fmt))#;print(self.figs)
+        self.load     = d_fmt[self.fmt]
+
+        super().__init__(v=v,**sargs)
+
+    ###############################################################
+    #### virtual functions
+    ###############################################################
+    def get_im(self,**kwargs):
+        fig = self.figs[self.i]
+        figname = os.path.basename(fig)
+        print(colors.yellow+fig+colors.black)
+        im = self.load(fig)
+        dsp.stddisp(im=[im],cmap='gray',caxis=[0,self.cutoff],pOpt='t',**kwargs)
+
+    def _get_nfigs(self):
+        return self.figs.size
+
+    ###############################################################
+    #### misc
+    ###############################################################
     def find_format(self,v=1):
         fmts = np.unique([f.split('.')[-1] for f in os.listdir(self.exp_path)])
         fmts = [fmt for fmt in fmts if fmt in self.supported_fmts]

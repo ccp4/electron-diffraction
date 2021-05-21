@@ -59,9 +59,11 @@ class Pets:
         self.A   = np.load(self.out+'UB.npy')
         self.invA = np.linalg.inv(self.A)
 
-        uvw = self.cif[['u','v','w']].values
-        self.uvw = np.array([u/np.linalg.norm(u) for u in uvw])
-        self.XYZ = self.xyz[['x','y','z']].values.T
+        uvw   = self.cif[['u','v','w']].values
+        beams = self.lat_vec.T.dot(uvw.T).T
+        self.uvw   = uvw/np.linalg.norm(uvw,axis=1)[:,None]
+        self.beams = self.K0*beams/np.linalg.norm(beams,axis=1)[:,None]
+        self.XYZ   = self.xyz[['x','y','z']].values.T
 
         rpl_hkl = self.invA.dot(self.rpl[['x','y','z']].values.T)
         self.rpl[['hx','kx','lx']]  = rpl_hkl.T
@@ -71,63 +73,32 @@ class Pets:
     #### get
     ###########################################################################
     def get_lattice(self,Nmax=5):
-        N = np.arange(-Nmax,Nmax+1)
-        h,k,l = np.meshgrid(N,N,N)
-        h,k,l = h.flatten(),k.flatten(),l.flatten()
-        a1,b1,c1 = self.lat_vec1
-        qx = h*a1[0]+k*b1[0]+l*c1[0]
-        qy = h*a1[1]+k*b1[1]+l*c1[1]
-        qz = h*a1[2]+k*b1[2]+l*c1[2]
-        return (h,k,l),(qx,qy,qz)
+        return mut.get_lattice(self.lat_vec1,Nmax)
 
-    def get_beam_dir(self,frame=None):
-        if frame:
-            uvw = self.uvw[frame-1]
-            #convert beam to xyz reciprocal basis
-            lat_vec = self.lat_vec
-            uvw = lat_vec.T.dot(uvw)
-            uvw/=np.linalg.norm(uvw)
-        return uvw
+    def get_beam_dir(self,frame):
+        return self.uvw[frame-1]
 
-    def get_beam(self,uvw):
-        K = self.K0*uvw/np.linalg.norm(uvw)
-        return K
+    def get_beam(self,frame):
+        return self.beams[frame-1]
 
-    def get_ewald(self,uvw):
-        '''uvw : reciprocal space beam direction'''
-        K = self.get_beam(uvw)
-        Kx,Ky,Kz = K
+    def get_ewald(self,frame,nts=100,nps=200):
+        return mut.get_ewald(self.get_beam(frame),nts,nps)
 
-        theta,phi = np.linspace(0,np.pi,100),np.linspace(0,2*np.pi,200)
-        x = Kx+self.K0*np.outer(np.sin(theta),np.cos(phi))
-        y = Ky+self.K0*np.outer(np.sin(theta),np.sin(phi))
-        z = Kz+self.K0*np.outer(np.cos(theta),np.ones(phi.shape))
-        return x,y,z
+    def get_excitation_errors(self,frame,Nmax=5,Smax=0.02):
+        return mut.get_excitation_errors(self.get_beam(frame),self.lat_vec1,Nmax=Nmax,Smax=Smax)
 
-    def get_excitation_errors(self,uvw,Nmax=5,Smax=0.02):
-        '''uvw : reciprocal space beam direction'''
-        K = self.get_beam(uvw)
-        Kx,Ky,Kz = K
-
-        (h,k,l),(qx,qy,qz) = self.get_lattice(Nmax)
-
-        Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2+(Kz-qz)**2) - self.K0)
-        idx = Sw<Smax
-        h0,k0,l0 = np.array([h[idx],k[idx],l[idx]],dtype=int)
-        data = np.array([h0,k0,l0,qx[idx],qy[idx],qz[idx],Sw[idx]]).T
-        return pd.DataFrame(data,columns=['h','k','l','qx','qy','qz','Sw'])
 
     ###########################################################################
     #### display
     ###########################################################################
-    def show_ewald_sphere(self,uvw=None,frame=None,Smax=0.01,Nmax=10,h3d=0,**kwargs):
-        if frame:uvw = self.get_beam_dir(frame)
-        K = self.get_beam(uvw)
+    def show_ewald_sphere(self,frame=None,Smax=0.01,Nmax=10,h3d=0,
+        nts=100,nps=200,**kwargs):
+        K = self.get_beam(frame)
         Kx,Ky,Kz = K
 
         (h,k,l),(qx,qy,qz) = self.get_lattice(Nmax)
-        x,y,z = self.get_ewald(uvw)
-        df    = self.get_excitation_errors(uvw,Smax=Smax,Nmax=Nmax)
+        x,y,z = self.get_ewald(frame,nts,nps)
+        df    = self.get_excitation_errors(frame,Smax=Smax,Nmax=Nmax)
 
         print('small excitation error beams',uvw)
         if frame:print('frame %d:' %frame)
@@ -143,8 +114,6 @@ class Pets:
         if h3d:h3d = h3D.handler_3d(fig,persp=False)
 
     def show_uvw(self):
-        # rotation matrix B=MA
-        # convert axis and angle, average
         uvw = self.uvw
         ez =  np.cross(uvw[0],uvw[-1])
 
@@ -232,7 +201,40 @@ class Pets:
         print(o.decode())
 
     def show_exp(self,frame=1,**kwargs):
-        mut.Viewer(self.path+'/tiff',i=frame,**kwargs)
+        mut.Viewer(self.path+'/tiff',frame=frame,**kwargs)
+    def show_sim(self,frame=1,**kwargs):
+        mut.Viewer(self.path+'/multislice',frame=frame,**kwargs)
+    def show_kin(self,thick,**sargs):
+        return mut.Kin_Viewer(self,thick,**sargs)
+
+    def show_kin_frame(self,frame,thick,Nmax=5,Smax=0.02,e0=[1,0,0],rot=0,opts='',Imag=10,**kwargs):
+        K = self.get_beam(frame)#;print(K)
+        df = mut.get_kinematic_pattern(self.cif_file,K,thick,Nmax=Nmax,Smax=Smax)
+        qxyz = df[['qx','qy','qz']].values
+        I = df.I.values
+
+        e3 = K/np.linalg.norm(K)
+        e1 = np.cross(e0,e3)
+        e2 = np.cross(e3,e1)
+
+        px,py = qxyz.dot(e1),qxyz.dot(e2)
+        if rot:
+            ct,st = np.cos(np.deg2rad(rot)),np.sin(np.deg2rad(rot))
+            px,py = ct*px-st*py,st*px+ct*py
+
+        h,k,l = df[['h','k','l']].values.T
+
+        txts = []
+        if 't' in opts:
+            txts = [[x,y,'(%s,%s,%s)' %(h0,k0,l0),'g'] for x,y,h0,k0,l0 in zip(px,py,h,k,l)]
+            if not 'fonts' in kwargs.keys():kwargs['fonts']={'text':20}
+        if not 'title' in kwargs.keys():kwargs['title']='frame %d' %frame
+        plts = [0,0,'b+']
+        scat = [px,py,I*Imag,'g']
+        labs = ['$p_x$','$p_y$']
+        dsp.stddisp(plts,scat=scat,texts=txts,bgcol='k',gridOn=0,
+            labs=labs,**kwargs)
+        return df
 
     ###########################################################################
     #### compare :
@@ -275,8 +277,8 @@ class Pets:
             h3d = h3D.handler_3d(fig,persp=True)
 
     def compare_hkl(self,frame,eps=None,Smax=0.025,Nmax=5,v=0):
-        uvw = self.get_beam_dir(frame=frame)
-        df  = self.get_excitation_errors(uvw,Nmax=Nmax,Smax=Smax)
+        uvw  = self.get_beam_dir(frame=frame)
+        df   = self.get_excitation_errors(frame,Nmax=Nmax,Smax=Smax)
         hkl0 = df[['h','k','l']]
 
         hkl1 = self.rpl.loc[self.rpl.F==frame] #[['hx','kx','lx']].values
@@ -287,21 +289,21 @@ class Pets:
 
         rrmv = [r for r in hkl1.values if not np.where(np.linalg.norm(r-hkl0.values,axis=1)==0)[0].size]
         rrmv = np.array(rrmv,dtype=int)
-        print('%d patterns reflections ' %hkl1.shape[0])
-        print('%d lattice  reflections ' %hkl0.shape[0])
-        print('reflections in diffraction pattern not in ewald construction with Smax=%.2E :' %Smax)
-        print(rrmv)
+        print('%d reflections in diffraction patterns ' %hkl1.shape[0])
+        print('%d reflections within Smax=%.2E of the Ewald sphere ' %(hkl0.shape[0],Smax))
+        print('%d reflections in diffraction pattern not in ewald construction ' %(rrmv.shape[0]))
+        if rrmv.shape[0]:print('\tdetails : ',rrmv)
 
+        ridx = []
+        for r in hkl1.values:
+            idx = np.where(np.linalg.norm(r-hkl0.values,axis=1)==0)[0]
+            if idx.size:
+                ridx+=[idx[0]]
         if v:
-            print('from diffraction patterns :');print(hkl1)
-            ridx = []
-            for r in hkl1.values:
-                idx = np.where(np.linalg.norm(r-hkl0.values,axis=1)==0)[0]
-                if idx.size:
-                    ridx+=[idx[0]]
-            print('from excitation errors    :');
+            print('Reflections from diffraction patterns :');print(hkl1)
+            print('Reflections from excitation errors of Ewald construction :');
             print(df.iloc[ridx][['h','k','l','Sw']])
-            return df.iloc[ridx][['h','k','l','Sw']]
+        return df.iloc[ridx][['h','k','l','Sw']]
 
     def check_orientation_matrix(self):
         lab = np.identity(3)

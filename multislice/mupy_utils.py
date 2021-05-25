@@ -1,6 +1,6 @@
 import importlib as imp
 import pandas as pd, numpy as np
-import os,matplotlib,cbf,tifffile,re,glob
+import os,matplotlib,cbf,tifffile,re,glob,easygui
 from subprocess import check_output
 from matplotlib import rc
 from crystals import Crystal
@@ -9,7 +9,7 @@ from utils import displayStandards as dsp   ; imp.reload(dsp)
 from utils import glob_colors as colors,handler3D as h3d
 from utils import physicsConstants as cst
 from scattering.structure_factor import structure_factor3D
-from . import multislice as mupy            ; imp.reload(mupy)
+from blochwave import bloch
 from . import rotating_crystal as rcc       #; imp.reload(rcc)
 from . import postprocess as pp             #; imp.reload(pp)
 from . import multi_3D as MS3D              #;imp.reload(MS3D)
@@ -18,6 +18,9 @@ from . import pymultislice                  #;imp.reload(pymultislice)
 cs = {1:colors.unicolor(0.75),3:(1,0,0),
       6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),14:(1,0,1),17:(0,1,1)}
 
+################################################################################
+#### Multislice related
+################################################################################
 def multi3D(name='./unknwon',filename='',load_opt=0,**kwargs):
     if filename :
         name=filename.replace('_3D.pkl','')
@@ -32,6 +35,42 @@ def multi3D(name='./unknwon',filename='',load_opt=0,**kwargs):
             print(colors.red+'file not found : '+colors.yellow+filename+colors.black)
     return MS3D.Multi3D(name=name,**kwargs)
 
+
+def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
+    **kwargs):
+    from . import multislice as mupy            ; imp.reload(mupy)
+    '''
+    runs a set of similar simulations with one varying parameter
+    - datpath    : path to the simulation folder
+    - param,vals : the parameters and values to sweep
+    - df :
+        - int - create and save the new dataframe if 1
+        - pd.Dataframe - to update(since parsed as a reference)
+    - pargs         : bool - pass param and values to Multislice  if True
+    - do_prev       : Used for iterative fourier transform
+    - kwargs : see help(Multislice)
+    '''
+    do_df,save = isinstance(df,pd.core.frame.DataFrame),0
+    if isinstance(df,int):
+        if df : df,do_df,save = pd.DataFrame(columns=[param,'host','state']+pp.info_cols),1,1
+    nvals,prev = len(vals),None
+    for i,val in zip(range(nvals),vals):
+        if pargs:kwargs[param]=val
+        if do_prev and i: prev = multi.outf['image']
+        multi=mupy.Multislice(datpath,prev=prev,
+            ssh=ssh,tail=tail+param+str(i).zfill(int(np.ceil(nvals/10))),
+            **kwargs)
+        if do_df:
+            df.loc[multi.outf['obj']] = [np.nan]*len(df.columns)
+            df.loc[multi.outf['obj']][[param,'host','state']] = [val,ssh,'start']
+    if save :
+        df.to_pickle(datpath+'df.pkl')
+        print(colors.green+'Dataframe saved : '+colors.yellow+datpath+'df.pkl'+colors.black)
+        return df
+
+################################################################################
+#### Reciprocal space related
+################################################################################
 def get_reciprocal(abc):
     a1,a2,a3 = abc
     b1 = np.cross(a2,a3)/(a1.dot(np.cross(a2,a3)))
@@ -104,9 +143,7 @@ def get_structure_factor(cif_file,dfout=0,**sf_args):
     else:
         return (qx,qy,qz),Fhkl
 
-def get_kinematic_pattern(cif_file,K,thick,Nmax=5,Smax=None):
-    crys = import_crys(cif_file)
-    lat_vec = np.array(crys.reciprocal_vectors)/(2*np.pi)
+def get_excited_beams(cif_file,K,lat_vec,Nmax,Smax):
     df_Sw   = get_excitation_errors(K,lat_vec,Nmax,Smax)
     df_Fhkl = get_structure_factor(cif_file,dfout=1,hklMax=Nmax+1)
 
@@ -118,51 +155,37 @@ def get_kinematic_pattern(cif_file,K,thick,Nmax=5,Smax=None):
         if idx.size:
             ridx+=[idx[0]]
 
-    Sw     = df_Sw.Sw.values                   #;print(df_Sw)
     Fhkl_0 = df_Fhkl.iloc[ridx]['Fhkl'].values #;print(df_Fhkl.iloc[ridx]);#print(ridx);print(df_Fhkl.shape)
-    K0  = np.linalg.norm(K)
-    sig = cst.keV2sigma(cst.lam2keV(1/K0))      #;print(sig)
-    # print(Sw)
-    gs = (sig*np.pi*thick*Sw)*np.sinc(thick*Sw)
-    I  = (np.abs(Fhkl_0)*gs)**2
-
     df_Sw['Fhkl'] = Fhkl_0
-    df_Sw['I']    = I
     return df_Sw
 
+def get_kinematic_intensities(cif_file,K,thick,Nmax=5,Smax=None):
+    crys    = import_crys(cif_file)
+    lat_vec = np.array(crys.reciprocal_vectors)/(2*np.pi)
+    df_Sw   = get_excited_beams(cif_file,K,lat_vec,Nmax,Smax)
 
+    #kinematic intensities
+    K0  = np.linalg.norm(K)
+    sig = cst.keV2sigma(cst.lam2keV(1/K0))      #;print(sig)
+    Sw  = df_Sw.Sw.values
+    gs = (sig*np.pi*thick*Sw)*np.sinc(thick*Sw)
 
-def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
-    **kwargs):
-    '''
-    runs a set of similar simulations with one varying parameter
-    - datpath    : path to the simulation folder
-    - param,vals : the parameters and values to sweep
-    - df :
-        - int - create and save the new dataframe if 1
-        - pd.Dataframe - to update(since parsed as a reference)
-    - pargs         : bool - pass param and values to Multislice  if True
-    - do_prev       : Used for iterative fourier transform
-    - kwargs : see help(Multislice)
-    '''
-    do_df,save = isinstance(df,pd.core.frame.DataFrame),0
-    if isinstance(df,int):
-        if df : df,do_df,save = pd.DataFrame(columns=[param,'host','state']+pp.info_cols),1,1
-    nvals,prev = len(vals),None
-    for i,val in zip(range(nvals),vals):
-        if pargs:kwargs[param]=val
-        if do_prev and i: prev = multi.outf['image']
-        multi=mupy.Multislice(datpath,prev=prev,
-            ssh=ssh,tail=tail+param+str(i).zfill(int(np.ceil(nvals/10))),
-            **kwargs)
-        if do_df:
-            df.loc[multi.outf['obj']] = [np.nan]*len(df.columns)
-            df.loc[multi.outf['obj']][[param,'host','state']] = [val,ssh,'start']
-    if save :
-        df.to_pickle(datpath+'df.pkl')
-        print(colors.green+'Dataframe saved : '+colors.yellow+datpath+'df.pkl'+colors.black)
-        return df
+    Fhkl_0 = df_Sw['Fhkl'].values
+    I  = (np.abs(Fhkl_0)*gs)**2
+    df_Sw['I'] = I
+    return df_Sw
 
+def project_beams(K,qxyz,e0=[1,0,0],v=0):
+    e3 = K/np.linalg.norm(K)
+    e0 = e0/np.linalg.norm(e0)
+    e2 = np.cross(e3,e0)
+    e1 = np.cross(e2,e3)
+
+    px,py = qxyz.dot(e1),qxyz.dot(e2)
+    if v:
+        return px,py,e0.dot(e1)
+    else:
+        return px,py
 
 ################################################################################
 #### coordinate file generation from cif files
@@ -657,13 +680,18 @@ class Base_Viewer:
         self.fig,self.ax = dsp.stddisp()
         cid = self.fig.canvas.mpl_connect('key_press_event', self)
         self.figpath = figpath
-        self.nfigs = self._get_nfigs()
-        if frame:i=min(max(frame,0),self.nfigs)-1
-        self.i    = frame       #starting image
-        self.inc  = 1           #increment(use 'p' or 'm' to change)
-        self.mode = 1
+        self.nfigs   = self._get_nfigs()
+        if frame:
+            i = min(max(frame,0),self.nfigs)-1
+        else:
+            frame = i+1
+        self.frame  = frame       #starting image
+        self.i      = frame       #starting image
+        self.inc    = 1           #increment(use 'p' or 'm' to change)
         self.cutoff = cutoff
         self.thick  = thick
+        self.fieldNames  = ['thick','frame','cutoff','inc']
+        self.mode = 1
         self.pargs  = pargs
         rc('text', usetex=False)
         self.show()
@@ -677,6 +705,7 @@ class Base_Viewer:
         elif event.key in ['left','down']:
             self.i=max(0,self.i-self.inc)
             self.mode=-1
+        self.frame=self.i+1
 
         if event.key=='s':
             dsp.saveFig(self.figpath+'_%s.png' %str(self.i).zfill(3),ax=self.ax)
@@ -684,41 +713,54 @@ class Base_Viewer:
         #increment rate
         if event.key=='p':
             self.inc=min(self.inc+1,100)        ;print('increment rate : %d' %self.inc)
-        if event.key=='m':
+        elif event.key=='m':
             self.inc=max(1,self.inc-1)          ;print('increment rate : %d' %self.inc)
-        if event.key=='ctrl+r':
+        elif event.key=='ctrl+r':
             self.inc=1                          ;print('increment rate : %d' %self.inc)
 
         #brightness
         if event.key=='pageup':
             self.cutoff=min(self.cutoff+5,500)  ;print('cutoff : %d' %self.cutoff)
-        if event.key=='pagedown':
+        elif event.key=='pagedown':
             self.cutoff=max(1,self.cutoff-5)    ;print('cutoff : %d' %self.cutoff)
-        if event.key=='r':
+        elif event.key=='r':
             self.cutoff=50                      ;print('cutoff : %d' %self.cutoff)
 
         #thickness
         if event.key=='ctrl+t':
             self.thick+=5                       ;print('thickness : %d' %self.thick)
-        if event.key=='ctrl+T':
+        elif event.key=='ctrl+T':
             self.thick=max(self.thick-5,5)      ;print('thickness : %d' %self.thick)
 
         if event.key=='h':self.show_help()
+        elif event.key=='enter':self.settings()
+        keys = self.call(event)
 
-        update_keys = ['ctrl+t','ctrl+T','pageup','pagedown','r','left','right','down','up']
-        if event.key in update_keys:
-            self.show()
+        update_keys = keys+['enter','ctrl+t','ctrl+T','pageup','pagedown','r','left','right','down','up']
+        if event.key in update_keys:self.show()
+
+    def settings(self):
+        fieldValues = ['%d' %self.__dict__[f] for f in self.fieldNames]
+        fieldNames = self.fieldNames.copy()
+        self.get_fieldValues(fieldNames,fieldValues)
+        dict_fv = multenterbox("Change settings","settings", fieldValues,fieldNames)
+        if dict_fv:
+            for f in self.fieldNames:
+                self.__dict__[f] = int(dict_fv[f])
+            self.set_fieldValues(dict_fv)
+        self.i = self.frame-1
 
     def show(self):
+        tle = "frame %d, thickness=%d $\AA$" %(self.i+1,self.thick)
         self.ax.cla()
-        self.get_im(fig=self.fig,ax=self.ax,title="frame %d" %(self.i+1),opt='',**self.pargs)
+        self.get_im(fig=self.fig,ax=self.ax,title=tle,opt='',**self.pargs)
         self.fig.canvas.draw()
 
     def show_help(self):
         msg = '''
     'up or right'  : show frame+1
     'down or left' : show frame-1
-    #
+    ##
     'p' : increase increment rate
     'm' : decrease increment rate
     ##
@@ -726,27 +768,59 @@ class Base_Viewer:
     'pagedown' : decrease cutoff brightness
     'r'        : reset cutoff brightness
     ##
-    'ctrl+t'  : increase thickness
+    'ctrl+t' : increase thickness
     'ctrl+T' : decrease thickness
     ##
+    'enter' : change settings
     's' : save image
     'h' : show help
         '''
         print(colors.green+'shortcuts : '+colors.blue+msg+colors.black)
+    ###################################
+    ##### virtual functions
+    ###################################
+    def _get_nfigs(self):
+        print('base nfigs')
+        return 0
+    def get_im(self,**kwargs):
+        print('base get_im')
+    def get_fieldValues(self,fieldNames,fieldValues):return None
+    def set_fieldValues(self,dict_fv):return None
+    def call(self,event):return []
 
 
-class Kin_Viewer(Base_Viewer):
-    def __init__(self,pets,thick,rot=0,Nmax=5,Smax=0.02,Imag=10,**sargs):
+class Frames_Viewer(Base_Viewer):
+    '''Viewer for pets'''
+    def __init__(self,pets,thick,Imag,kargs,**sargs):
         self.pets   = pets
-        self.kargs  = {'rot':rot,'Nmax':Nmax,'Smax':Smax}
+        self.kargs  = kargs
         super().__init__(thick=thick,cutoff=Imag,**sargs)
 
+    def get_fieldValues(self,fieldNames,fieldValues):
+        fieldNames+=list(self.kargs.keys())
+        fieldValues+=[str(f) for f in self.kargs.values()]
+    def set_fieldValues(self,dict_fv):
+        float_keys = np.setdiff1d(list(self.kargs.keys()),'opts')
+        for f in float_keys:
+            self.kargs[f] = eval(dict_fv[f])
+        self.kargs['opts']=dict_fv['opts']
     def _get_nfigs(self):
         return self.pets.nFrames
-
     def get_im(self,**kwargs):
-        self.pets.show_kin_frame(frame=self.i+1,thick=self.thick,Imag=self.cutoff,
+        self.pets.show_frame(frame=self.i+1,thick=self.thick,Imag=self.cutoff,
             **self.kargs,**kwargs)
+    def call(self,event):
+        chars = 'KkPhr'
+        keys = ['ctrl+K','ctrl+k', 'ctrl+H','ctrl+h','ctrl+g']
+
+        vals = [c in self.kargs['opts'] for c in chars]
+        for i,(c,k) in enumerate(zip(chars,keys)):
+            if event.key==k:
+                vals[i] = not vals[i]
+
+        self.kargs['opts']='q'+''.join([c for c,val in zip(chars,vals) if val])
+
+        return keys
 
 class Viewer(Base_Viewer):
     '''similar to adxv. Works with raw cbf/tiff'''
@@ -766,9 +840,6 @@ class Viewer(Base_Viewer):
 
         super().__init__(v=v,**sargs)
 
-    ###############################################################
-    #### virtual functions
-    ###############################################################
     def get_im(self,**kwargs):
         fig = self.figs[self.i]
         figname = os.path.basename(fig)
@@ -809,3 +880,17 @@ class Viewer(Base_Viewer):
 
     def load_tif(self,fig):
         return tifffile.imread(fig)
+
+
+def multenterbox(msg,title,fieldValues,fieldNames):
+    fieldValues = easygui.multenterbox(msg, title, fieldNames,fieldValues)
+    while True:
+        if fieldValues is None:
+            break
+        errs = list()
+        for n, v in zip(fieldNames, fieldValues):
+            if v.strip() == "":errs.append('"{}" is a required field.'.format(n))
+        if not len(errs):
+            break
+        fieldValues = easygui.multenterbox("\n".join(errs), title, fieldNames, fieldValues)
+    return dict(zip(fieldNames,fieldValues))

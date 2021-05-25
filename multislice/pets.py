@@ -87,6 +87,18 @@ class Pets:
     def get_excitation_errors(self,frame,Nmax=5,Smax=0.02):
         return mut.get_excitation_errors(self.get_beam(frame),self.lat_vec1,Nmax=Nmax,Smax=Smax)
 
+    def get_kin(self,frame,thick,Nmax=5,Smax=0.02,e0=[1,0,0],rot=0,Imag=10):
+        K = self.get_beam(frame)#;print(K)
+        df = mut.get_kinematic_intensities(self.cif_file,K,thick,Nmax=Nmax,Smax=Smax)
+        qxyz = df[['qx','qy','qz']].values
+        I = df.I.values*Imag
+
+        px,py = mut.project_beams(K,qxyz,e0)
+        if rot:
+            ct,st = np.cos(np.deg2rad(rot)),np.sin(np.deg2rad(rot))
+            px,py = ct*px-st*py,st*px+ct*py
+        hkl = df[['h','k','l']].values.T
+        return px,py,I,hkl
 
     ###########################################################################
     #### display
@@ -131,57 +143,6 @@ class Pets:
         fig2,ax = dsp.stddisp(rc='3d',scat=[h,k,l,I,'b'],labs=['h','k','l'],**kwargs)
         h3d2 = h3D.handler_3d(fig2,persp=False)
 
-    def show_frame(self,frame=0,rot=0,
-        opts=None,show_hkl=True,print_hkl=False,qopt=True,rings=True,
-        Smax=None,Nmax=10,**kwargs):
-        if isinstance(opts,str):show_hkl,print_hkl,qopt,rings = [c in opts for c in 'hpqr']
-        rpl0 = self.rpl.loc[self.rpl.F==frame]
-        wm,txts = 5,[]
-
-        px,py,I,Im = rpl0[['px','py','I','Im']].values.T
-
-        hkl1  = rpl0[['h','k','l']]
-        h,k,l = hkl1.values.T
-        hx,kx,lx = rpl0[['hx','kx','lx']].values.T
-        if print_hkl:
-            print(h,k,l)
-
-        cx,cy = self.cen.iloc[frame-1][['px','py']].values.T
-        labs = ['px','py']
-        if qopt :
-            wm*=self.aper
-            px,py = ((np.vstack([px,py]).T-[cx,cy])*self.aper).T
-            cx,cy=0,0
-            labs = ['$q_x$','$q_y$']
-
-        plts = [[cx,cy,'b+']]
-        if show_hkl:
-            sx = lambda x:['%d' %round(x),'%.1f' %x][abs(x-round(x))>0.06]
-            txts += [[x+0*wm,y+wm,'(%s,%s,%s)' %(sx(h0),sx(k0),sx(l0)),'g'] for x,y,h0,k0,l0 in zip(px,py,hx,kx,lx)]
-        if rings and qopt:
-            t = np.linspace(0,np.pi*2,100)
-            ct,st = np.cos(t),np.sin(t)
-            qmax = np.ceil(max(py.max(),px.max()))
-            plts+=[[i*ct,i*st,'m','',0.5] for i in np.arange(0.25,qmax,0.25)]
-            plts+=[[i*ct,i*st,'m','',2] for i in np.arange(1,qmax)]
-
-        scat = ([px,py,I,'w','o'],)
-        if Smax:
-            uvw  = self.get_beam_dir(frame=frame)
-            df   = self.get_excitation_errors(uvw,Nmax=Nmax,Smax=Smax)
-            hkl0 = df[['h','k','l']]
-            ridx = []
-            for r in hkl0.values:
-                idx = np.where(np.linalg.norm(r-hkl1.values,axis=1)==0)[0]
-                if idx.size:
-                    ridx+=[idx[0]]
-            scat+= ([px[ridx],py[ridx],20,'g','s'],)
-
-        if not 'fonts' in kwargs.keys():kwargs['fonts']={'text':20}
-        if not 'xylims' in kwargs.keys():kwargs['xylims']=[-px.max(),px.max(),-py.max(),py.max()]
-        dsp.stddisp(plts,ms=20,scat=scat,texts=txts,bgcol='k',gridOn=0,
-            labs=labs,**kwargs)
-
     def mp4_crystal_rotation(self,name,**kwargs):
         cif_file = self.cif_file
         uvw = [self.get_beam_dir(frame=f) for f in np.arange(self.nFrames)+1]
@@ -200,41 +161,79 @@ class Pets:
         o,e = p.communicate();
         print(o.decode())
 
+    ########################################################################
+    ### def : Viewer
+    ########################################################################
     def show_exp(self,frame=1,**kwargs):
         mut.Viewer(self.path+'/tiff',frame=frame,**kwargs)
     def show_sim(self,frame=1,**kwargs):
         mut.Viewer(self.path+'/multislice',frame=frame,**kwargs)
-    def show_kin(self,thick,**sargs):
-        return mut.Kin_Viewer(self,thick,**sargs)
+    def show_frames(self,thick=1000,Nmax=5,Smax=0.02,e0=[1,0,0],rot=0,Imag=10,Itol=20,opts='PKqr',**sargs):
+        kargs = dict(zip(
+            ['Nmax','Smax','e0','rot','Itol','opts'],
+            [Nmax,Smax,e0,rot,Itol,opts]))
+        return mut.Frames_Viewer(self,thick,Imag,kargs,**sargs)
 
-    def show_kin_frame(self,frame,thick,Nmax=5,Smax=0.02,e0=[1,0,0],rot=0,opts='',Imag=10,**kwargs):
-        K = self.get_beam(frame)#;print(K)
-        df = mut.get_kinematic_pattern(self.cif_file,K,thick,Nmax=Nmax,Smax=Smax)
-        qxyz = df[['qx','qy','qz']].values
-        I = df.I.values
 
-        e3 = K/np.linalg.norm(K)
-        e1 = np.cross(e0,e3)
-        e2 = np.cross(e3,e1)
+    def show_frame(self,frame=0,opts='Pqr',
+        thick=1000,Nmax=5,Smax=0.02,e0=[1,0,0],rot=0,Imag=10,Itol=20,
+        show_hkl=True,qopt=True,rings=True,
+        **kwargs):
+        ''' Show a frame with information specified by opts
+        - opts : E(exp), P(proc), S(sim), K(kin), h(hkl),q(rec A),r(rings), k(hkl_k)
+        '''
+        if isinstance(opts,str):exp,proc,sim,kin,show_hkl,qopt,rings,show_hkl_kin = [c in opts for c in 'EPSKhqrk']
+        if kin:qopt=1
 
-        px,py = qxyz.dot(e1),qxyz.dot(e2)
-        if rot:
-            ct,st = np.cos(np.deg2rad(rot)),np.sin(np.deg2rad(rot))
-            px,py = ct*px-st*py,st*px+ct*py
+        plts,scat,txts,labs,qmax,wm = [[0,0,'b+']],(),[],['px','py'],0,5
+        # plts=[]
+        if qopt :
+            wm*=self.aper
+            labs = ['$q_x$','$q_y$']
+        if proc:
+            rpl0  = self.rpl.loc[self.rpl.F==frame]
+            cx,cy = self.cen.iloc[frame-1][['px','py']].values.T
+            px,py,I,Im = rpl0[['px','py','I','Im']].values.T
 
-        h,k,l = df[['h','k','l']].values.T
+            if qopt :
+                px,py = ((np.vstack([px,-py]).T-[cx,-cy])*self.aper).T
+            else:
+                plts = [[cx,cy,'b+']]
+            scat += ([px,py,I,'w','o'],)
+            qmax = np.ceil(max(py.max(),px.max()))
 
-        txts = []
-        if 't' in opts:
-            txts = [[x,y,'(%s,%s,%s)' %(h0,k0,l0),'g'] for x,y,h0,k0,l0 in zip(px,py,h,k,l)]
-            if not 'fonts' in kwargs.keys():kwargs['fonts']={'text':20}
-        if not 'title' in kwargs.keys():kwargs['title']='frame %d' %frame
-        plts = [0,0,'b+']
-        scat = [px,py,I*Imag,'g']
-        labs = ['$p_x$','$p_y$']
-        dsp.stddisp(plts,scat=scat,texts=txts,bgcol='k',gridOn=0,
+            if show_hkl:
+                hkl1  = rpl0[['h','k','l']]
+                h,k,l = hkl1.values.T
+                hx,kx,lx = rpl0[['hx','kx','lx']].values.T
+                sx = lambda x:['%d' %round(x),'%.1f' %x][abs(x-round(x))>0.06]
+                txts += [[x+0*wm,y+wm,'(%s,%s,%s)' %(sx(h0),sx(k0),sx(l0)),(0.5,)*3] for x,y,h0,k0,l0 in zip(px,py,hx,kx,lx)]
+                print(h,k,l)
+
+        if kin:
+            px_k,py_k,I_k,hkl_k = self.get_kin(frame,thick,Nmax,Smax,e0,rot,Imag)
+            scat += ([px_k,py_k,I_k,'g','o'],)
+            if show_hkl_kin:
+                h,k,l = hkl_k
+                Itol = I_k.max()/Itol
+                txts += [[x,y+wm,'(%s,%s,%s)' %(h0,k0,l0),'g'] for x,y,h0,k0,l0,I in zip(px_k,py_k,h,k,l,I_k) if I>Itol]
+                print(h,k,l)
+            qmax = np.ceil(max(qmax,px_k.max(),py_k.max()))
+
+        if rings and qopt:
+            t = np.linspace(0,np.pi*2,100)
+            ct,st = np.cos(t),np.sin(t)
+            plts+=[[i*ct,i*st,'m','',0.5] for i in np.arange(0.25,qmax,0.25)]
+            plts+=[[i*ct,i*st,'m','',2] for i in np.arange(1,qmax)]
+        # if rot:
+        #     ct,st = np.cos(np.deg2rad(rot)),np.sin(np.deg2rad(rot))
+        #     px,py = ct*px-st*py,st*px+ct*py
+
+
+        if not 'fonts' in kwargs.keys():kwargs['fonts']={'text':15}
+        if not 'xylims' in kwargs.keys():kwargs['xylims']=[-px.max(),px.max(),-py.max(),py.max()]
+        dsp.stddisp(plts,ms=20,scat=scat,texts=txts,bgcol='k',gridOn=0,
             labs=labs,**kwargs)
-        return df
 
     ###########################################################################
     #### compare :

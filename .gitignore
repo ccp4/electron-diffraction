@@ -4,16 +4,13 @@
 */figures
 */docs_fig
 
-#not necessary with new framework
-#*.ipynb
-#!*_.ipynb
-
 tests/dials
 tests/*/dat
 multislice/examples/dat
 multislice/temsim/makefile
 multislice/data_2D
-blochwave
+#blochwave/
+
 
 **.ipynb_checkpoints/
 

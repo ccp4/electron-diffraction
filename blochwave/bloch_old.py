@@ -6,7 +6,7 @@ def solve_Bloch(k0,hkl,Gs,Fhkl,v=0):
     k0   : incident wave vector amplitude
     idx  : Nx2 or Nx3 - miller indices of each beam
     Gs   : Nx2 or Nx3 - reciprocal lattice beams
-    Fhkl : 2Nx+1 x 2Ny+1 - 3D Potential components (Volts)
+    Vhkl : 2Nx+1 x 2Ny+1 - 3D Potential components (Volts)
     '''
     Ug = cst.Vg2Ug(Fhkl,k0)
     N,dim = Gs.shape                    # Number of beams and dimensions 2D/3D

@@ -9,7 +9,6 @@ from utils import displayStandards as dsp   ; imp.reload(dsp)
 from utils import glob_colors as colors,handler3D as h3d
 from utils import physicsConstants as cst
 from scattering.structure_factor import structure_factor3D
-from blochwave import bloch
 from . import rotating_crystal as rcc       #; imp.reload(rcc)
 from . import postprocess as pp             #; imp.reload(pp)
 from . import multi_3D as MS3D              #;imp.reload(MS3D)
@@ -669,11 +668,6 @@ class Image_viewer:
             X,Y = self.pX*px*1e3,self.pY*py*1e3
         return dsp.stddisp(im=[X,Y,image],labs=labs,
             pOpt='ptX',title="%s" %os.path.basename(file),**kwargs)
-
-
-
-
-
 
 class Base_Viewer:
     def __init__(self,figpath='',frame=None,thick=5,cutoff=50,i=0,v=1,pargs={}):#,fig=None,ax=None,):

@@ -55,7 +55,7 @@ class Bloch:
         Nmax : maximum h,k,l order
         '''
         if isinstance(Nmax,int):
-            if Nmax>self.Nmax:
+            if not Nmax==self.Nmax:
                 self.Nmax=Nmax
                 (h,k,l),(qx,qy,qz) = mut.get_lattice(self.lat_vec,self.Nmax)
                 self.lattice = [(h,k,l),(qx,qy,qz)]
@@ -79,7 +79,7 @@ class Bloch:
         self.Kuvw = self.lat_vec.dot(self.K)  #projection in reciprocal crystal basis
         self.Kabc = self.lat_vec0.dot(self.K) #projection in crystal basis
 
-    def get_excitation_errors(self,Smax=0.02):
+    def _set_excitation_errors(self,Smax=0.02):
         ''' get excitation errors for Sg<Smax
         - Smax : maximum excitation error to be included
         '''
@@ -92,10 +92,10 @@ class Bloch:
             idx = Sw<Smax
             h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
             qx,qy,qz,Sw = qx[idx],qy[idx],qz[idx],Sw[idx]
-
         d = dict(zip(['h','k','l','qx','qy','qz','Sw'],[h,k,l,qx,qy,qz,Sw]))
-        df_G = pd.DataFrame.from_dict(d)
-        return df_G
+
+        self.Smax = Smax
+        self.df_G = pd.DataFrame.from_dict(d)
 
     def set_thickness(self,thick):
         '''set thickness and update beams
@@ -134,8 +134,7 @@ class Bloch:
         self.update_Nmax(Nmax)
         self.set_beam(K,u,keV)
         self.set_name(name,self.path)
-        self.Smax = Smax
-        self.df_G = self.get_excitation_errors(Smax)
+        self._set_excitation_errors(Smax)
         self._solve_Bloch(opts,Vopt0,v)
         self._set_Vg()
         self.set_thickness(thick)
@@ -144,7 +143,7 @@ class Bloch:
     ################################################################################
     #### private
     ################################################################################
-    def _solve_Bloch(self,opts='',Vopt0=True,v=0):
+    def _solve_Bloch(self,opts='0',Vopt0=True,v=0):
         ''' Diagonalize the Hamiltonian
         Ug is a (2*Nmax+1)^3 tensor :
         # Ug[l] = [U(-N,-N,l) .. U(-N,0,l) .. U(-N,N,l)
@@ -156,17 +155,21 @@ class Bloch:
 
         hkl = self.df_G[['h','k','l']].values
         Sg  = self.df_G.Sw.values
-        Ug = cst.Vg2Ug(self.Fhkl,self.k0)
+        Ug = self.Fhkl/self.crys.volume
 
         # Ug[U0_idx] = U0
         # and Ug(iG,jG) are obtained from Ug[h,k,l] where h,k,l = hlk_iG-hkl_jG
         U0_idx = [2*self.Nmax]*3
-        if Vopt0 : Ug[U0_idx] = 0   #setting average potential to 0
+        if Vopt0 : Ug[tuple(U0_idx)] = 0   #setting average potential to 0
 
         if v:print(colors.blue+'...assembling %dx%d matrix...' %((Sg.shape[0],)*2)+colors.black)
         H = np.diag(Sg+0J)
         for iG,hkl_G in enumerate(hkl) :
             U_iG = np.array([Ug[tuple(hkl_J+U0_idx)] for hkl_J in hkl_G-hkl]) #;print(V_iG.shape)
+            # print('G : ',hkl_G)
+            # print('U_G:',Ug[tuple(U0_idx+hkl_G)])
+            # print('idx iG:',[tuple(hkl_J+U0_idx) for hkl_J in hkl_G-hkl])
+            # print(U_iG)
             H[iG,:] += U_iG/(2*self.k0)  #off diagonal terms as potential
 
         self.H = H
@@ -181,15 +184,19 @@ class Bloch:
         hkl    = self.df_G[['h','k','l']].values
         Vg_G   = np.array([ Vg[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
         px,py,e0x = mut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
+        self.e0x = e0x
         self.df_G['px'] = px
         self.df_G['py'] = py
         self.df_G['Vg'] = Vg_G
+        self.df_G['L']  = np.ones(Vg_G.shape)
 
     def _set_intensities(self):
         '''get beam intensities at thickness'''
-        id0 = self.Nmax
+        id0 = self.is_hkl([0,0,0],v=0)
         gammaj,CjG = self.gammaj,self.CjG
-        S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*self.thick))).dot(CjG.T)[:,id0]
+        S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*self.thick))).dot(CjG.T)
+        # S = S[:,id0]
+        S = S[id0,:]
         self.df_G['S'] = S
         self.df_G['I'] = np.abs(S)**2
 
@@ -198,6 +205,7 @@ class Bloch:
     ################################################################################
     def get_intensities(self):return self.df_G.I
     def get_hkl(self):return self.df_G[['h','k','l']].values
+    def get_kin(self):return self.df_G[['h','k','l','Sw','Vg','S','I']]
     def get_G(self):return self.df_G[['qx','qy','qz']].values
     def get_Istrong(self,m=100):
         Imax = self.df_G.I.max()
@@ -208,7 +216,7 @@ class Bloch:
     def is_hkl(self,Ghkl,v=1):
         Gidx = np.where(np.linalg.norm(self.get_hkl() - Ghkl,axis=1)==0)[0]
         if v:print(self.df_G.iloc[Gidx])
-        return Gidx
+        return Gidx[0]
 
     ################################################################################
     #### display
@@ -220,18 +228,18 @@ class Bloch:
         - fopts : see get_fz
         '''
         fz,fz_str = get_fz(fopts)
-        F_str = {'I':'Intensity','Vg':'Potential','S':'Scattered beams'}[F]
+        F_str = {'I':'Intensity $I_{g}$','Vg':'Potential $V_{g}$','S':'Scattered beams $S_{g}$','L':'Lattice','Sw':'Excitation error $\zeta_{g}$'}[F]
 
-        tle = '%s, %s'  %(F_str,fz_str)
+        tle = '%s, %s, thickness=%d$\AA$'  %(F_str,fz_str,self.thick)
         px,py = self.df_G[['px','py']].values.T
         Fvals = fz(self.df_G[F])
         if 'N' in opts:Fvals/=Fvals.max()
         # mag /= Fvals.max()
         scat  = [px,py,Fvals*mag/Fvals.max(),Fvals]
         plts = [[0,0,'b+','']]
-        if 'x' in opts:plts+=[ [[0,e0x],[0,0],'r','']]
+        if 'x' in opts:plts+=[ [[0,self.e0x],[0,0],'r','']]
         # print(Fvals.max())
-        fig,ax = dsp.stddisp(plts,lw=2,scat=scat,cmap=cmap,cs='S',title=tle,**kwargs)
+        fig,ax = dsp.stddisp(plts,lw=2,scat=scat,caxis=[0,Fvals.max()],cmap=cmap,cs='S',title=tle,**kwargs)
 
     def show_Fhkl(self,s=None,opts='m',h3D=0,**kwargs):
         '''Displays structure factor over grid
@@ -239,8 +247,8 @@ class Bloch:
         - s : slice or str('k=0' => Fhkl(k=0)) or int('l==<int>')
         '''
         fz,fz_str = get_fz(opts)
-        s,tle = self._get_slice(s)
-        tle += 'showing %s'  %fz_str
+        s,s_str = self._get_slice(s)
+        tle = 'Structure factor($\AA$), showing %s in %s'  %(fz_str,s_str)
         h,k,l = self.hklF
         Fhkl  = self.Fhkl #.copy()
         if isinstance(s,tuple):
@@ -302,13 +310,16 @@ def load(path='',tag='',file='',):
 
 def get_fz(opts):
     '''mapping for function to apply
-    - opts : 'r'(real) 'i'(imag) 'a'(angle) 'm'(mag) 'l'(log10(|Fhkl|+1)) '2'(mag^2)
+    - opts : 'r'(real) 'i'(imag) 'a'(angle) 'm'(mag) 'l'(log10(|Fhkl|+1)) '2'(mag^2) 'L'(logM)
     '''
     if not opts:opts='m'
-    keys   =['r','i','a','m','l','2']
-    fz     = dict(zip(keys,[np.real,np.imag,np.angle,np.abs,logF,abs2]))[opts]
-    fz_str = dict(zip(keys,['real part','imag part','phase','magnitude','$\log_{10}(|F|+1)$','$|F|^2$']))[opts]
+    keys   =['r','i','a','m','l','2','L']
+    fs     = [np.real,np.imag,np.angle,np.abs,logF,abs2,logM]
+    fs_str = ['real part','imag part','phase','magnitude','$\log_{10}(|F|+1)$','$|F|^2$','$-\log_{10}$']
+    fz     = dict(zip(keys,fs))[opts]
+    fz_str = dict(zip(keys,fs_str))[opts]
     return fz,fz_str
 
 abs2 = lambda F:np.abs(F)**2
 logF = lambda F:np.log10(np.abs(F)+1)
+logM = lambda F:-np.log10(np.maximum(F,1e-5))

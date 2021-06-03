@@ -3,6 +3,7 @@ import importlib as imp
 import numpy as np,pandas as pd,pickle5,os,glob
 from crystals import Crystal
 from multislice import mupy_utils as mut     ;imp.reload(mut)
+from multislice import postprocess as pp     ;imp.reload(pp)
 from scattering import structure_factor as sf;imp.reload(sf)
 from utils import displayStandards as dsp    ;imp.reload(dsp)
 from utils import physicsConstants as cst    ;imp.reload(cst)
@@ -42,9 +43,7 @@ class Bloch:
         '''
         if not name:
             basefile = self.cif_file.replace('.cif','')
-            Kabc = self.Kabc.copy()
-            Kabc /= abs(Kabc)[abs(Kabc)>0.01].min() #;print(Kabc)
-            u_str = ''.join(['%d' %np.round(u) for u in Kabc])
+            u_str = ''.join(['%d' %np.round(u) for u in self.Kabc0])
             name='%s%s_%dkeV_bloch' %(basefile,u_str,np.round(self.keV))
         if not path:os.path.dirname(name)
         self.path = path                            #; print(self.path)
@@ -75,51 +74,20 @@ class Bloch:
             self.K = self.k0*np.array(u)/np.linalg.norm(u)
         self.lam = 1/self.k0
         self.keV = cst.lam2keV(self.lam)
+        self.sig = cst.keV2sigma(self.keV)
         self.u   = self.K/self.k0
         self.Kuvw = self.lat_vec.dot(self.K)  #projection in reciprocal crystal basis
         self.Kabc = self.lat_vec0.dot(self.K) #projection in crystal basis
-
-    def _set_excitation_errors(self,Smax=0.02):
-        ''' get excitation errors for Sg<Smax
-        - Smax : maximum excitation error to be included
-        '''
-        K,K0 = self.K,self.k0
-        (h,k,l),(qx,qy,qz) = self.lattice
-
-        Kx,Ky,Kz = K
-        Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2+(Kz-qz)**2) - K0)
-        if Smax:
-            idx = Sw<Smax
-            h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
-            qx,qy,qz,Sw = qx[idx],qy[idx],qz[idx],Sw[idx]
-        d = dict(zip(['h','k','l','qx','qy','qz','Sw'],[h,k,l,qx,qy,qz,Sw]))
-
-        self.Smax = Smax
-        self.df_G = pd.DataFrame.from_dict(d)
+        self.Kabc0 = self.Kabc/(abs(self.Kabc)[abs(self.Kabc)>0.01].min()) #;print(Kabc)
+        self.Kuvw0 = self.Kuvw/(abs(self.Kuvw)[abs(self.Kuvw)>0.01].min()) #;print(Kabc)
 
     def set_thickness(self,thick):
         '''set thickness and update beams
         - thick : thickness
         '''
         if isinstance(thick,int):self.thick=thick
-        self._set_intensities()
-
-    def set_beams_vs_thickness(self,thicks):
-        ''' get Scattering matrix as function of thickness for all beams
-        - thicks : int or list or np.ndarray thicknesses
-        '''
-        if isinstance(thicks,float) or isinstance(thicks,int) : thicks=np.array([thicks])
-        if isinstance(thicks,list):thicks = np.array(thicks)
-        St = np.zeros((self.df_G.shape[0],Ts.size),dtype=complex)
-        gammaj,CjG = self.gammaj,self.CjG
-        for iT,T in enumerate(thicks):
-            # S=CjG.T.dot(np.diag(np.exp(2J*np.pi*gammaj*T))).dot(CjG)
-            S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*thick))).dot(CjG.T)
-            # St[:,iT]=CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*T))).dot(CjG.T)[0,:]
-            St[:,iT] = S[:,0]
-        self.z     = thicks
-        self.df_Sz = list(St)
-        return St
+        self._set_kinematic()
+        if self.solved:self._set_intensities()
 
     def solve(self,Smax=0.02,Nmax=None,K=None,u=None,keV=None,thick=None,
         opts='sv',Vopt0=False,v=True,name=''):
@@ -138,6 +106,7 @@ class Bloch:
         self._solve_Bloch(opts,Vopt0,v)
         self._set_Vg()
         self.set_thickness(thick)
+        self._set_kinematic()
         if 's' in opts:self.save()
 
     ################################################################################
@@ -177,6 +146,27 @@ class Bloch:
 
         if v:print(colors.blue+'...diagonalization...'+colors.black)
         self.gammaj,self.CjG = np.linalg.eigh(H) #;print(red+'Ek',lk,black);print(wk)
+        self.solved = True
+
+    def _set_excitation_errors(self,Smax=0.02):
+        ''' get excitation errors for Sg<Smax
+        - Smax : maximum excitation error to be included
+        '''
+        K,K0 = self.K,self.k0
+        (h,k,l),(qx,qy,qz) = self.lattice
+
+        Kx,Ky,Kz = K
+        Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2+(Kz-qz)**2) - K0)
+        if Smax:
+            idx = Sw<Smax
+            h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
+            qx,qy,qz,Sw = qx[idx],qy[idx],qz[idx],Sw[idx]
+        d = dict(zip(['h','k','l','qx','qy','qz','Sw'],[h,k,l,qx,qy,qz,Sw]))
+
+        self.Smax = Smax
+        self.nbeams = Sw.size
+        self.df_G = pd.DataFrame.from_dict(d)
+        self.solved = False
 
     def _set_Vg(self):
         Vg     = self.Fhkl/self.crys.volume
@@ -189,6 +179,15 @@ class Bloch:
         self.df_G['py'] = py
         self.df_G['Vg'] = Vg_G
         self.df_G['L']  = np.ones(Vg_G.shape)
+        self._set_zones()
+
+    def _set_zones(self):
+        hkl     = self.df_G[['h','k','l']].values
+        # Khkls   = np.round(hkl.dot(self.Kuvw/np.linalg.norm(self.Kuvw))*100)/100
+        Khkls    = np.round(hkl.dot(self.Kuvw0)*100)/100 #integer only in zone axis orientation
+        Khkl,ar = np.unique(Khkls,return_inverse=True) #; print(Khkls);print(zones);print(ar)
+        zones = np.argsort(Khkl)
+        self.df_G['zone'] = zones[ar]
 
     def _set_intensities(self):
         '''get beam intensities at thickness'''
@@ -200,16 +199,51 @@ class Bloch:
         self.df_G['S'] = S
         self.df_G['I'] = np.abs(S)**2
 
+
+    def _set_kinematic(self):
+        Sw,Vg = self.df_G[['Sw','Vg']].values.T
+        t,sig = self.thick, self.sig
+
+        Sg = sig*Vg*t*np.sinc(Sw*t)
+        self.df_G['Sg'] = Sg
+        self.df_G['Ig'] = np.abs(Sg)**2
+
+    def set_beams_vs_thickness(self,thicks):
+        ''' get Scattering matrix as function of thickness for all beams
+        - thicks : tuple(ti,tf,step) or list or np.ndarray thicknesses
+        '''
+        self._set_thicks(thicks)
+        id0 = self.is_hkl([0,0,0],v=0)
+        St = np.zeros((self.df_G.shape[0],self.z.size),dtype=complex)
+        gammaj,CjG = self.gammaj,self.CjG
+        for iT,thick in enumerate(self.z):
+            # S=CjG.T.dot(np.diag(np.exp(2J*np.pi*gammaj*T))).dot(CjG)
+            S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*thick))).dot(CjG.T)
+            # St[:,iT]=CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*T))).dot(CjG.T)[0,:]
+            St[:,iT] = S[id0,:]
+        self.Sz = St
+        self.Iz = np.abs(self.Sz)**2
+
+    def _set_thicks(self,thicks):
+        if isinstance(thicks,tuple):thicks = np.linspace(*thicks)
+        elif isinstance(thicks,float) or isinstance(thicks,int) : thicks=[thicks]
+        self.z = np.array(thicks)
+
     ################################################################################
     #### getter
     ################################################################################
     def get_intensities(self):return self.df_G.I
     def get_hkl(self):return self.df_G[['h','k','l']].values
-    def get_kin(self):return self.df_G[['h','k','l','Sw','Vg','S','I']]
+    def get_kin(self):return self.df_G[['h','k','l','Sw','Vg','Sg','Ig']]
+    def get_zones(self):return self.df_G[['h','k','l','zone']].values
     def get_G(self):return self.df_G[['qx','qy','qz']].values
-    def get_Istrong(self,m=100):
-        Imax = self.df_G.I.max()
-        print(self.df_G[['h','k','l','Sw','Vg','I']].loc[self.df_G.I>Imax/m])
+    def get_Istrong(self,m=100,out=0):
+        if 'I' in self.df_G.columns:
+            Imax = self.df_G.I.max()
+            Istrong = self.df_G.loc[self.df_G.I>Imax/m]
+            if out:return Istrong.index.values
+            else:print(Istrong[['h','k','l','Sw','Vg','I']])
+
     def get_Sw(self,Smax=1):
         Smax = min(Smax,self.Smax)
         print(self.df_G[['h','k','l','Sw']].loc[self.df_G.Sw<=Smax])
@@ -228,7 +262,12 @@ class Bloch:
         - fopts : see get_fz
         '''
         fz,fz_str = get_fz(fopts)
-        F_str = {'I':'Intensity $I_{g}$','Vg':'Potential $V_{g}$','S':'Scattered beams $S_{g}$','L':'Lattice','Sw':'Excitation error $\zeta_{g}$'}[F]
+        F_str = {'L':'Lattice','Vg':'Potential $V_{g}$',
+            'S' :'Scattered beams Bloch $S_{g}$',
+            'I' :'Intensity Bloch$I_{g}$',
+            'Sg':'Scattered beams Kinematic $S_{g,kin}$',
+            'Ig':'Intensity kinematic $I_{g,kin}$',
+            'Sw':'Excitation error $\zeta_{g}$'}[F]
 
         tle = '%s, %s, thickness=%d$\AA$'  %(F_str,fz_str,self.thick)
         px,py = self.df_G[['px','py']].values.T
@@ -240,6 +279,19 @@ class Bloch:
         if 'x' in opts:plts+=[ [[0,self.e0x],[0,0],'r','']]
         # print(Fvals.max())
         fig,ax = dsp.stddisp(plts,lw=2,scat=scat,caxis=[0,Fvals.max()],cmap=cmap,cs='S',title=tle,**kwargs)
+
+    def show_beams_vs_thickness(self,thicks=None,strong=True,**kwargs):
+        if thicks:self.set_beams_vs_thickness(thicks)
+        hkl = self.get_hkl().copy()
+        Iz  = self.Iz.copy()
+        if strong:
+            Istrong = self.get_Istrong(out=1) #;print(Istrong)
+            Iz  = Iz[Istrong]
+            hkl = hkl[Istrong]
+        hkl = [str(tuple(h)) for h in hkl]
+        beams=[hkl,self.z,None,None,Iz]
+        # beams=[hkl,self.z,np.real(self.Sz),np.imag(self.Sz),self.Iz]
+        pp.plot_beam_thickness(beams,**kwargs)
 
     def show_Fhkl(self,s=None,opts='m',h3D=0,**kwargs):
         '''Displays structure factor over grid

@@ -10,13 +10,19 @@ u010 = np.array([ 0.05929628, -0.00230903,  0.99823776])
 u020 = np.array([ 0.13922443, -0.00461806,  0.99025009])
 u030 = np.array([ 0.39685357,  0.0069271 ,  0.9178558 ])
 u040 = [ 0.26448615, -0.00923606,  0.96434526]
+# u = [ 0.2980959 , -0.00520328,  0.95452174]
+# u = [ 0.13503907,0.03366902,-0.99026807]
 u = None#u040#u010
-# theta,phi=0,0 #23.4077, 0.9991
-theta,phi=15.3460, 358.0000
+theta,phi=0,0
+u = [2,5,0]
+# theta,phi,u=15.3460, 358.0000,None
 
-rot_wv = vw.Rotate_Viewer(b0,[theta,phi,1,1],
-    u=u,Smax=0.001,Nmax=4,thick=100,
-    F='Sw',opts='x',cmap='Greens',mag=100,xylims=1.5)
+# b0.solve(Smax=0.01,u=[1,1,0],Nmax=15)
+# b0.show_beams_vs_thickness(thicks=(0,1000,1000))
+
+rot_vw = vw.Rotate_Viewer(b0,[theta,phi,1,1],
+    u=u,Smax=0.01,Nmax=10,thick=250,
+    F='Sw',opts='x',cmap='Greens',mag=100,xylims=3,init='wz')
 
 # b0.is_hkl([0,0,0])
 # I = b0.get_intensities()

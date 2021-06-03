@@ -115,7 +115,8 @@ def update_df_info(df_path,hostpath=None,files=[]):
 #########################################################################
 def plot_beam_thickness(beams,rip='I',linespec='-',cm='Greens',**kwargs):
     ''' plot the beams as function of thickness
-    - beams : beams info from import_beams or file containing them
+    - beams : [hk,t,re,im,Ib] beams info from import_beams or file containing them
+    - Ib : nbeams x nthicknesss
     - rip flags : I(Intens),r(real),i(imag)
     '''
     hk,t,re,im,Ib = beams

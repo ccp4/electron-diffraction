@@ -39,7 +39,6 @@ class Viewer:
         - kargs  : see Pets.show_frame
         '''
         self.init_path(path,cif_file,bloch,pets)
-        self.cif_file = mut._get_cif_file(self.path,cif_file)
         self.cutoff  = cutoff
         self.xylims  = xylims
         self.Smax  = Smax
@@ -102,8 +101,9 @@ class Viewer:
                 msg ='''%d pts files  found :%s''' %(len(pts_files),str(pts_files))
 
         if bloch and pets :
-            if not self.bloch.cif_file == self.pets.cif_file:
-                raise Exception('bloch and pets seems to have different cif_files')
+            bloch_cif,pets_cif = os.path.basename(self.bloch.cif_file),os.path.basename(self.pets.cif_file)
+            if not bloch_cif==pets_cif:
+                raise Exception('bloch and pets seems to have different cif_files : bloch=%s, pets=%s'%(bloch_cif,pets_cif))
 
         self.figpath = os.path.join(self.path,'figures')
         if not os.path.exists(self.figpath):
@@ -113,8 +113,9 @@ class Viewer:
         if type(bloch) == Bloch:self.bloch = bloch
         elif type(bloch) == str:self.bloch = load_Bloch(file=bloch)
         else:raise Exception('bloch args need be NoneType, str or Bloch object ')
-        if not type(self.path)      == str : self.path = self.bloch.path
-        if not type(self.cif_file)  == str : self.cif_file = self.bloch.cif_file
+        if not type(self.path)     == str : self.path = self.bloch.path
+        if not type(self.cif_file) == str : self.cif_file = self.bloch.cif_file
+        # print(self.cif_file,self.bloch.cif_file)
 
     def init_pets(self,pets):
         if type(pets)== Pets : self.pets = pets
@@ -171,6 +172,7 @@ class Viewer:
             if self.save_bloch:
                 if self.mode=='frames':self.bloch.save(self.path+'/%s_bloch.pkl' %str(self.frame).zfill(4))
                 else:self.bloch.save()
+                self.save_bloch=0
 
     def show_vals(self):
         if self.show_hkl : print(self.bloch.get_kin())
@@ -241,7 +243,7 @@ class Viewer:
         elif key == self.dict_k['help_cli']    : self.show_help_cli()
         elif key == self.dict_k['help_gui']    : self.show_help_gui()
         elif key == self.dict_k['save_fig']    : dsp.saveFig(self.get_figname(),ax=self.ax)
-        elif key == self.dict_k['save_bloch']  : self.save_bloch=not self.save_bloch;print('%s saving bloch' %['not ',''][self.save_bloch])
+        elif key == self.dict_k['save_bloch']  : self.save_bloch=1 #not self.save_bloch;print('%s saving bloch' %['not ',''][self.save_bloch])
         elif key == self.dict_k['solve_bloch'] : self.update(fsolve=1)
         #modes
         elif key==self.dict_k['frames_mode'] and self.tifpath :

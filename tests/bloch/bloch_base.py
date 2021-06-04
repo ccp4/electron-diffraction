@@ -4,7 +4,7 @@ from EDutils import viewers as vw   ;imp.reload(vw)
 plt.close('all')
 path = 'dat'
 
-b0 = bloch.load(path,'Si001')
+b0 = bloch.load_Bloch(path,'Si001')
 
 u010 = np.array([ 0.05929628, -0.00230903,  0.99823776])
 u020 = np.array([ 0.13922443, -0.00461806,  0.99025009])

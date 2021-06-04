@@ -342,7 +342,7 @@ class Bloch:
 ################################################################################
 #### functions
 ################################################################################
-def load(path='',tag='',file='',):
+def load_Bloch(path='',tag='',file='',):
     '''load a saved Bloch object
     filename : pickle file (.pkl)  '''
     files = [f for f in glob.glob(os.path.join(path,'*.pkl')) if tag in f]

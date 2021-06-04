@@ -18,7 +18,7 @@ class Pets:
         self.path  = os.path.dirname(pts_file)
         self.out   = self.path+'/dat/'
 
-        self.cif_file   = self._get_cif_file(cif_file)
+        self.cif_file   = mut._get_cif_file(self.path,cif_file)
         self.crys       = Crystal.from_cif(self.cif_file)
         self.lat_vec    = np.array(self.crys.lattice_vectors)
         self.lat_vec1   = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
@@ -313,25 +313,3 @@ class Pets:
         x0,y0,z0 = [0.5]*3
         plts += [ [[x0,ai[0]+x0],[y0,ai[1]+y0],[z0,ai[2]+z0],[c,'--'],'$%s^{*}$' %l]  for i,(ai,c,l) in enumerate(zip(cr2,['r','g','b'],['a','b','c'])) ]
         # dsp.stddisp(plts,rc='3d',view=[0,0],name='figures/glycine_orient.png',opt='sc')
-
-    ###########################################################################
-    #### misc :
-    ###########################################################################
-    def _get_cif_file(self,cif_file):
-        if not cif_file:
-            cif_file = self._find_files('cif')
-        return cif_file
-
-
-    def _find_files(self,f_type):
-        files = glob.glob(self.path+'/*.%s' %f_type)
-        if len(files)==1:
-            file=files[0]
-            return file
-        else:
-            msg ='''
-        only 1 %s file should be found in path folder :
-         %s
-        but %d were found :
-         %s''' %(f_type,os.path.realpath(self.path),len(files),str(files))
-            raise Exception(msg)

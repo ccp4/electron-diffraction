@@ -238,11 +238,14 @@ class Bloch:
     def get_zones(self):return self.df_G[['h','k','l','zone']].values
     def get_G(self):return self.df_G[['qx','qy','qz']].values
     def get_Istrong(self,m=100,out=0):
-        if 'I' in self.df_G.columns:
-            Imax = self.df_G.I.max()
-            Istrong = self.df_G.loc[self.df_G.I>Imax/m]
+        Icol=''
+        if 'I' in self.df_G.columns : Icol = 'I'
+        elif 'Ig' in self.df_G.columns : Icol = 'Ig'
+        if Icol:
+            Imax = self.df_G[Icol].max()
+            Istrong = self.df_G.loc[self.df_G[Icol]>Imax/m]
             if out:return Istrong.index.values
-            else:print(Istrong[['h','k','l','Sw','Vg','I']])
+            else:print(Istrong[['h','k','l','Sw','Vg',Icol]])
 
     def get_Sw(self,Smax=1):
         Smax = min(Smax,self.Smax)

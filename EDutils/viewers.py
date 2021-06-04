@@ -1,19 +1,21 @@
 import importlib as imp
-import easygui,os,glob
+import easygui,os,glob,copy
 from subprocess import Popen,PIPE
 import numpy as np,matplotlib.pyplot as plt,pandas as pd
 from utils import displayStandards as dsp
 from utils import glob_colors as colors
+from blochwave import bloch as bl           ;imp.reload(bl)
 from blochwave.bloch import Bloch,load_Bloch#;imp.reload(mut)
 from multislice.pets import Pets            #;imp.reload()
-from multislice import mupy_utils as mut             ;imp.reload(mut)
+from multislice import mupy_utils as mut    ;imp.reload(mut)
 
 pd.set_option('precision',3)
-if plt.rcParams['keymap.save']:
-    plt.rcParams['keymap.save'].remove('s')
-    plt.rcParams['keymap.save'].remove('ctrl+s')
-    plt.rcParams['keymap.grid'].remove('g')
-    plt.rc('text', usetex=False)
+
+plt.rcParams['keymap.save']=[]
+plt.rcParams['keymap.grid']=[]
+plt.rcParams['keymap.xscale']=[]
+plt.rcParams['keymap.yscale']=[]
+# plt.rc('text', usetex=False)
 
 class Viewer:
     def __init__(self,path=None,cif_file=None,bloch=None,pets=None,
@@ -90,7 +92,7 @@ class Viewer:
         if not type(self.cif_file)==str:
             self.cif_file = mut._get_cif_file(self.path,cif_file)
         if not type(self.bloch)==Bloch:
-            self.bloch = Bloch(self.cif_file,path=self.path)
+            self.bloch = bl.Bloch(self.cif_file,path=self.path)
         if not type(self.pets)==Pets:
             pts_files = glob.glob(os.path.join(self.path,'*.pts'))
             if len(pts_files)>=1:
@@ -118,8 +120,8 @@ class Viewer:
         if type(pets)== Pets : self.pets = pets
         elif type(pets)==str : self.pets = Pets(pets,gen=1)
         else:raise Exception('pets args need be NoneType, str or Pets object ')
-        if type(self.path)      == str : self.path = self.pets.path
-        if type(self.cif_file)  == str : self.cif_file = self.pets.cif_file
+        if not type(self.path)     == str : self.path = self.pets.path
+        if not type(self.cif_file) == str : self.cif_file = self.pets.cif_file
         self.nfigs    = self.pets.nFrames
         self.tifpath  = os.path.join(self.pets.path,'tiff')
         self.fmt,self.load = mut.find_format(self.tifpath)
@@ -189,7 +191,7 @@ class Viewer:
 
     def show_sim(self):
         self.bloch.show_beams(ax=self.ax,fig=self.fig,F=self.F,fopts=self.fopts,
-            opt='',xylims=self.xylims,gridOn=0,**self.beams_args)
+            opt='',mag=self.cutoff*10,xylims=self.xylims,gridOn=0,**self.beams_args)
 
     def show(self):
         self.show_vals()
@@ -231,10 +233,16 @@ class Viewer:
 
 
     def get_keys(self,key):
-        if   key == self.dict_k['settings'] : self.settings()
-        elif key == self.dict_k['help']     : self.show_help()
-        elif key == self.dict_k['save_fig'] : dsp.saveFig(self.get_figname(),ax=self.ax)
-        elif key == self.dict_k['save_bloch'] : self.save_bloch=1;print('%s saving bloch' %['not ',''][self.save_bloch])
+        if   key == self.dict_k['settings']    : self.settings()
+        elif key == self.dict_k['new_fig']     :
+            v1 = copy.copy(self)
+            v1.fig,v1.ax = dsp.stddisp()
+            cid = v1.fig.canvas.mpl_connect('key_press_event', v1)
+        elif key == self.dict_k['help_cli']    : self.show_help_cli()
+        elif key == self.dict_k['help_gui']    : self.show_help_gui()
+        elif key == self.dict_k['save_fig']    : dsp.saveFig(self.get_figname(),ax=self.ax)
+        elif key == self.dict_k['save_bloch']  : self.save_bloch=not self.save_bloch;print('%s saving bloch' %['not ',''][self.save_bloch])
+        elif key == self.dict_k['solve_bloch'] : self.update(fsolve=1)
         #modes
         elif key==self.dict_k['frames_mode'] and self.tifpath :
             self.mode,self.show_im = 'frames',self.show_exp
@@ -255,8 +263,8 @@ class Viewer:
             elif key == self.dict_k['dazim_down'] : self.dphi=max(self.dphi-1,0)
         elif self.mode=='frames':
             # frame
-            if   key in [self.dict_k['frame_up']  ,self.dict_k['frame_right']] : self.frame=min(self.frame+self.incrate,self.nfigs)
-            elif key in [self.dict_k['frame_down'],self.dict_k['frame_left']]  : self.frame =max(1,self.frame-self.incrate)
+            if   key in [self.dict_k['frame_up']  ,self.dict_a['frame_up']]   : self.frame=min(self.frame+self.incrate,self.nfigs)
+            elif key in [self.dict_k['frame_down'],self.dict_a['frame_down']] : self.frame =max(1,self.frame-self.incrate)
             # increment rate
             elif key==self.dict_k['inc_frame_up']  :self.incrate=min(self.incrate+1,100)
             elif key==self.dict_k['inc_frame_down']:self.incrate=max(1,self.incrate-1)
@@ -291,15 +299,19 @@ class Viewer:
                 for i,(c,k) in enumerate(zip(self.pets_chars,self.pets_keys)):
                     if key==k:vals[i] = not vals[i]
             elif key in self.Pnum_keys:
-                i = int(key[-1])
+                i = int(key[-1])-1
                 vals[i]=not vals[i]
+            if vals[0]:
+                vals[0]=0;print('exp')
+                self.pets.show_exp(frame=self.frame)
             self.pets_opts='q'+''.join([c for c,val in zip(self.pets_chars,vals) if val])
 
     def set_keys(self):
-        self.dict_k = {}
+        self.dict_k,self.dict_a = {},{}
 
-        generic = ['settings','help','save_fig','save_bloch']
-        self.dict_k.update(dict(zip(generic,['enter','h','s','S'])))
+        generic       = ['new_fig'   ,'settings','help_cli','help_gui','save_fig','save_bloch','solve_bloch']
+        self.gen_keys = ['ctrl+enter','enter','ctrl+2','ctrl+1'       ,'s'       ,'ctrl+s'    ,' ']
+        self.dict_k.update(dict(zip(generic,self.gen_keys)))
 
         #modes
         modes = ['frames_mode','rotate_mode']
@@ -315,12 +327,16 @@ class Viewer:
         self.dict_k.update(dict(zip(drots,self.dorient_keys)))
 
         #frames
-        frames = ['frame_'+s for s in ['up','right','down','left']]
+        frames = ['frame_'+s for s in ['up','down']] #'right','down','left']]
         dframes = ['inc_'+s for s in frames]
-        self.frame_keys  = ['up','right','down','left']
-        self.dframe_keys = ['ctrl+'+s for s in self.frame_keys]
+        self.frame_keys    = ['up','down']
+        self.dframe_keys   = ['ctrl+'+s for s in self.frame_keys]
+        self.frame_keys_a  = ['right','left']
+        # self.dframe_keys_a = ['ctrl+'+s for s in self.frame_keys_a]
         self.dict_k.update(dict(zip(frames,self.frame_keys)))
         self.dict_k.update(dict(zip(dframes,self.dframe_keys)))
+        self.dict_a.update(dict(zip(frames,self.frame_keys_a)))
+        self.frame_keys = self.frame_keys.copy()+self.frame_keys_a
 
         #thickness
         thicks  = ['thick_up','thick_down']
@@ -344,11 +360,11 @@ class Viewer:
         #display Bloch
         Fs    = ['L','Sw','Vg','S','I','Ig']#,'E']
         fopt  = ['m','L' ,'l' ,'m','m','l' ]#,'m']
-        names = ['Lattice','Excitation error','Potential','Scattering','Intensities','Kinematic']
-        names = ['show '+s for s in names]
+        bloch = ['Lattice','Excitation error','Potential','Scattering','Intensities','Kinematic']
+        bloch = ['show '+s for s in bloch]
         self.F_keys    = ['ctrl+'+c for c in 'LGVSIK']
-        self.Fnum_keys = ['ctrl+'+c for c in '123456']
-        self.df_F = pd.DataFrame.from_dict(dict(zip(['names','key','alias','F','fopt'],[names,self.F_keys,self.Fnum_keys,Fs,fopt])))
+        self.Fnum_keys = [''+c for c in '123456']
+        self.df_F = pd.DataFrame.from_dict(dict(zip(['names','key','alias','F','fopt'],[bloch,self.F_keys,self.Fnum_keys,Fs,fopt])))
         self.df_F = self.df_F.set_index('names')
 
         #display Pets
@@ -356,17 +372,20 @@ class Viewer:
         pets = ['Exp','Processed','Simulated','Kinematic','hkl_exp','hkl_kin','rings']
         pets = ['show_'+s for s in pets]
         self.pets_keys = ['E','P','S','K','j','k','g']
-        self.Pnum_keys = ['ctrl+'+c for c in '1234']
+        self.Pnum_keys = [''+c for c in '1234']
         self.dict_k.update(dict(zip(pets,self.pets_keys)))
 
 
         #### Keys that trigger the show
         self.show_keys = self.modes_keys.copy()
-        self.show_keys += self.thick_keys+self.brightness_keys +['enter','S']
+        self.show_keys += self.thick_keys+self.brightness_keys +[self.dict_k[k] for k in ['settings','solve_bloch']]
 
         #### Data frame for the help command
         self.df_keys = pd.DataFrame.from_dict(self.dict_k,orient='index',columns=['key'])
         self.df_keys['alias'] = ['']*self.df_keys.shape[0]
+        self.df_keys.loc[pets,'alias'] = self.Pnum_keys+['']*3
+        self.df_keys.loc[frames,'alias'] = self.frame_keys_a
+        self.df_keys = self.df_keys.append(self.df_F[['key','alias']])
 
         self.df_generic = self.df_keys.loc[generic]
         self.df_modes   = self.df_keys.loc[modes]
@@ -375,14 +394,17 @@ class Viewer:
         self.df_thicks  = self.df_keys.loc[thicks+dthicks]
         self.df_bright  = self.df_keys.loc[bright]
         self.df_vals    = self.df_keys.loc[vals]
-        self.df_bloch   = self.df_F[['key','alias']]
+        self.df_bloch   = self.df_keys.loc[bloch]
         self.df_pets    = self.df_keys.loc[pets]
-        self.df_pets['alias'].iloc[:4] = self.Pnum_keys
+        # self.df_pets['alias'].iloc[:4] = self.Pnum_keys
 
     ###################################
     ##### Help
     ###################################
-    def show_help(self):
+    def is_key(self,key):return self.df_keys.loc[self.df_keys.key==key]
+    def is_cmd(self,cmd):return self.df_keys.iloc[[cmd in k for k in  self.df_keys.index]]
+
+    def show_help_cli(self):
         print(colors.green+'Shortcuts :  '+colors.black)
         print(colors.blue+'Generic :     '+colors.black);print(self.df_generic)
         print(colors.blue+'Modes :       '+colors.black);print(self.df_modes)
@@ -393,6 +415,30 @@ class Viewer:
         print(colors.blue+'Show values : '+colors.black);print(self.df_vals)
         print(colors.blue+'Display (Rotate mode): '+colors.black);print(self.df_bloch)
         print(colors.blue+'Display (Frames mode): '+colors.black);print(self.df_pets)
+
+    def show_help_gui(self):
+        # msg = str(self.df_keys)
+        msg =''
+        msg+= '\t\t\t SHORTCUTS : \n'
+        msg+= 'Generic :     '+'\n'
+        msg+=str(self.df_generic)+'\n'
+        msg+= 'Modes :       '+'\n'
+        msg+=str(self.df_modes)+'\n'
+        msg+= 'Frames (Frames mode) :      '+'\n'
+        msg+=str(self.df_frames)+'\n'
+        msg+= 'Orientation (Rotate mode) : '+'\n'
+        msg+=str(self.df_orient)+'\n'
+        msg+= 'Thickness :   '+'\n'
+        msg+=str(self.df_thicks)+'\n'
+        msg+= 'Brightness :  '+'\n'
+        msg+=str(self.df_bright)+'\n'
+        msg+= 'Show values : '+'\n'
+        msg+=str(self.df_vals)+'\n'
+        msg+= 'Display (Rotate mode): '+'\n'
+        msg+=str(self.df_bloch)+'\n'
+        msg+= 'Display (Frames mode): '+'\n'
+        msg+=str(self.df_pets)+'\n'
+        easygui.msgbox(msg, title='help')
 
     def settings(self):
         fieldNames  =['Smax','Nmax','thick','dthick','xylims']

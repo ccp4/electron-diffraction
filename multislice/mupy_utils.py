@@ -803,6 +803,7 @@ class Frames_Viewer(Base_Viewer):
     def get_im(self,**kwargs):
         self.pets.show_frame(frame=self.i+1,thick=self.thick,Imag=self.cutoff,
             **self.kargs,**kwargs)
+            
     def call(self,event):
         chars = 'KkPhr'
         keys = ['ctrl+K','ctrl+k', 'ctrl+H','ctrl+h','ctrl+g']

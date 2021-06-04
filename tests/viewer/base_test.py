@@ -1,13 +1,13 @@
 from utils import*                  ;imp.reload(dsp)
 from EDutils import viewers as vw   ;imp.reload(vw)
 plt.close('all')
-tests = [1]
+tests = [3]
 
 if -1 in tests:v = vw.Viewer()  #nothing should raise exception
 if 0 in tests:v = vw.Viewer(path='dat/glycine')           #path alone (contains cif_file)
-if 1 in tests:v = vw.Viewer(path='dat/pets',init_opts='u',rot=206)    #path alone (contains pts_file)
+if 1 in tests:v = vw.Viewer(path='dat/pets',init_opts='',rot=206)    #path alone (contains pts_file)
 if 2 in tests:v = vw.Viewer(cif_file='dat/glycine/glycine.cif')       #cif_file alone
-if 3 in tests:v = vw.Viewer(pets='dat/pets/glycine.pts')              #pets alone
+if 3 in tests:v = vw.Viewer(pets='dat/pets/glycine.pts',init_opts='i',F='Ig',rot=206)              #pets alone
 if 4 in tests:v = vw.Viewer(bloch='dat/bloch/Si110_200keV_bloch.pkl') #bloch alone
 
 if 5 in tests:v = vw.Viewer(path='dat/Si',cif_file='Si',u=[0,0,1])                  #path and cif

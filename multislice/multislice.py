@@ -443,6 +443,19 @@ class Multislice:
         out=check_output(['/bin/bash','-i','-c',cmd]).decode()
         print(colors.green+out+colors.black)
 
+    def set_thicks(self):
+        self.dzs = self.i_slice*self.slice_thick
+        self.zs = np.arange(0,self.thickness,self.dzs)
+
+    def get_iz(self,thick,v=0):
+        self.dzs = self.i_slice*self.slice_thick
+        self.zs = np.arange(self.dzs,self.thickness+self.slice_thick,self.dzs)
+
+        iz = np.argmin(abs(self.zs-thick))
+        if v==1: print('thick=%.2f, actual thick=%.2f' %(thick,self.zs[iz]))
+        if v==2:return iz,self.zs[iz]
+        return iz
+
     def pattern(self,iz=None,file=None,rmax=10,Iopt='Ncs',out=0,tol=1e-6,Nmax=None,gs=3,Imax=3e4,
         rot=0,rings=[],v=1,cmap='binary',pOpt='im',title='',name=None,**kwargs):
         '''Displays the 2D diffraction pattern out of simulation
@@ -455,17 +468,18 @@ class Multislice:
         - kwargs : see stddisp
         returns : [qx,qy,I]
         '''
-        if iz:
-            patterns = np.sort(lsfiles(self._outf('pattern')+'.*'))
-            izs = np.array([p.split('.')[-1] for p in patterns],dtype=int)
-            # print(izs,patterns)
-            idx = np.where(izs-iz==0)[0]
+        if isinstance(iz,int):
+            npy_files = self._outf('patternnpy').replace('.npy','[0-9]*.npy')
+            patterns = np.sort(lsfiles(npy_files))#;print(patterns)
+            izs = np.array([p.split('pattern')[-1].replace('.npy','') for p in patterns],dtype=int)
+            # print(izs)
+            idx = np.where(izs-iz==0)[0]#;print(idx)
             if idx:
-                # patterns = np.sort(lsfiles(self._outf('pattern').replace('.txt','')+'*.npy'))
-                file = patterns[idx[0]].replace('.txt.','')+'.npy'
-                zi = self.i_slice*self.slice_thick*(iz)#;print(zi)
+                file = patterns[idx[0]]
+                zi = self.i_slice*self.slice_thick*(iz+1)#;print(zi)
         if not file:
             file = self._outf('patternnpy')
+            if not exists(file):file=self._outf('patternS')#;print('ok')
             zi = self.thickness
         if not title:title = 'z=%d A' %(zi)
 
@@ -513,6 +527,7 @@ class Multislice:
             h,k = np.meshgrid(np.arange(-Nmax,Nmax),np.arange(-Nmax,Nmax))
 
         if 'g' in Iopt:
+            # print(np.where(im0>10*tol))
             i,j = np.where(im0>10*tol) #index of spots
             # print(i,j)
             im00 = im0.copy()
@@ -520,7 +535,7 @@ class Multislice:
             gs3 = gs
             dqx,dqy = Nh/ax,Nk/by
             nx,ny = int(np.floor(gs3/dqx)),int(np.floor(gs3/dqy)) ;
-            if v: print('Gaussian window function size : ', nx,ny)
+            if v>1: print('Gaussian window function size : ', nx,ny)
             ix,iy = np.meshgrid(range(-nx,nx+1),range(-ny,ny+1))
             x,y = ix*dqx,iy*dqy
             Pb = np.exp(-(x**2+y**2)/(gs3/3)**2)#;dsp.stddisp(im=[x,y,Pb],pOpt='im')
@@ -550,7 +565,7 @@ class Multislice:
             ct,st = np.cos(alpha),np.sin(alpha)
             qx,qy = ct*qx-st*qy,st*qx+ct*qy
         N = [1,4]['q' in Iopt]
-        if out : return qx,qy,im0
+        if out : return qx,qy,np.array(im0*Imax,dtype='uint16')
 
         self._set_figpath()
         if not name:name=self.figpath+basename(file).replace('.npy','.png')

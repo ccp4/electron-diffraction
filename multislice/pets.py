@@ -69,6 +69,11 @@ class Pets:
         self.rpl[['hx','kx','lx']]  = rpl_hkl.T
         self.rpl[['h','k','l']]     = np.array(np.round(rpl_hkl),dtype=int).T
 
+        cx,cy = self.cen[['px','py']].iloc[self.rpl.F-1].values.T
+        px,py = self.rpl[['px','py']].values.T
+        qxqy  = self.aper*(np.vstack([px,-py]).T-np.vstack([cx,-cy]).T)
+        self.rpl[['qx','qy']] = qxqy
+
     ###########################################################################
     #### get
     ###########################################################################
@@ -177,7 +182,7 @@ class Pets:
 
     def show_frame(self,frame=0,opts='Pqr',
         thick=1000,Nmax=5,Smax=0.02,e0=[1,0,0],rot=0,Imag=10,Itol=20,
-        show_hkl=True,qopt=True,rings=True,
+        show_hkl=True,qopt=True,rings=True,sim_pattern=None,
         **kwargs):
         ''' Show a frame with information specified by opts
         - opts : E(exp), P(proc), S(sim), K(kin), h(hkl),q(rec A),r(rings), k(hkl_k)
@@ -192,14 +197,18 @@ class Pets:
             labs = ['$q_x$','$q_y$']
         if proc:
             rpl0  = self.rpl.loc[self.rpl.F==frame]
-            cx,cy = self.cen.iloc[frame-1][['px','py']].values.T
-            px,py,I,Im = rpl0[['px','py','I','Im']].values.T
-
+            I,Im = rpl0[['I','Im']].values.T
             if qopt :
-                px,py = ((np.vstack([px,-py]).T-[cx,-cy])*self.aper).T
+                px,py = rpl0[['qx','qy']].values.T
+                # px,py = rpl0[['rpx','rpy']].values.T
+                # cx,cy = self.cen.iloc[frame-1][['px','py']].values.T
+                # px,py = ((np.vstack([px,-py]).T-[cx,-cy])*self.aper).T
             else:
+                px,py = rpl0[['rpx','rpy']].values.T
+                cx,cy = self.cen.iloc[frame-1][['px','py']].values.T
                 plts = [[cx,cy,'b+']]
-            scat += ([px,py,I,'w','o'],)
+            c = (0.5,)*3
+            scat += ([px,py,I,c,'o'],)
             qmax = np.ceil(max(py.max(),px.max()))
 
             if show_hkl:
@@ -220,6 +229,13 @@ class Pets:
                 print(h,k,l)
             qmax = np.ceil(max(qmax,px_k.max(),py_k.max()))
 
+        im,bgcol = None,'k'
+        if sim:
+            qx,qy,I=sim_pattern
+            qmax = np.ceil(max(qmax,qx.max(),qy.max()))
+            im,bgcol=[qx,-qy,I],None
+            # print(bgcol)
+
         if rings and qopt:
             t = np.linspace(0,np.pi*2,100)
             ct,st = np.cos(t),np.sin(t)
@@ -232,33 +248,62 @@ class Pets:
 
         if not 'fonts' in kwargs.keys():kwargs['fonts']={'text':15}
         if not 'xylims' in kwargs.keys():kwargs['xylims']=[-px.max(),px.max(),-py.max(),py.max()]
-        dsp.stddisp(plts,ms=20,scat=scat,texts=txts,bgcol='k',gridOn=0,
-            labs=labs,**kwargs)
+        dsp.stddisp(plts,ms=20,scat=scat,im=im,texts=txts,bgcol=bgcol,gridOn=0,
+            labs=labs,sargs={'alpha':0.5},**kwargs)
 
     ###########################################################################
     #### compare :
     ###########################################################################
+    def rotate_pattern(self,frame,qxqy):
+        xyz0  = np.vstack([qx,qy,np.zeros(qx.shape)])
+
+        alpha,beta,omega = -self.cif.iloc[frame-1][['alpha','beta','omega']]
+
+        R = np.identity(3)
+        omega_r = np.deg2rad(omega)
+        ct,st  = np.cos(omega_r),np.sin(omega_r)
+        Rz = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]) #get_crystal_rotation(u=[0,0,-1],alpha=self.omega)
+        R = Rz.dot(R)
+        alpha_r = np.deg2rad(alpha)
+        ct,st   = np.cos(alpha_r),np.sin(alpha_r)
+        Rx = np.array([[1,0,0],[0,ct,st],[0,-st,ct]])
+        R  = Rx.dot(R)
+        beta_r = np.deg2rad(beta)
+        ct,st   = np.cos(beta_r),np.sin(beta_r)
+        Ry = np.array([[ct,0,st],[0,1,0],[-st,0,ct]])
+        R  = Ry.dot(R)
+
+        x0,y0,z0  = R.dot(xyz0)
+
+
     def compare_xyz_pxpy(self,frame=32,opts='oa',view=[90,90],**kwargs):
         rpl0    = self.rpl.loc[self.rpl.F==frame]
         pxc,pyc = self.cen.iloc[frame-1][['px','py']].values.T
-        alpha   = rpl0.alpha.iloc[0]
+        omega,beta,alpha = self.omega,0,rpl0.alpha.iloc[0]
 
-        px,py = rpl0[['px','py']].values.T
+
+        px,py = rpl0[['rpx','rpy']].values.T
         px    =  self.aper*(px-pxc)
         py    = -self.aper*(py-pyc)
         xyz0  = np.vstack([px,py,np.zeros(px.shape)])
 
         R = np.identity(3)
         if 'o' in opts:
-            omega_r = np.deg2rad(self.omega)
+            omega_r = np.deg2rad(omega)
             ct,st  = np.cos(omega_r),np.sin(omega_r)
-            Romega = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]) #get_crystal_rotation(u=[0,0,-1],alpha=self.omega)
-            R = Romega
+            Rz = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]) #get_crystal_rotation(u=[0,0,-1],alpha=self.omega)
+            R = Rz.dot(R)
         if 'a' in opts:
             alpha_r = np.deg2rad(alpha)
             ct,st   = np.cos(alpha_r),np.sin(alpha_r)
-            Ra = np.array([[1,0,0],[0,ct,st],[0,-st,ct]])
-            R  = Ra.dot(R)
+            Rx = np.array([[1,0,0],[0,ct,st],[0,-st,ct]])
+            R  = Rx.dot(R)
+        if 'b' in opts:
+            beta_r = np.deg2rad(beta)
+            ct,st   = np.cos(beta_r),np.sin(beta_r)
+            Ry = np.array([[ct,0,st],[0,1,0],[-st,0,ct]])
+            R  = Ry.dot(R)
+
         x0,y0,z0  = R.dot(xyz0)
 
         xyz   = rpl0[['x','y','z']].values.T
@@ -273,7 +318,7 @@ class Pets:
         else:
             scat = ([x,y,z,Im,'b','o'],[x0,y0,z0,Im,'r','o'])
             fig,ax  = dsp.stddisp(rc='3d',view=view,xylims=1.5,scat=scat,labs=['x','y','z'],**kwargs)
-            h3d = h3D.handler_3d(fig,persp=True)
+            h3d = h3D.handler_3d(fig,persp=False)
 
     def compare_hkl(self,frame,eps=None,Smax=0.025,Nmax=5,v=0):
         uvw  = self.get_beam_dir(frame=frame)

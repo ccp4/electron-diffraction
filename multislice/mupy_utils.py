@@ -594,6 +594,7 @@ def show_ewald_sphere(lat_params,lam=0.025,tmax=7,T=0.2,nx=20,ny=10,**kwargs):
         lw=3,#,xylims=[-nx*b1,nx*b1,-b2,ny*b2],xyTickLabs=[[],[]],
         **kwargs)
 
+
 ################################################################################
 #### Class viewers
 ################################################################################
@@ -803,7 +804,7 @@ class Frames_Viewer(Base_Viewer):
     def get_im(self,**kwargs):
         self.pets.show_frame(frame=self.i+1,thick=self.thick,Imag=self.cutoff,
             **self.kargs,**kwargs)
-            
+
     def call(self,event):
         chars = 'KkPhr'
         keys = ['ctrl+K','ctrl+k', 'ctrl+H','ctrl+h','ctrl+g']

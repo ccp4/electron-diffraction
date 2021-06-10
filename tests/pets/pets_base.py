@@ -4,21 +4,17 @@ from utils import*                      ;imp.reload(dsp)
 import multislice.mupy_utils as mut     ;imp.reload(mut)
 import multislice.pets as pp            ;imp.reload(pp)
 plt.close('all')
-pts_path = '../glycine.pts'
+pts_path = 'glycine/glycine.pts'
 cif_file = 'glycine.cif'
 
 
 pets = pp.Pets(pts_path,gen=0)#,lam=0.02508,aper=0.005340,omega=230,gen=1)
-frame = 18
+frame = 65
 
 # pets.show_exp(frame,v=0)
 # pets.show_sim()
 
-# pets.compare_xyz_pxpy(frame=frame,opts=''  ,view='x',name='xyz_vs_pxpy_raw_x.png',opt='sc')
-# pets.compare_xyz_pxpy(frame=frame,opts=''  ,view='z',name='xyz_vs_pxpy_raw_z.png',opt='sc')
-# pets.compare_xyz_pxpy(frame=frame,opts='oa',view='x')#,name='xyz_vs_pxpy_prc_x.png',opt='sc')
-# pets.compare_xyz_pxpy(frame=frame,opts='oa',view='z')#,name='xyz_vs_pxpy_prc_z.png',opt='sc')
-# pets.compare_xyz_pxpy(frame=frame,opts='oa')
+# pets.compare_xyz_pxpy(frame=frame,opts='oab')
 
 # pets.show_uvw()
 # pets.show_xyz()

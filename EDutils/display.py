@@ -88,5 +88,5 @@ dfb = { 'B':['I' ,get_fz('m')[0],'b','o','Intensity Bloch$I_{g}$'],
         'L':['L' ,get_fz('m')[0],'k','s','Lattice']}
 dfb = pd.DataFrame.from_dict(dfb,orient='index',columns=['F','fz','color','marker','legend'])
 cp,mp = (0.5,)*3,'o'
-legElts={'Processed':[cp,mp],'Multislice':'r*']}
+legElts={'Processed':[cp,mp],'Multislice':'r*'}
 legElts.update({C.legend:[C.color,C.marker] for c,C in dfb.iterrows()})

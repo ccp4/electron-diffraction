@@ -5,9 +5,10 @@ import numpy as np,matplotlib.pyplot as plt,pandas as pd
 from utils import displayStandards as dsp
 from utils import glob_colors as colors
 # from multislice.pets import Pets
+# from multislice.multislice import Multislice
+# from multislice import multislice           #;imp.reload(multislice)
+# print('...bloch,multi...')
 from blochwave.bloch import load_Bloch #Bloch
-from multislice.multislice import Multislice
-from multislice import multislice           #;imp.reload(multislice)
 from multislice import mupy_utils as mut    #;imp.reload(mut)
 from multislice import postprocess as pp    #;imp.reload(pp)
 from blochwave import bloch as bl           #;imp.reload(bl)
@@ -47,6 +48,7 @@ class Viewer:
         - kwargs : see Bloch.show_beams
         - kargs  : see Pets.show_frame
         '''
+        print('...init...')
         self.__version__=__version__
         #generic
         self.cutoff  = cutoff
@@ -68,7 +70,7 @@ class Viewer:
         self.rotS    = rotS
         self.drot,self.drotS=1,1
         #pets related
-        self.pets_opts = pets_opts+'q'
+        self.pets_opts = pets_opts
         self.kargs = kargs
         #multislice related
         self.multi_args = {'Iopt':'csngt','Imax':5e4,'gs':0.025,'rmax':25,'Nmax':512}
@@ -85,6 +87,7 @@ class Viewer:
         self.show_u     = 'u' in init_opts
         self.show_v     = 'v' in init_opts
         self.save_bloch = 'B' in init_opts
+        self.hold_mode  = ' ' in init_opts
         if 'h' in init_opts:self.show_help()
 
         self.fig,self.ax = dsp.stddisp()
@@ -101,7 +104,7 @@ class Viewer:
         self.update_thickness()
         self.update(fsolve=1)
         self.show()
-        plt.show()
+        # plt.show()
 
     def __call__(self,event):self.call(event)
 
@@ -191,8 +194,12 @@ class Viewer:
     ######################################################################
     def call_update(self, event):
         # print(event.key)
-        self.get_keys(event.key)
-        self.do_update(event.key)
+        key = event.key
+        if key in self.df_keys.alias.values:
+            key = self.df_keys.loc[(self.df_keys.alias==key) & (self.df_keys['mode']==self.mode)].iloc[0].key
+        # print(key)
+        self.get_keys(key)
+        self.do_update(key)
 
     def set_theta_phi_from_u(self,u=None):
         if type(u) in [list,np.ndarray]:
@@ -220,6 +227,8 @@ class Viewer:
             self.update_thickness()
         if 'P' in self.pets_opts and self.tifpath:
             self.rpl = self.pets.rpl.loc[self.pets.rpl.F==self.frame]
+        if 'B' in self.pets_opts :
+            self.update(fsolve=1)
 
     def update_thickness(self):
         if 'M' in self.pets_opts and self.multi_path and self.mode=='frames':
@@ -275,7 +284,7 @@ class Viewer:
 
     def show_bloch(self):
         self.bloch.show_beams(ax=self.ax,fig=self.fig,F=self.F,fopts=self.fopts,
-            opt='',mag=self.cutoff*10,xylims=self.xylims,gridOn=0,**self.beams_args)
+            opt='',mag=self.cutoff*10,xylims=self.xylims,gridOn=0)#,**self.beams_args)
 
     def show(self):
         self.show_vals()
@@ -308,12 +317,11 @@ class Viewer:
                 if self.F in ['S','I'] : self.update(fsolve=1)
         elif (key in self.frame_keys or key in ['enter'] ) and self.mode=='frames':
             self.update_frame()
-            self.update()
-        elif (key in self.Pnum_keys or key in self.pets_keys ) and self.mode=='frames':
+        elif key in self.pets_keys and self.mode=='frames':
             print('frame options %s' %self.pets_opts)
 
         show_keys = key in self.show_keys
-        show_keys = show_keys or (key in self.frame_keys+self.pets_keys+self.Pnum_keys) and self.mode=='frames'
+        show_keys = show_keys or (key in self.frame_keys+self.dsp_keys+self.opt_keys) and self.mode=='frames'
         show_keys = show_keys or (key in self.orient_keys+self.F_keys+self.Fnum_keys) and self.mode=='rotate'
         if show_keys : self.show()
 
@@ -332,6 +340,7 @@ class Viewer:
         elif key == self.dict_k['save_fig']    : dsp.saveFig(self.get_figname(),ax=self.ax)
         elif key == self.dict_k['save_bloch']  : self.save_bloch=1 #not self.save_bloch;print('%s saving bloch' %['not ',''][self.save_bloch])
         elif key == self.dict_k['solve_bloch'] : self.update(fsolve=1)
+        elif key == self.dict_k['hold']        : self.hold_mode=not self.hold_mode;print('hold mode ' + ['off','on'][self.hold_mode])
         #modes
         elif key==self.dict_k['frames_mode'] and (self.tifpath or self.multi_path):
             self.mode,self.show_im = 'frames',self.show_pets
@@ -358,8 +367,8 @@ class Viewer:
             elif key == self.dict_k['dazim_down'] : self.dphi=max(self.dphi-1,0)
         elif self.mode=='frames':
             # frame
-            if   key in [self.dict_k['frame_up']  ,self.dict_a['frame_up']]   : self.frame=min(self.frame+self.incrate,self.nfigs)
-            elif key in [self.dict_k['frame_down'],self.dict_a['frame_down']] : self.frame=max(1,self.frame-self.incrate)
+            if   key==self.dict_k['frame_up']   : self.frame=min(self.frame+self.incrate,self.nfigs)
+            elif key==self.dict_k['frame_down'] : self.frame=max(1,self.frame-self.incrate)
             # increment rate
             elif key==self.dict_k['inc_frame_up']  :self.incrate=min(self.incrate+1,100)
             elif key==self.dict_k['inc_frame_down']:self.incrate=max(1,self.incrate-1)
@@ -394,26 +403,32 @@ class Viewer:
                 self.F,self.fopts = loc.F,loc.fopt
         # Pets display
         elif self.mode=='frames':
-            vals = [c in self.pets_opts for c in self.pets_chars]
-            if key in self.pets_keys :
-                for i,(c,k) in enumerate(zip(self.pets_chars,self.pets_keys)):
-                    if key==k:vals[i] = not vals[i]
-            elif key in self.Pnum_keys:
-                i = int(key[-1])
-                vals[i]=not vals[i]
-            if vals[0]:
-                vals[0]=0#;print('exp')
+            do_up=False
+            if key in self.opt_keys :
+                self.opt_d[key] = not self.opt_d[key]
+            elif key in self.dsp_keys:
+                if self.hold_mode:
+                    self.dsp_d[key] = not self.dsp_d[key]
+                else:
+                    self.dsp_d = self.dsp_d.fromkeys(self.dsp_d,False)
+                    self.dsp_d[key] = True
+                do_up = do_up or (self.dsp_d['M'] and not 'M' in self.pets_opts and self.multi_path and not self.im)
+                do_up = do_up or (self.dsp_d['P'] and not 'P' in self.pets_opts and self.tifpath )
+                do_up = do_up or (self.dsp_d['B'] and not 'B' in self.pets_opts and not self.bloch.solved)
+            elif key==self.dict_k['show_Exp'] and self.tifpath:
                 self.pets.show_exp(frame=self.frame)
-            do_up = vals[2] and not 'M' in self.pets_opts and self.multi_path and not self.im
-            do_up = do_up or (vals[1] and not 'P' in self.pets_opts and self.tifpath )
-            self.pets_opts=''.join([c for c,val in zip(self.pets_chars,vals) if val])
+            self.pets_opts =''.join([self.opt_chars[c] for c,val in self.opt_d.items() if val])
+            self.pets_opts+=''.join([self.dsp_chars[c] for c,val in self.dsp_d.items() if val])
             if do_up:self.update_frame()
+
 
     def set_keys(self):
         self.dict_k,self.dict_a = {},{}
 
-        generic       = ['new_fig'   ,'settings','help_cli','help_gui','help_simple','save_fig','save_bloch','solve_bloch','find_shortcut']
-        self.gen_keys = ['ctrl+enter','enter'   ,'ctrl+2'  ,'ctrl+1'  ,'ctrl+ '     ,'s'       ,'ctrl+s'    ,'ctrl+S'     ,'ctrl+P'       ]
+        generic       = ['new_fig'   ,'settings','help_cli','help_gui','help_simple' ]
+        self.gen_keys = ['ctrl+enter','enter'   ,'ctrl+2'  ,'ctrl+1'  ,'ctrl+ '      ]
+        generic      += ['save_fig','save_bloch','solve_bloch','find_shortcut','hold']
+        self.gen_keys+= ['s'       ,'ctrl+s'    ,'ctrl+S'     ,'ctrl+P'       ,' '   ]
         self.dict_k.update(dict(zip(generic,self.gen_keys)))
 
         #modes
@@ -478,15 +493,28 @@ class Viewer:
         self.df_F = pd.DataFrame.from_dict(dict(zip(['names','key','alias','F','fopt'],[bloch,self.F_keys,self.Fnum_keys,Fs,fopt])))
         self.df_F = self.df_F.set_index('names')
 
-        #display Pets
-        self.pets_chars = 'EPMBKVSLhkrl'
-        pets = ['Exp','Processed','Multislice','Bloch','Kinematic','Potential','Excitation error','Lattice']
-        pets+= ['hkl_exp','hkl_kin','rings','legend']
-        pets = ['show_'+s for s in pets]
-        self.Pnum_keys = [''+c for c in '01234567']
-        self.pets_keys = ['E','P','M','B','K','V','S','L','j','k','g','l']
-        self.dict_k.update(dict(zip(pets,self.pets_keys)))
+        #display Frames
+        self.dict_k['show_Exp']='0'
+        petsD = ['Processed','Multislice','Bloch','Kinematic','Potential','Excitation error','Lattice']
+        petsD = ['show_'+s for s in petsD]
+        self.dsp_keys   = ['P','M','B','K','V','S','L']
+        self.dsp_keys_a = [''+c for c in '1234567']
+        self.dsp_chars = dict(zip(self.dsp_keys,'PMBKVSL'))
+        self.dsp_d = dict(zip(self.dsp_keys,np.zeros((len(self.dsp_keys)),dtype=bool) ))
+        self.dict_k.update(dict(zip(petsD,self.dsp_keys)))
+        self.dict_a.update(dict(zip(petsD,self.dsp_keys_a)))
+        #options
+        petsO = ['hkl_exp','hkl_kin','rings','legend']
+        petsO = ['show_'+s for s in petsO]
+        self.opt_keys = ['j','k','g','l']
+        self.opt_chars = dict(zip(self.opt_keys,'hkrl'))
+        self.opt_d = dict(zip(self.opt_keys,np.zeros((len(self.opt_keys)),dtype=bool) ))
+        self.dict_k.update(dict(zip(petsO,self.opt_keys)))
+        self.pets_keys = self.dsp_keys+self.opt_keys
 
+        #init self.pets_opts
+        for k,v in self.dsp_chars.items():self.dsp_d[k] = v in self.pets_opts
+        for k,v in self.opt_chars.items():self.opt_d[k] = v in self.pets_opts
 
         #### Keys that trigger the show
         self.show_keys = self.modes_keys.copy()
@@ -495,9 +523,11 @@ class Viewer:
         #### Data frame for the help command
         self.df_keys = pd.DataFrame.from_dict(self.dict_k,orient='index',columns=['key'])
         self.df_keys['alias'] = ['']*self.df_keys.shape[0]
-        self.df_keys.loc[pets,'alias'] = self.Pnum_keys+['']*4
-        self.df_keys.loc[frames,'alias'] = self.frame_keys_a
+        for k,v in self.dict_a.items():self.df_keys.loc[k,'alias'] = v
         self.df_keys = self.df_keys.append(self.df_F[['key','alias']])
+        self.df_keys['mode']  = ['any']*self.df_keys.shape[0]
+        self.df_keys.loc[rots+drots+bloch,'mode'] = 'rotate'
+        self.df_keys.loc[frames+dframes+petsD+petsO,'mode'] = 'frames'
 
         self.df_generic = self.df_keys.loc[generic]
         self.df_modes   = self.df_keys.loc[modes]
@@ -507,7 +537,7 @@ class Viewer:
         self.df_bright  = self.df_keys.loc[bright]
         self.df_vals    = self.df_keys.loc[vals]
         self.df_bloch   = self.df_keys.loc[bloch]
-        self.df_pets    = self.df_keys.loc[pets]
+        self.df_pets    = self.df_keys.loc[petsD+petsO]
         # self.df_pets['alias'].iloc[:4] = self.Pnum_keys
 
     ###################################

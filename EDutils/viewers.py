@@ -1,5 +1,5 @@
 import importlib as imp
-import easygui,os,glob,copy
+import easygui,os,glob,copy,pickle
 from subprocess import Popen,PIPE
 import numpy as np,matplotlib.pyplot as plt,pandas as pd
 from utils import displayStandards as dsp
@@ -15,8 +15,9 @@ from blochwave import bloch as bl           #;imp.reload(bl)
 from multislice import pets as pt           #;imp.reload(pt)
 from . import __version__
 from . import display as EDdisp             #;imp.reload(EDdisp)
-pd.set_option('precision',3)
 
+pd.set_option('precision',3)
+pd.set_option('max_rows',100)
 if plt.rcParams['keymap.save']:
     plt.rcParams['keymap.save']=[]
     plt.rcParams['keymap.grid']=[]
@@ -24,12 +25,53 @@ if plt.rcParams['keymap.save']:
     plt.rcParams['keymap.yscale']=[]
     # plt.rc('text', usetex=False)
 
+
+
 class Viewer:
-    def __init__(self,path=None,cif_file=None,bloch=None,pets=None,multi=None,
-        orient=[0,0,5,5],u=None,Smax=0.01,Nmax=3,thick=None,
-        F='Sw',xylims=1.5,init_opts='R',cutoff=50,mag=500,cmap='Reds',
-        frame=1,pets_opts='Pr',rot=0,rotS=0,kargs={},**kwargs):
+    def __init__(self,config=None,help=False,**kwargs):
         '''Dynamic beam viewer :
+        - config : str - saved configuration
+        - help : bool - show help at startup
+        - kwargs : see init_args'''
+        self.__version__=__version__
+        # print('...setting up keys...')
+        self.set_keys()
+        if help:self.show_help()
+
+        self.path,self.cif_file,self.bloch,self.pets = None,None,None,None
+        self.multi_path,self.tifpath,self.multi = None,None,None
+        self.rpl,self.im = None,None
+        self.kargs      = {}
+        self.multi_args = {'Iopt':'csngt','Imax':5e4,'gs':0.025,'rmax':25,'Nmax':512}
+
+        # print('...load parameters...')
+        if config:self.load_config(config)
+        else:self.init_args(**kwargs)
+        self.load_objects()
+
+
+        # print('...Complete initialization...')
+        if not (self.tifpath or self.multi_path):self.mode = 'rotate'
+        self.show_im = {'frames':self.show_pets,'rotate':self.show_bloch}[self.mode]
+        if not self.thick : self.thick=100
+        self.dthick_r=self.dthick
+
+        #print('... init figure ...')
+        self.fig,self.ax = dsp.stddisp()
+        cid = self.fig.canvas.mpl_connect('key_press_event', self)
+        self.call = self.call_update
+        # print('... update and show ...')
+        self.update(fsolve=1)
+        self.update_thickness()
+        self.show()
+        # plt.show()
+
+
+    def init_args(self,path=None,cif_file=None,bloch=None,pets=None,multi=None,
+        orient=[0,0,5,5],u=None,Smax=0.01,Nmax=5,thick=None,dthick=5,thicks=(0,1000,1000),
+        F='Sw',xylims=1.5,init_opts='R',cutoff=50,mag=500,cmap='Reds',
+        frame=1,incrate=1,drot=1,drotS=1,pets_opts='Pr',rot=0,rotS=0,kargs={},**kwargs):
+        ''' configuration Initializer
     #### path setup (at least one of these need to be defined)
         - path      : str - path to the main folder
         - cif_file  : str - full path to .cif file (will be automatically fetched in path if not defined)
@@ -38,7 +80,7 @@ class Viewer:
         - pets      : Pets object or str to .pts file -
     #### Simulation setup
         - orient : [theta,phi,dtheta,dphi] in degrees
-        - u : set beam direction(takes preference over orient)
+        - u      : list3 - set beam direction(takes preference over orient)
         - Smax,Nmax,thick,F : see blochwave.Bloch
         - init_opts: str -
             - h(show help at start) R(rotate mode) B(save Bloch)
@@ -48,39 +90,38 @@ class Viewer:
         - kwargs : see Bloch.show_beams
         - kargs  : see Pets.show_frame
         '''
-        print('...init...')
-        self.__version__=__version__
         #generic
         self.cutoff  = cutoff
         self.mag     = mag
         self.xylims  = xylims
-        self.Smax  = Smax
-        self.Nmax  = Nmax
-        self.thick = thick
-        self.dthick = 5
+        self.Smax    = Smax
+        self.Nmax    = Nmax
+        self.thick   = thick
+        self.dthick  = dthick
         #bloch related
         self.theta,self.phi,self.dtheta,self.dphi = orient
         self.dtheta_dphi = [self.dtheta,self.dphi]
-        self.thicks = (0,1000,1000)
-        self.beams_args = kwargs
+        self.thicks      = thicks
+        self.beams_args  = kwargs
+        self.set_theta_phi_from_u(u)
+        self.F,self.fopts = F,self.df_F.loc[self.df_F.F==F].iloc[0].fopt
+
         #frames related
         self.frame   = frame
-        self.incrate = 1
+        self.incrate = incrate
         self.rot     = rot
         self.rotS    = rotS
-        self.drot,self.drotS=1,1
+        self.drot,self.drotS = drot,drotS
         #pets related
         self.pets_opts = pets_opts
-        self.kargs = kargs
-        #multislice related
-        self.multi_args = {'Iopt':'csngt','Imax':5e4,'gs':0.025,'rmax':25,'Nmax':512}
-        self.cmap = cmap
-        self.im,self.rpl=None,None
+        for k,v in self.dsp_chars.items():self.dsp_d[k] = v in self.pets_opts
+        for k,v in self.opt_chars.items():self.opt_d[k] = v in self.pets_opts
 
-        # print('...keys...')
-        self.set_keys()
-        self.F,self.fopts = F,self.df_F.loc[self.df_F.F==F].iloc[0].fopt
-        self.mode,self.show_im = [['frames',self.show_pets],['rotate',self.show_bloch]]['R' in init_opts]
+        #multislice related
+        self.cmap       = cmap
+
+        #init_opts
+        self.mode       = 'R' in init_opts
         self.show_hkl   = 'k' in init_opts
         self.show_i     = 'i' in init_opts
         self.show_z     = 'z' in init_opts
@@ -88,32 +129,51 @@ class Viewer:
         self.show_v     = 'v' in init_opts
         self.save_bloch = 'B' in init_opts
         self.hold_mode  = ' ' in init_opts
-        if 'h' in init_opts:self.show_help()
-
-        self.fig,self.ax = dsp.stddisp()
-        cid = self.fig.canvas.mpl_connect('key_press_event', self)
-        self.call=self.call_update
 
         # print('...init path...')
         self.init_path(path,cif_file,bloch,pets,multi)
-        self.set_theta_phi_from_u(u)
 
-        # print('...update...')
-        if not self.thick : self.thick=100
-        self.dthick_r=self.dthick
-        self.update_thickness()
-        self.update(fsolve=1)
-        self.show()
-        # plt.show()
+    def load_config(self,config):
+        with open(config,'rb') as f:d_config = pickle.load(f)
+        for k,v in d_config.items(): self.__dict__[k] = v
 
-    def __call__(self,event):self.call(event)
+    def open_config(self,config_file=''):
+        ext = config_file.split('.')[-1]
+        if not ext=='pkl':config_file=''
+        elif not os.path.exists(config_file):
+            config_file = os.path.join(self.path,config_file)
+
+        if not os.path.exists(config_file):
+            config_file = os.path.join(self.path,'')
+            config_file = easygui.fileopenbox('open config','config',config_file,['*.pkl'])
+
+        ext = config_file.split('.')[-1]
+        if os.path.exists(config_file) and ext=='pkl' :
+            print(colors.green+'Loading '+colors.yellow+config_file+colors.black)
+            Viewer(config=config_file)
+
+    def save_config(self,config_file=''):
+        keys = ['path','cif_file','multi_path','tifpath',                       #paths
+        'cutoff','mag','xylims','Smax','Nmax','thick','dthick',                 #generic
+        'theta','phi','dtheta','dphi','dtheta_dphi','thicks',                   #bloch
+        'frame','incrate','rot','rotS','drot','drotS','pets_opts','cmap',       #frames
+        'mode','show_hkl','show_i','show_z','show_u','show_v',                  #mode
+        'save_bloch','hold_mode',
+        'beams_args','F','fopts',
+        ]
+        if not config_file:
+            config_file = os.path.join(self.path,'config.pkl')
+            config_file = easygui.filesavebox('save config','save',config_file)
+
+        if config_file:
+            d_config = {k:self.__dict__[k] for k in keys}
+            with open(config_file,'wb') as f:pickle.dump(d_config,f,pickle.HIGHEST_PROTOCOL)
+            print(colors.yellow+config_file+colors.green+' saved'+colors.black)
 
     def init_path(self,path,cif_file,bloch,pets,multi):
         if all([type(o)==type(None) for o in [path,cif_file,bloch,pets] ]):
             args = ['path','cif_file','bloch','pets']
             raise Exception('at least one of these must be defined : ',args)
-        self.path,self.cif_file,self.bloch,self.pets = None,None,None,None
-        self.multi_path,self.tifpath,self.multi = None,None,None
 
         if type(path)==str:self.path = path
         if type(cif_file)==str:self.cif_file = cif_file
@@ -125,11 +185,19 @@ class Viewer:
             self.path = os.path.dirname(self.cif_file)
         if not type(self.cif_file)==str:
             self.cif_file = mut._get_cif_file(self.path,cif_file)
+
+        if bloch and pets :
+            bloch_cif,pets_cif = os.path.basename(self.bloch.cif_file),os.path.basename(self.pets.cif_file)
+            if not bloch_cif==pets_cif:
+                raise Exception('bloch and pets seems to have different cif_files : bloch=%s, pets=%s'%(bloch_cif,pets_cif))
+
+    def load_objects(self):
         if not type(self.bloch)==bl.Bloch:
             bloch_path = os.path.join(self.path,'bloch')
             if not os.path.exists(bloch_path):
                 p = Popen("mkdir %s" %bloch_path,shell=True,stderr=PIPE,stdout=PIPE);p.wait()
             self.bloch = bl.Bloch(self.cif_file,path=bloch_path)
+
         if not type(self.pets)==pt.Pets:
             pets_path = os.path.join(self.path,'pets')
             if not os.path.exists(pets_path):pets_path=self.path
@@ -137,9 +205,8 @@ class Viewer:
             if len(pts_files)>=1:
                 print(colors.green+'found .pts file. Loading %s ' %pts_files[0]+colors.black)
                 self.init_pets(pts_files[0])
-            if not len(pts_files)==1:
-                msg ='''warning:%d pts files  found :%s''' %(len(pts_files),str(pts_files))
-                print(colors.red+msg+colors.black)
+            else:
+                print(colors.red+'no pts files found'+colors.black)
         if not type(self.multi_path)==str:
             multi_path = os.path.join(self.path,'multi')
             if os.path.exists(multi_path):
@@ -148,20 +215,17 @@ class Viewer:
                 print(colors.green+msg+colors.black)
                 if not self.thick:
                     self.multi = pp.load(self.multi_path,tag='test'+str(self.frame).zfill(3))
-                    self.thick=self.multi.thickness
+                    self.thick = self.multi.thickness
                 self.update_frame()
-
-        if bloch and pets :
-            bloch_cif,pets_cif = os.path.basename(self.bloch.cif_file),os.path.basename(self.pets.cif_file)
-            if not bloch_cif==pets_cif:
-                raise Exception('bloch and pets seems to have different cif_files : bloch=%s, pets=%s'%(bloch_cif,pets_cif))
+            else:
+                print(colors.red+'no multislice folder'+colors.black)
 
         self.figpath = os.path.join(self.path,'figures')
         if not os.path.exists(self.figpath):
             p = Popen("mkdir %s" %self.figpath,shell=True,stderr=PIPE,stdout=PIPE);p.wait()
 
     def init_bloch(self,bloch):
-        if type(bloch) == bl.Bloch:self.bloch = bloch
+        if type(bloch)   == bl.Bloch:self.bloch = bloch
         elif type(bloch) == str:self.bloch = load_Bloch(file=bloch)
         else:raise Exception('bloch args need be NoneType, str or Bloch object ')
         if not type(self.path)     == str : self.path = self.bloch.path
@@ -181,22 +245,23 @@ class Viewer:
         self.fmt,self.load = mut.find_format(self.tifpath)
         self.figs = np.sort(glob.glob(self.tifpath+'/*.%s' %self.fmt))#;print(self.figs)
 
-
-    def get_figname(self):
-        if self.mode=='frame':
-            png_file = '_%s.png' %str(self.frame).zfill(3)
-        else:
-            png_file = '%s.png' %str(self.bloch.name)
-        return os.path.join(self.figpath,png_file)
-
     ######################################################################
     ##### Update and show functions
     ######################################################################
+    def __call__(self,event):
+        ''' event callback function
+        normal mode : call = call_update
+        find mode   : call = shortcut_call
+        '''
+        self.call(event)
+
     def call_update(self, event):
         # print(event.key)
         key = event.key
-        if key in self.df_keys.alias.values:
-            key = self.df_keys.loc[(self.df_keys.alias==key) & (self.df_keys['mode']==self.mode)].iloc[0].key
+        alias_match = self.df_keys.loc[(self.df_keys.alias==key) & (self.df_keys['mode']==self.mode)]
+        if any(alias_match.index):
+            # print(alias_match)
+            key = alias_match.iloc[0].key
         # print(key)
         self.get_keys(key)
         self.do_update(key)
@@ -293,6 +358,16 @@ class Viewer:
         self.fig.canvas.draw()
 
     ######################################################################
+    ##### Misc
+    ######################################################################
+    def get_figname(self):
+        if self.mode=='frame':
+            png_file = '_%s.png' %str(self.frame).zfill(3)
+        else:
+            png_file = '%s.png' %str(self.bloch.name)
+        return os.path.join(self.figpath,png_file)
+
+    ######################################################################
     ##### Keys
     ######################################################################
     def do_update(self,key):
@@ -334,13 +409,17 @@ class Viewer:
             v1 = copy.copy(self)
             v1.fig,v1.ax = dsp.stddisp()
             cid = v1.fig.canvas.mpl_connect('key_press_event', v1)
-        elif key == self.dict_k['help_cli']    : self.show_help_cli()
-        elif key == self.dict_k['help_gui']    : self.show_help_gui()
-        elif key == self.dict_k['help_simple'] : print(self.df_keys)
-        elif key == self.dict_k['save_fig']    : dsp.saveFig(self.get_figname(),ax=self.ax)
-        elif key == self.dict_k['save_bloch']  : self.save_bloch=1 #not self.save_bloch;print('%s saving bloch' %['not ',''][self.save_bloch])
-        elif key == self.dict_k['solve_bloch'] : self.update(fsolve=1)
-        elif key == self.dict_k['hold']        : self.hold_mode=not self.hold_mode;print('hold mode ' + ['off','on'][self.hold_mode])
+        elif key == self.dict_k['help_cli']      : self.show_help_cli()
+        elif key == self.dict_k['help_gui']      : self.show_help_gui()
+        elif key == self.dict_k['help_simple']   : print(self.df_keys)
+        elif key == self.dict_k['save_fig']      : dsp.saveFig(self.get_figname(),ax=self.ax)
+        elif key == self.dict_k['save_config']   : self.save_config(os.path.join(self.path,'config.pkl'))
+        elif key == self.dict_k['save_config_as']: self.save_config()
+        elif key == self.dict_k['reload_config'] : self.open_config('config.pkl')
+        elif key == self.dict_k['open_config']   : self.open_config()
+        elif key == self.dict_k['save_bloch']    : self.save_bloch=1 #not self.save_bloch;print('%s saving bloch' %['not ',''][self.save_bloch])
+        elif key == self.dict_k['solve_bloch']   : self.update(fsolve=1)
+        elif key == self.dict_k['hold']          : self.hold_mode=not self.hold_mode;print('hold mode ' + ['off','on'][self.hold_mode])
         #modes
         elif key==self.dict_k['frames_mode'] and (self.tifpath or self.multi_path):
             self.mode,self.show_im = 'frames',self.show_pets
@@ -425,10 +504,14 @@ class Viewer:
     def set_keys(self):
         self.dict_k,self.dict_a = {},{}
 
-        generic       = ['new_fig'   ,'settings','help_cli','help_gui','help_simple' ]
-        self.gen_keys = ['ctrl+enter','enter'   ,'ctrl+2'  ,'ctrl+1'  ,'ctrl+ '      ]
-        generic      += ['save_fig','save_bloch','solve_bloch','find_shortcut','hold']
-        self.gen_keys+= ['s'       ,'ctrl+s'    ,'ctrl+S'     ,'ctrl+P'       ,' '   ]
+        generic       = ['new_fig'   ,'settings' ,'help_cli','help_gui','help_simple' ]
+        self.gen_keys = ['ctrl+enter','enter'    ,'ctrl+2'  ,'ctrl+1'  ,'ctrl+ '      ]
+        generic      += ['save_config','save_config_as','open_config','reload_config',]
+        self.gen_keys+= ['ctrl+s'     ,'ctrl+S'        ,'ctrl+o'     ,'backspace'    ,]
+        generic      += ['save_fig','save_bloch','solve_bloch','find_shortcut']
+        self.gen_keys+= ['s'       ,'ctrl+alt+S','ctrl+alt+s' ,'ctrl+P'       ]
+        generic      += ['hold']
+        self.gen_keys+= [' '   ]
         self.dict_k.update(dict(zip(generic,self.gen_keys)))
 
         #modes
@@ -488,7 +571,7 @@ class Viewer:
         fopt  = ['m','L' ,'l' ,'m','m','m' ]#,'m']
         bloch = ['Lattice','Excitation error','Potential','Scattering','Intensities','Kinematic']
         bloch = ['show '+s for s in bloch]
-        self.F_keys    = ['ctrl+'+c for c in 'LGVSIK']
+        self.F_keys    = [''+c for c in 'LGVSIK']
         self.Fnum_keys = [''+c for c in '123456']
         self.df_F = pd.DataFrame.from_dict(dict(zip(['names','key','alias','F','fopt'],[bloch,self.F_keys,self.Fnum_keys,Fs,fopt])))
         self.df_F = self.df_F.set_index('names')
@@ -511,10 +594,6 @@ class Viewer:
         self.opt_d = dict(zip(self.opt_keys,np.zeros((len(self.opt_keys)),dtype=bool) ))
         self.dict_k.update(dict(zip(petsO,self.opt_keys)))
         self.pets_keys = self.dsp_keys+self.opt_keys
-
-        #init self.pets_opts
-        for k,v in self.dsp_chars.items():self.dsp_d[k] = v in self.pets_opts
-        for k,v in self.opt_chars.items():self.opt_d[k] = v in self.pets_opts
 
         #### Keys that trigger the show
         self.show_keys = self.modes_keys.copy()
@@ -540,8 +619,30 @@ class Viewer:
         self.df_pets    = self.df_keys.loc[petsD+petsO]
         # self.df_pets['alias'].iloc[:4] = self.Pnum_keys
 
+    def settings(self):
+        fieldNames  =['Smax','Nmax','thick','dthick','xylims','mag']
+        if   self.mode=='rotate':
+            self.dtheta_dphi=[self.dtheta,self.dphi]
+            fieldNames+=['theta','phi','dtheta_dphi','thicks','F']
+        elif self.mode=='frames':
+            fieldNames+=['frame','incrate','rot','rotS','pets_opts','cmap','cutoff']
+        fieldValues = [str(self.__dict__[f]) for f in fieldNames]
+        dict_fv = multenterbox("Change settings","settings", fieldValues,fieldNames)
+        if dict_fv:
+            for f in fieldNames:
+                if isinstance(self.__dict__[f],str):
+                    self.__dict__[f] = dict_fv[f]
+                else:
+                    self.__dict__[f] = eval(dict_fv[f])
+
+        #update dtheta,dphi
+        if self.mode=='rotate':
+            if type(self.dtheta_dphi) in [float,int]:
+                self.dtheta_dphi=[self.dtheta_dphi]*2
+            self.dtheta,self.dphi = self.dtheta_dphi
+
     ###################################
-    ##### Help
+    ##### Shotcut call
     ###################################
     def is_key(self,key):return self.df_keys.loc[(self.df_keys.key==key) | (self.df_keys.alias==key)]
     def is_cmd(self,cmd):return self.df_keys.iloc[[cmd in k for k in  self.df_keys.index]]
@@ -567,7 +668,9 @@ class Viewer:
             if any(dfk.index):print(colors.green+'found key'+colors.black);print(dfk)
             else:print(colors.red+'no key binding for %s' %key+colors.black)
 
-
+    ###################################
+    ##### Help
+    ###################################
     def show_help_cli(self):
         print(colors.green+'Shortcuts :  '+colors.black)
         print(colors.blue+'Generic :     '+colors.black);print(self.df_generic)
@@ -604,27 +707,6 @@ class Viewer:
         msg+=str(self.df_pets)+'\n'
         easygui.msgbox(msg, title='help')
 
-    def settings(self):
-        fieldNames  =['Smax','Nmax','thick','dthick','xylims','mag']
-        if   self.mode=='rotate':
-            self.dtheta_dphi=[self.dtheta,self.dphi]
-            fieldNames+=['theta','phi','dtheta_dphi','thicks','F']
-        elif self.mode=='frames':
-            fieldNames+=['frame','incrate','rot','rotS','pets_opts','cmap','cutoff']
-        fieldValues = [str(self.__dict__[f]) for f in fieldNames]
-        dict_fv = multenterbox("Change settings","settings", fieldValues,fieldNames)
-        if dict_fv:
-            for f in fieldNames:
-                if isinstance(self.__dict__[f],str):
-                    self.__dict__[f] = dict_fv[f]
-                else:
-                    self.__dict__[f] = eval(dict_fv[f])
-
-        #update dtheta,dphi
-        if self.mode=='rotate':
-            if type(self.dtheta_dphi) in [float,int]:
-                self.dtheta_dphi=[self.dtheta_dphi]*2
-            self.dtheta,self.dphi = self.dtheta_dphi
 
 ######################################################################
 ##### Misc

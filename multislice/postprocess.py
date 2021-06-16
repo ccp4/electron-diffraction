@@ -64,21 +64,24 @@ def load(datpath,tail='',tag=None,v=0):
     if tag:tail=tag
     filename = datpath
     pkls = glob.glob(os.path.join(datpath,'*.pkl'))
-    filename = pkls[0]
-    tails = ['_'.join(pkl.split('_')[1:-1]) for pkl in pkls]
-    file_idx = [i for i,t in enumerate(tails) if tail == t]
-    if file_idx:
-        if len(file_idx)>1:print(colors.red+'several matches for tail : ',file_dx+colors.black)
-        filename=pkls[file_idx[0]]
-        print(colors.green+'loading ' +colors.yellow+filename+colors.black )
-        multi = load_multi_obj(filename)        
-        if v : print('simu status : ',multi.check_simu_state())
-        if v>1 : multi.log_info(v=1);
-        return multi
+    if any(pkls):
+        filename = pkls[0]
+        tails = ['_'.join(pkl.split('_')[1:-1]) for pkl in pkls]
+        file_idx = [i for i,t in enumerate(tails) if tail == t]
+        if file_idx:
+            if len(file_idx)>1:print(colors.red+'several matches for tail : ',file_dx+colors.black)
+            filename=pkls[file_idx[0]]
+            print(colors.green+'loading ' +colors.yellow+filename+colors.black )
+            multi = load_multi_obj(filename)
+            if v : print('simu status : ',multi.check_simu_state())
+            if v>1 : multi.log_info(v=1);
+            return multi
+        else:
+            print(colors.red+'warning: tail "%s" not found in %s' %(tail,datpath)+colors.black )
+            print(colors.green+'available tails:'+colors.yellow,tails,colors.black)
     else:
-        print(colors.red+'warning: tail "%s" not found in %s' %(tail,datpath)+colors.black )
-        print(colors.green+'available tails:'+colors.yellow,tails,colors.black)
-
+        print(colors.red+'warning:no file found'+colors.red)
+        
 def load_multi_obj(filename):
     '''load a saved Multislice object
     filename : pickle file (.pkl)  '''

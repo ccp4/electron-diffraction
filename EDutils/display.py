@@ -1,9 +1,9 @@
 import importlib as imp
-import pandas as pd,numpy as np
+import pandas as pd,numpy as np,easygui
 from utils import displayStandards as dsp #;imp.reload(dsp)
 
 
-def show_frame(opts='Pqr',mag=10,rot=0,
+def show_frame(opts='Pqr',mag=10,rot=0,hkl_idx=[],
     df_pets=None,im_multi=None,df_bloch=None,
     **kwargs):
     ''' Show a frame with information specified by opts
@@ -34,18 +34,17 @@ def show_frame(opts='Pqr',mag=10,rot=0,
                 I = C.fz(df_bloch[C.F])
                 scat += ( [qx_b,qy_b,I/I.max()*mag,C.color,C.marker],)
         bs = [c for c in dfb.index if c in opts]
-        if 'k' in opts and bs:
-            h,k,l = df_bloch[['h','k','l']].values.T
-            # Itol = I_k.max()/Itol
+        if 'k' in opts and bs and any(hkl_idx):
+            h,k,l,qx0,qy0 = df_bloch.iloc[hkl_idx][['h','k','l','qx','qy']].values.T
+            if rot:qx0,qy0 = ct*qx0-st*qy0,st*qx0+ct*qy0
             ctxt = dfb.loc[bs[0]].color
-            txts += [[x,y+wm,'(%s,%s,%s)' %(h0,k0,l0),ctxt] for x,y,h0,k0,l0 in zip(qx_b,qy_b,h,k,l)] #,I_b) if I>Itol]
+            txts += [[x,y+wm,'(%d,%d,%d)' %(h0,k0,l0),ctxt] for x,y,h0,k0,l0 in zip(qx0,qy0,h,k,l)] #,I_b) if I>Itol]
         qmax = np.ceil(max(qmax,qx_b.max(),qy_b.max()))
 
     if 'M' in opts and im_multi:
         qx_m,qy_m,I=im_multi
         qmax = np.ceil(max(qmax,qx_m.max(),qy_m.max()))
         im=[qx_m,-qy_m,I]
-
 
     if 'r' in opts:
         t = np.linspace(0,np.pi*2,100)
@@ -90,3 +89,17 @@ dfb = pd.DataFrame.from_dict(dfb,orient='index',columns=['F','fz','color','marke
 cp,mp = (0.5,)*3,'o'
 legElts={'Processed':[cp,mp],'Multislice':'r*'}
 legElts.update({C.legend:[C.color,C.marker] for c,C in dfb.iterrows()})
+
+
+def multenterbox(msg,title,fieldValues,fieldNames):
+    fieldValues = easygui.multenterbox(msg, title, fieldNames,fieldValues)
+    while True:
+        if fieldValues is None:
+            break
+        errs = list()
+        for n, v in zip(fieldNames, fieldValues):
+            if v.strip() == "":errs.append('"{}" is a required field.'.format(n))
+        if not len(errs):
+            break
+        fieldValues = easygui.multenterbox("\n".join(errs), title, fieldNames, fieldValues)
+    return dict(zip(fieldNames,fieldValues))

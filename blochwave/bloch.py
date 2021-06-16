@@ -169,16 +169,18 @@ class Bloch:
         self.solved = False
 
     def _set_Vg(self):
-        Vg     = self.Fhkl/self.crys.volume
-        V0_idx = [2*self.Nmax]*3
+        Vg     = self.Fhkl.copy()/self.crys.volume
+        V0_idx = np.array([2*self.Nmax]*3)
         hkl    = self.df_G[['h','k','l']].values
-        Vg_G   = np.array([ Vg[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
-        px,py,e0x = mut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
+        Vg[tuple(V0_idx)] = 0
+        Vg_G       = np.array([ Vg[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
+        px,py,e0x  = mut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
         self.e0x = e0x
         self.df_G['px'] = px
         self.df_G['py'] = py
         self.df_G['Vg'] = Vg_G
         self.df_G['L']  = np.ones(Vg_G.shape)
+        # self.df_G.loc[(self.df_G.h==0) & (self.df_G.k==0) & (self.df_G.l)==0]['Vg'] = 0
         self._set_zones()
 
     def _set_zones(self):
@@ -198,7 +200,6 @@ class Bloch:
         S = S[id0,:]
         self.df_G['S'] = S
         self.df_G['I'] = np.abs(S)**2
-
 
     def _set_kinematic(self):
         Sw,Vg = self.df_G[['Sw','Vg']].values.T
@@ -237,15 +238,16 @@ class Bloch:
     def get_kin(self):return self.df_G[['h','k','l','Sw','Vg','Sg','Ig']]
     def get_zones(self):return self.df_G[['h','k','l','zone']].values
     def get_G(self):return self.df_G[['qx','qy','qz']].values
-    def get_Istrong(self,m=100,out=0):
-        Icol=''
-        if 'I' in self.df_G.columns : Icol = 'I'
-        elif 'Ig' in self.df_G.columns : Icol = 'Ig'
-        if Icol:
-            Imax = self.df_G[Icol].max()
-            Istrong = self.df_G.loc[self.df_G[Icol]>Imax/m]
-            if out:return Istrong.index.values
-            else:print(Istrong[['h','k','l','Sw','Vg',Icol]])
+    def get_Istrong(self,m={'I':1000,'Ig':1000,'Vg':10},out=0,Icols=['I']):
+        cond = self.df_G.L<0
+        Icols = [Icol for Icol in Icols if Icol in self.df_G.columns and Icol in m.keys()]
+        for Icol in Icols :
+            Imax = abs(self.df_G[Icol].max())
+            cond |= (abs(self.df_G[Icol])>Imax/m[Icol])
+        Istrong = self.df_G.loc[cond]
+        if out:return Istrong.index.values
+        else:
+            if any(Istrong):print(Istrong[['h','k','l','Sw']+Icols])
 
     def get_Sw(self,Smax=1):
         Smax = min(Smax,self.Smax)
@@ -258,7 +260,7 @@ class Bloch:
     ################################################################################
     #### display
     ################################################################################
-    def show_beams(self,F='I',fopts='m',opts='xN',mag=500,cmap='Greens',**kwargs):
+    def show_beams(self,F='I',fopts='m',opts='xN',mag=500,cutoff=0,cmap='Greens',**kwargs):
         '''Display beam values
         - F : 'I'(intensity),'S'(scattered beams),'Vg'(potential)
         - opts  : 'x'(include projection of x axis), 'N'(normalize)
@@ -280,15 +282,16 @@ class Bloch:
         scat  = [px,py,Fvals*mag/Fvals.max(),Fvals]
         plts = [[0,0,'b+','']]
         if 'x' in opts:plts+=[ [[0,self.e0x],[0,0],'r','']]
+        if not cutoff:cutoff = Fvals.max()
         # print(Fvals.max())
-        fig,ax = dsp.stddisp(plts,lw=2,scat=scat,caxis=[0,Fvals.max()],cmap=cmap,cs='S',title=tle,**kwargs)
+        fig,ax = dsp.stddisp(plts,lw=2,scat=scat,caxis=[0,cutoff],cmap=cmap,cs='S',title=tle,**kwargs)
 
-    def show_beams_vs_thickness(self,thicks=None,strong=True,**kwargs):
+    def show_beams_vs_thickness(self,thicks=None,strong=[],**kwargs):
         if thicks:self.set_beams_vs_thickness(thicks)
         hkl = self.get_hkl().copy()
         Iz  = self.Iz.copy()
-        if strong:
-            Istrong = self.get_Istrong(out=1) #;print(Istrong)
+        if any(strong):
+            Istrong = self.get_Istrong(out=1,Icols=strong) #;print(Istrong)
             Iz  = Iz[Istrong]
             hkl = hkl[Istrong]
         hkl = [str(tuple(h)) for h in hkl]

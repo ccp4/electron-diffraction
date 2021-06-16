@@ -198,7 +198,7 @@ def import_crys(file):
         raise Exception('cannot import %s' %file)
     return crys
 
-def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0, ff=0,fmt='%.4f',opts=''):
+def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0, pad=0,fmt='%.4f',opts=''):
     if 'v' in opts:print('...import file...')
     crys = import_crys(file)
     n_u = n
@@ -285,7 +285,7 @@ def find_xyz(lat_vec,lat_params,n_u,theta,plot=0,v=0):
         dsp.stddisp(rc='3d',scat=scat)
     return lmn.T
 
-def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',**kwargs):
+def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',theta=0,**kwargs):
     ''' convert cif file into autoslic .xyz input file
     - file : cif_file
     - rep : super cell repeat
@@ -306,7 +306,7 @@ def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',**kwargs):
     else:
         if not xyz: raise Exception('xyz filename required')
         pattern = file
-    pattern,lat = make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,**kwargs)
+    pattern,lat = make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,theta=theta,**kwargs)
     npy_file = xyz.replace('.xyz','.npy')
     np.save(npy_file,[lat,pattern])
     print(colors.green+'binary coords file saved :'+colors.yellow+npy_file+colors.black)
@@ -363,14 +363,14 @@ def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],theta=0,rep=[1,1,1],pad=0
         st,ct = np.sin(t),np.cos(t)
         coords = np.array([[ct,st,0],[-st,ct,0],[0,0,1]]).dot(coords.T).T
     #apply padding
-    if isinstance(pad,int) or isinstance(pad,float):pad=[pad]*3
+    if isinstance(pad,int) or isinstance(pad,float):pad=[pad]*2
     if sum(pad)>0:
         coords[:,0] += Nx*ax0*pad[0]
         coords[:,1] += Ny*by0*pad[1]
-        coords[:,2] += Nz*cz0*pad[2]
+        coords[:,2] += Nz*cz0
         ax *= 1+2*pad[0]
         by *= 1+2*pad[1]
-        cz *= 1+2*pad[2]
+        # cz *= 1+2*pad[2]
     pattern = np.hstack([Za[:,None],coords,occ[:,None],bfact[:,None]])
     # ax,by,cz = lat_params
     lat_params = (ax,by,cz)

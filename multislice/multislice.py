@@ -98,16 +98,16 @@ class Multislice:
     - `hostpath` : path to data on host
     - `cluster` : indicate if running on a cluster using qsub
     '''
-    def __init__(self,name,mulslice=False,tail='',tag=None,data=None,
+    def __init__(self,name,mulslice=False,tail='',tag=None,data=None,u=None,
                 tilt=[0,0],TDS=False,T=300,n_TDS=16,
-                keV=200,repeat=[2,2,1],NxNy=[512,512],slice_thick=1.0,dz=None,i_slice=1000,
+                keV=200,repeat=[1,1,1],NxNy=[512,512],slice_thick=1.0,dz=None,i_slice=1000,
                 hk=[(0,0)],Nhk=0,hk_pad=None,hk_sym=0,prev=None,
-                opt='sr',fopt='',ppopt='uwP',v=1,
+                opt='sr',fopt='',ppopt='uwPs',v=1,
                 ssh=None,hostpath='',cluster=False,cif_file=None):
 
         v = self._get_verbose_options(v)
         #attributes
-        self.version     = '1.4.3a'
+        self.version     = '1.4.3b'
         self.name        = dsp.basename(name)                       #;print('basename:',self.name)
         self.datpath     = realpath(name)+'/'                       #;print('path:',self.datpath)
         self.cif_file    = self.get_cif_file(cif_file)              #;print(self.cif_file)
@@ -119,6 +119,7 @@ class Multislice:
         self.tail        = self._set_tail(tail,tag)
         self.name        = self._set_name('n' in v)
         self.data        = self._get_datafiles(data)
+        self.u           = u
         self.slices      = SLICES[:len(self.data)]
         self.outf        = self._set_filenames()
         self.keV         = keV
@@ -426,6 +427,8 @@ class Multislice:
         patterns = lsfiles(self._outf('pattern').replace('.txt','')+'0*.npy')
         return pp.Multi_Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
 
+    # def _get_patterns(self):return
+    
     def patterns2gif(self,name=None,v=0,**kwargs):
         if not name:
             self._set_figpath()
@@ -472,10 +475,10 @@ class Multislice:
             npy_files = self._outf('patternnpy').replace('.npy','[0-9]*.npy')
             patterns = np.sort(lsfiles(npy_files))#;print(patterns)
             izs = np.array([p.split('pattern')[-1].replace('.npy','') for p in patterns],dtype=int)
-            # print(izs)
+            # print(patterns)
             idx = np.where(izs-iz==0)[0]#;print(idx)
-            if idx:
-                file = patterns[idx[0]]
+            if idx.size:
+                file = patterns[idx[0]]#;print(file)
                 zi = self.i_slice*self.slice_thick*(iz+1)#;print(zi)
         if not file:
             file = self._outf('patternnpy')

@@ -146,6 +146,7 @@ class Bloch:
 
         if v:print(colors.blue+'...diagonalization...'+colors.black)
         self.gammaj,self.CjG = np.linalg.eigh(H) #;print(red+'Ek',lk,black);print(wk)
+        self.invCjG = np.linalg.inv(self.CjG)
         self.solved = True
 
     def _set_excitation_errors(self,Smax=0.02):
@@ -195,17 +196,18 @@ class Bloch:
         '''get beam intensities at thickness'''
         id0 = self.is_hkl([0,0,0],v=0)
         gammaj,CjG = self.gammaj,self.CjG
-        S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*self.thick))).dot(CjG.T)
+        S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*self.thick))).dot(self.invCjG)
         # S = S[:,id0]
         S = S[id0,:]
         self.df_G['S'] = S
         self.df_G['I'] = np.abs(S)**2
 
     def _set_kinematic(self):
-        Sw,Vg = self.df_G[['Sw','Vg']].values.T
+        Sw,Ug = self.df_G[['Sw','Vg']].values.T
         t,sig = self.thick, self.sig
 
-        Sg = sig*Vg*t*np.sinc(Sw*t)
+        #[Ug]=[A-2], [k0]=[A^-1], [t]=[A], [Fhkl]=[fe]=[A]
+        Sg = np.pi/self.k0*Ug*t*np.sinc(Sw*t)
         self.df_G['Sg'] = Sg
         self.df_G['Ig'] = np.abs(Sg)**2
 
@@ -216,12 +218,12 @@ class Bloch:
         self._set_thicks(thicks)
         id0 = self.is_hkl([0,0,0],v=0)
         St = np.zeros((self.df_G.shape[0],self.z.size),dtype=complex)
-        gammaj,CjG = self.gammaj,self.CjG
+        gammaj,CjG,invCjG = self.gammaj,self.CjG,self.invCjG
         for iT,thick in enumerate(self.z):
             # S=CjG.T.dot(np.diag(np.exp(2J*np.pi*gammaj*T))).dot(CjG)
-            S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*thick))).dot(CjG.T)
+            S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*thick))).dot(invCjG)
             # St[:,iT]=CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*T))).dot(CjG.T)[0,:]
-            St[:,iT] = S[id0,:]
+            St[:,iT] = S[:,id0]
         self.Sz = St
         self.Iz = np.abs(self.Sz)**2
 
@@ -297,7 +299,7 @@ class Bloch:
         hkl = [str(tuple(h)) for h in hkl]
         beams=[hkl,self.z,None,None,Iz]
         # beams=[hkl,self.z,np.real(self.Sz),np.imag(self.Sz),self.Iz]
-        pp.plot_beam_thickness(beams,**kwargs)
+        return pp.plot_beam_thickness(beams,**kwargs)
 
     def show_Fhkl(self,s=None,opts='m',h3D=0,**kwargs):
         '''Displays structure factor over grid

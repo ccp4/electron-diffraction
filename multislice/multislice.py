@@ -103,7 +103,7 @@ class Multislice:
                 keV=200,repeat=[1,1,1],NxNy=[512,512],slice_thick=1.0,dz=None,i_slice=1000,
                 hk=[(0,0)],Nhk=0,hk_pad=None,hk_sym=0,prev=None,
                 opt='sr',fopt='',ppopt='uwPs',v=1,
-                ssh=None,hostpath='',cluster=False,cif_file=None):
+                ssh=None,hostpath='',cluster=False,cif_file=None,xyz_params=None):
 
         v = self._get_verbose_options(v)
         #attributes
@@ -120,6 +120,7 @@ class Multislice:
         self.name        = self._set_name('n' in v)
         self.data        = self._get_datafiles(data)
         self.u           = u
+        self.xyz_params  = xyz_params
         self.slices      = SLICES[:len(self.data)]
         self.outf        = self._set_filenames()
         self.keV         = keV
@@ -363,7 +364,7 @@ class Multislice:
         if 'o' in bOpt:
             return beams
         else:
-            pp.plot_beam_thickness(beams,**kwargs)
+            return pp.plot_beam_thickness(beams,**kwargs)
 
     def merge_beams(self):
         if not self.merged:
@@ -428,7 +429,7 @@ class Multislice:
         return pp.Multi_Pattern_viewer(self,patterns,figpath=self.datpath,**kwargs)
 
     # def _get_patterns(self):return
-    
+
     def patterns2gif(self,name=None,v=0,**kwargs):
         if not name:
             self._set_figpath()
@@ -458,6 +459,28 @@ class Multislice:
         if v==1: print('thick=%.2f, actual thick=%.2f' %(thick,self.zs[iz]))
         if v==2:return iz,self.zs[iz]
         return iz
+
+    def integrate_reflections(self,idxs,dq=None,N=10,**kwargs):
+        self.set_thicks()
+        if isinstance(N,int):N=[N]*2
+        if dq :
+            dqxy = self.repeat[:2]/self.cell_params[:2]
+            dqx,dqy = Nh/ax,Nk/by
+            N = np.round(dq/dqxy)
+        Nx,Ny = np.array(N,dtype=int)
+        nbs = idxs.shape[0]
+        zs = self.zs.copy()#[:20]
+        self.bs = np.zeros((nbs,zs.size))
+        for iz,z in enumerate(zs):
+            qx,qy,im = self.pattern(iz=iz,out=1,**kwargs)
+            for i,idx in enumerate(idxs):
+                s = np.ix_(idx[0]+np.arange(-Nx,Nx+1),idx[1]+np.arange(-Ny,Ny+1))
+                # print(im[s].sum())
+                self.bs[i,iz] = im[s].sum()
+
+        cs = dsp.getCs('jet',nbs)
+        plts = [[zs,b,cs[iB],'%d' %iB] for iB,b in enumerate(self.bs)]
+        dsp.stddisp(plts,labs=['z','Iint'])
 
     def pattern(self,iz=None,file=None,rmax=10,Iopt='Ncs',out=0,tol=1e-6,Nmax=None,gs=3,Imax=3e4,
         rot=0,rings=[],v=1,cmap='binary',pOpt='im',title='',name=None,**kwargs):
@@ -575,7 +598,7 @@ class Multislice:
         if 't' in Iopt:
             I = np.array(im0*Imax,dtype='uint16')
             tiff_file = name.replace('.png','.tif')
-            tifffile.imwrite(tiff_file,I)
+            tifffile.imwrite(tiff_file,np.flipud(I))
             print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
 
         t = np.linspace(0,2*np.pi/N,100)
@@ -807,6 +830,8 @@ class Multislice:
         if Nhk:
             h,k = np.meshgrid(range(-sym*Nhk,Nhk),range(-sym*Nhk,Nhk))
             hk=[(Nh*h,Nk*k) for h,k in zip(h.flatten(),k.flatten())];#print(hk)
+        self.Nhk=Nhk
+        self.hk_pad=hk_pad
         return hk
     def _set_slice_thick(self,slice_thick,dz=None):
         if dz:slice_thick=dz
@@ -840,6 +865,24 @@ class Multislice:
     ########################################################################
     #### Job
     ########################################################################
+    def _job_pp(self,patterns_opt):
+        datpath = self.datpath;
+        self.datpath='./';
+        try:
+            self.get_beams(bOpt='fa');
+        except:
+            print('get_beams failed');
+        try:
+            self.save_pattern();
+            qx,qy,It1 = self.pattern(Iopt='Ncs',out=True,Nmax=260);
+            np.save(self.outf['patternS'],[qx,qy,It1]);
+        except:
+            print('pattern failed')
+        if patterns_opt:
+            self.save_patterns(save_opt=0)
+            self.datpath = datpath
+            self.save()
+
     def _get_job(self,temsim=None,cluster=False,datpath=None,patterns_opt=False):
         logfile     = self.outf['log'] #self._outf('log')
         simu_deck   = self.outf['simu_deck'] #self._outf('simu_deck')
@@ -867,17 +910,10 @@ class Multislice:
         job+='printf "\n\tPOSTPROCESSING\n"  >> %s \n\n' %(logfile)
         pycode='''import multislice.postprocess as pp;import numpy as np;
         multi = pp.load_multi_obj('%s');
-        datpath = multi.datpath;
-        multi.datpath='./';
-        multi.get_beams(bOpt='fa');
-        multi.save_pattern();
-        qx,qy,It1 = multi.pattern(Iopt='Ncs',out=True,Nmax=260);
-        np.save(multi.outf['patternS'],[qx,qy,It1]);
-        ''' %(self.outf['obj'])
-        if patterns_opt:
-            pycode+='''multi.save_patterns(save_opt=0);'''
-            pycode+='''multi.datpath = datpath;multi.save();'''
-        job +='%s -c "%s" >>%s 2>&1 \n' %(pyexe, pycode.replace('\n',''),logfile)
+        multi._job_pp(%d)
+        ''' %(self.outf['obj'],patterns_opt)
+
+        job+='%s -c "%s" >>%s 2>&1 \n' %(pyexe, pycode.replace('\n',''),logfile)
         job+='printf "END" >>%s\n' %(logfile)
 
         #save job

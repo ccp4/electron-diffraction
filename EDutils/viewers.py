@@ -11,7 +11,7 @@ from blochwave.bloch import load_Bloch #Bloch
 from multislice import mupy_utils as mut    #;imp.reload(mut)
 from multislice import postprocess as pp    #;imp.reload(pp)
 from multislice import multislice as ms     #;imp.reload(ms)
-from blochwave import bloch as bl           ;imp.reload(bl)
+from blochwave import bloch as bl           #;imp.reload(bl)
 from multislice import pets as pt           #;imp.reload(pt)
 from . import __version__
 from . import display as EDdisp             #;imp.reload(EDdisp)
@@ -43,7 +43,7 @@ class Viewer:
         self.rpl,self.im,self.Icols = None,None,[]
         self.nfigs,self.kargs,self.u = 0,{},[0,0,1]
         self.pattern_args = {'Iopt':'csngt','Imax':5e4,'gs':0.025,'rmax':25,'Nmax':512}
-        self.multi_args = {'data':'','mulslice':False,'NxNy':512,
+        self.multi_args = {'data':'','mulslice':False,'NxNy':512,'Nhk':0,'hk_pad':None,
             'slice_thick':1,'i_slice':10,'ssh':'','opt':'srf'}
         self.xyz_params = {'theta':0,'lat_params':[20,20,100],'pad':1.0,'rep':None}
 
@@ -53,13 +53,16 @@ class Viewer:
         for k,v in self.dsp_chars.items():self.dsp_d[k] = v in self.pets_opts
         for k,v in self.opt_chars.items():self.opt_d[k] = v in self.pets_opts
         self.cutoff_r,self.mag_r,self.dthick_r=self.cutoff,self.mag,self.dthick
+        if 'tag' in self.multi_args.keys():
+            self.multi_args['tail']=self.multi_args['tag']
+            self.multi_args.pop('tag')
 
         self.load_objects()
         self.set_mode(self.mode)
         if not (self.tifpath or self.multi):self.set_mode('rotate')
 
         # print('...Complete initialization...')
-        self.multi_args['tag']  = self.tag+self.frame_str()
+        self.multi_args['tail'] = self.tag+self.frame_str()
         self.multi_args['name'] = self.multi_path
 
         #print('... init figure ...')
@@ -282,16 +285,16 @@ class Viewer:
         self.show_im = {'frames':self.show_frames,'rotate':self.show_bloch}[self.mode]
         if self.mode=='frames':
             if self.multi_path and 'M' in self.pets_opts:
-                self.update_frame()
-                self.dthick_r,self.dthick=self.dthick,self.multi.dzs
-                self.cutoff,self.mag = self.cutoff_r,self.mag_r
-                print('frames mode. Changing dthick=%d' %self.dthick)
+                if : self.update_frame()
+                    self.dthick_r,self.dthick=self.dthick,self.multi.dzs
+                    self.cutoff,self.mag = self.cutoff_r,self.mag_r
+                    print('frames mode. Changing dthick=%d' %self.dthick)
         else:
             self.dthick=self.dthick_r
             self.cutoff_r,self.mag_r = self.cutoff,self.mag
             self.cutoff,self.mag = 5,500
             self.set_theta_phi_from_u(self.u)
-            self.update()
+            self.update(fsolve=1)
 
     def call_update(self, event):
         # print(event.key)
@@ -331,18 +334,13 @@ class Viewer:
         self.xyz_params['n']=self.u
         self.xyz_params['xyz']=self.get_xyz()
 
+
     def update_frame(self):
         if 'M' in self.pets_opts and self.multi_path:
-            # if self.tifpath:
-            tag = self.tag+str(self.frame).zfill(3)
-            multi = pp.load(self.multi_path,tag=tag)
-            # else:
-                # pkls = glob.glob(os.path.join(self.multi_path,'*.pkl'))
-                # multi = pp.load_multi_obj(pkls[self.frame])
-            if multi:
+            loaded_multi = self.load_multi()
+            if loaded_multi:
                 state = self.multi.check_simu_state()
                 if state=='done':
-                    self.multi=multi
                     self.multi.set_thicks()
                     self.multi.datpath=os.path.join(self.multi_path,'')
                     self.dthick = self.multi.dzs
@@ -359,7 +357,8 @@ class Viewer:
         if 'P' in self.pets_opts and self.tifpath:
             self.rpl = self.pets.rpl.loc[self.pets.rpl.F==self.frame]
         # if 'B' in self.pets_opts :
-        self.update(fsolve='B' in self.pets_opts)
+        self.update(fsolve=1)#'B' in self.pets_opts)
+        return 1
 
     def update_thickness(self):
         if 'M' in self.pets_opts and self.multi_path and self.mode=='frames':
@@ -384,7 +383,9 @@ class Viewer:
             self.bloch._solve_Bloch(opts='0v')
             self.bloch.set_thickness(thick=self.thick)
             if self.save_bloch:
-                if self.mode=='frames':self.bloch.save(self.path+'/%s_bloch.pkl' %str(self.frame).zfill(4))
+                if self.mode=='frames':
+                    bloch_file = os.path.join(self.path,'bloch','%s%s.pkl' %(self.tag,str(self.frame).zfill(4)))
+                    self.bloch.save(bloch_file)
                 else:self.bloch.save()
                 self.save_bloch=0
 
@@ -401,7 +402,7 @@ class Viewer:
         if any(self.Icols) : self.bloch.get_Istrong(Icols=self.Icols)
 
     def show_frames(self):
-        title = self.tag + ', frame %d' %self.frame
+        title = self.tag.replace('_',' ') + ', frame %d' %self.frame
         if any([c in self.pets_opts for c in 'MK']):
             title += ', thickness=%.1f$\AA$' %self.thick
 
@@ -431,7 +432,7 @@ class Viewer:
         # while (btn in btns[1:-2] or btn=='Start'):
         self.xyz_params['xyz']  = self.get_xyz()
         self.multi_args['data'] = self.get_xyz()
-        self.multi_args['tag']  = self.tag+self.frame_str()
+        self.multi_args['tail']  = self.tag+self.frame_str()
         msg = self.get_multi_params()
         btn = easygui.buttonbox(msg,'Multislice',btns)
         if   btn=='Change params' : self.set_multi()
@@ -451,7 +452,7 @@ class Viewer:
 
         if not self.multi_args['ssh']:self.multi_args['ssh']=None
         if not self.tag:self.tag='None'
-        mult_keys = ['NxNy','mulslice','slice_thick','i_slice','ssh','opt']
+        mult_keys = ['NxNy','mulslice','slice_thick','i_slice','ssh','opt','Nhk','hk_pad']
         xyz_keys  = ['rep','lat_params','pad']
         fieldNames  = ['tag'] + mult_keys+xyz_keys
         fieldValues = [self.tag]
@@ -511,19 +512,55 @@ class Viewer:
                 xyz_params.pop('rep');
                 mut.gen_xyz2(opts='v',**xyz_params)
 
+    def open_multi(self):
+        tails = self.show_tags(out=1)
+        msg = '''Load multislice
+        Available tags :
+        %s
+        ''' %tails
+        tag = easygui.enterbox(msg,'load multislice',self.tag)
+        if tag:
+            if not tag==self.tag:
+                self.tag=tag
+                self.load_multi()
+                self.update_frame()
+    def load_multi(self):
+            tag = self.tag+str(self.frame).zfill(3)
+            multi = pp.load(self.multi_path,tag=tag)
+            loaded_multi=False
+            if multi:
+                self.multi=multi
+                if 'xyz_params' in self.multi.__dict__.keys():
+                    self.xyz_params = self.multi.xyz_params
+                else:
+                    print('warning : xyz_params not in multi')
+                multi_args = list(self.multi_args.keys())
+                for k in ['data','name','ssh','mulslice','opt']:multi_args.remove(k)
+                self.multi_args['data'] = self.multi.data[0]
+                for k in multi_args :
+                    if k in self.multi.__dict__.keys():
+                        self.multi_args[k]=self.multi.__dict__[k]
+                    else:
+                        print('warning : %s not in multi' %k)
+                loaded_multi=True
+            return loaded_multi
+
     def _run_multi(self):
         self._gen_xyz()
         # print('Solving multi : ', self.multi_args)
-        self.multi = ms.Multislice(u=self.u,**self.multi_args)
+        self.multi = ms.Multislice(u=self.u,xyz_params=self.xyz_params,
+            **self.multi_args)
         self.update_nfigs()
 
-    def show_tags(self):
+    def show_tags(self,out=0):
         if self.multi_path:
             pkls = glob.glob(os.path.join(self.multi_path,'*.pkl'))
-            tails = ['_'.join(pkl.split('_')[1:-1]) for pkl in pkls]
-            tails = np.unique([pkl[:-3] for pkl in pkls])
+            tails = ['_'.join(os.path.basename(pkl).split('_')[1:-1]) for pkl in pkls]
+            tails = np.unique([tail[:-3] for tail in tails]) #;print(tails)
+        if out:
+            return tails
+        else:
             print(colors.green+'available tails:'+colors.yellow,tails,colors.black)
-
     def get_xyz(self):
         return os.path.join(self.multi_path,self.tag+self.frame_str()+'.xyz')
     def frame_str(self,pad=3):return '%s' %str(self.frame).zfill(pad)
@@ -587,18 +624,24 @@ class Viewer:
         elif key == self.dict_k['help_gui']      : self.show_help_gui()
         elif key == self.dict_k['help_simple']   : print(self.df_keys)
         elif key == self.dict_k['save_fig']      : dsp.saveFig(self.get_figname(),ax=self.ax)
+        #config
         elif key == self.dict_k['save_config']   : self.save_config(os.path.join(self.path,'config.pkl'))
         elif key == self.dict_k['save_config_as']: self.save_config()
         elif key == self.dict_k['reload_config'] : self.open_config('config.pkl')
         elif key == self.dict_k['open_config']   : self.open_config()
+        #bloch
         elif key == self.dict_k['save_bloch']    : self.save_bloch=1 #not self.save_bloch;print('%s saving bloch' %['not ',''][self.save_bloch])
         elif key == self.dict_k['solve_bloch']   : self.update(fsolve=1)
-        elif key == self.dict_k['set_multi']     : self.set_multi()
+        #multi
+        elif key == self.dict_k['open_multi']    : self.open_multi()
         elif key == self.dict_k['solve_multi']   : self.solve_multi()
+        elif key == self.dict_k['set_multi']     : self.set_multi()
+        elif key == self.dict_k['run_multi']     : self._run_multi()
         elif key == self.dict_k['show_multi']    : self.show_multi()
         elif key == self.dict_k['show_tags']     : self.show_tags()
-        elif key == self.dict_k['hold']          : self.hold_mode=not self.hold_mode;print('hold mode ' + ['off','on'][self.hold_mode])
+        elif key == self.dict_k['log_info']      : print(self.multi.check_simu_state())
         #modes
+        elif key == self.dict_k['hold']      : self.hold_mode=not self.hold_mode;print('hold mode ' + ['off','on'][self.hold_mode])
         elif key==self.dict_k['frames_mode'] : self.set_mode('frames')
         elif key==self.dict_k['rotate_mode'] : self.set_mode('rotate')
 
@@ -684,11 +727,13 @@ class Viewer:
         self.gen_keys+= ['ctrl+s'     ,'ctrl+S'        ,'ctrl+o'     ,'backspace'    ,]
         generic      += ['save_fig','save_bloch','solve_bloch']
         self.gen_keys+= ['s'       ,'ctrl+alt+S','ctrl+B'     ]
-        generic      += ['set_multi','solve_multi','show_multi','show_tags']
-        self.gen_keys+= ['ctrl+m'   ,'ctrl+M'     ,'ctrl+alt+m','ctrl+O'    ]
-        generic      += ['hold','find_shortcut']
-        self.gen_keys+= [' '   ,'ctrl+P'       ]
+        generic      += ['hold','find_shortcut','find_command']
+        self.gen_keys+= [' '   ,'ctrl+P'       ,'ctrl+p'      ]
         self.dict_k.update(dict(zip(generic,self.gen_keys)))
+
+        multi           = ['open_multi','solve_multi','set_multi','run_multi','show_multi','show_tags' ,'log_info']
+        self.multi_keys = ['ctrl+O'    ,'m'          ,'ctrl+m'   ,'ctrl+M'   ,'ctrl+alt+m','ctrl+alt+M','ctrl+l'  ]
+        self.dict_k.update(dict(zip(multi,self.multi_keys)))
 
         #modes
         modes = ['frames_mode','rotate_mode']
@@ -800,6 +845,7 @@ class Viewer:
         self.df_vals    = self.df_keys.loc[vals]
         self.df_bloch   = self.df_keys.loc[bloch]
         self.df_pets    = self.df_keys.loc[petsD+petsO]
+        self.df_multi   = self.df_keys.loc[multi]
         # self.df_pets['alias'].iloc[:4] = self.Pnum_keys
 
     def settings(self):

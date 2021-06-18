@@ -218,8 +218,11 @@ def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0, pad=0,fmt='%.4f',opts=''):
     bfact  = np.tile(bfact,[n.size])
 
     ###orient
-    coords = rcc.orient_crystal(coords,n_u=n_u,theta=theta)
-
+    coords = rcc.orient_crystal(coords,n_u=n_u,theta=theta)#;print(coords.shape)
+    x,y,z = coords.T
+    idx = (x>=0) & (y>=0) & (z>=0) & (x<=ax) & (y<=by) & (z<=cz)
+    # coords=coords[idx]
+    # print(coords.shape)
     #### apply padding
     if isinstance(pad,int) or isinstance(pad,float):pad=[pad]*2
     if sum(pad)>0:
@@ -228,7 +231,7 @@ def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0, pad=0,fmt='%.4f',opts=''):
         ax *= 1+2*pad[0]
         by *= 1+2*pad[1]
 
-    pattern = np.hstack([Za[:,None],coords,occ[:,None],bfact[:,None]])
+    pattern = np.hstack([Za[idx,None],coords[idx],occ[idx,None],bfact[idx,None]])
     #### save
     if 'v' in opts:print('...saving to file ...')
     dir=''.join(np.array(n,dtype=str))
@@ -245,19 +248,21 @@ def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0, pad=0,fmt='%.4f',opts=''):
 
 def find_xyz(lat_vec,lat_params,n_u,theta,plot=0,v=0):
     ax,by,cz = lat_params
-    rot_vec = rcc.orient_crystal(lat_vec,n_u=n_u,T=True,theta=theta)
+    ai = np.linalg.norm(lat_vec,axis=1)#;print(a_max)
+    a_min,a_max = min(ai),max(ai)
     # ra1,ra2,ra3 = rot_vec
     #### brute force unit cells generation
-    N = np.ceil(1.5*max(lat_params)/min(np.linalg.norm(lat_vec,axis=0)))
+    N = np.ceil(1.5*max(lat_params)/a_min)
     u1 = np.arange(-N,N+1)
     l,m,n = np.meshgrid(u1,u1,u1)
-    #### l*a1+m*a2+n*a3
     lmn = np.vstack([l.flatten(),m.flatten(),n.flatten()]).T
     if v:print('...\torienting full mesh N=%d...' %N)
+    #### l*a1+m*a2+n*a3
+    rot_vec = rcc.orient_crystal(lat_vec,n_u=n_u,T=True,theta=theta)
     xyz  = lmn.dot(rot_vec)
     x,y,z = xyz.T
     if v:print('...\tkeeping valid unit cells...')
-    idx = (x>0) & (y>0) & (z>0) & (x<ax) & (y<by) & (z<cz)
+    idx = (x>=-a_max) & (y>=-a_max) & (z>=-a_max) & (x<=ax+a_max) & (y<=by+a_max) & (z<=cz+a_max)
     lmn = lmn[idx]
 
     if plot:
@@ -269,20 +274,28 @@ def find_xyz(lat_vec,lat_params,n_u,theta,plot=0,v=0):
 
         #### generate super cell corners
         l0,m0,n0 = np.meshgrid([0,1],[0,1],[0,1])
-        ax,by,cz = np.diag(lat_params)
-        sc = np.vstack([ax*i+by*j+cz*k for i,j,k in zip(l0.flatten(),m0.flatten(),n0.flatten())])
+        ax_,by_,cz_ = np.diag(lat_params)
+        sc = np.vstack([ax_*i+by_*j+cz_*k for i,j,k in zip(l0.flatten(),m0.flatten(),n0.flatten())])
         x0,y0,z0 = sc.T
         #### get actual corners
-        lat_p2 = np.linalg.norm(rot_vec,axis=0)**2
+        lat_p2 = np.linalg.norm(rot_vec,axis=1)**2
         nlm1 = np.array([np.round(rot_vec.dot(v)/lat_p2) for v in sc])
         print('corners' ,nlm1)
         x1,y1,z1 = nlm1.dot(rot_vec).T
 
-        scat = ()
-        scat+=([x0,y0,z0,50,'b','o'],)
-        scat+=([x0,y0,z0,50,'g','d'],)
-        scat+=([x,y,z,20,'r','s'],)
-        dsp.stddisp(rc='3d',scat=scat)
+        # scat = ()
+        # scat+=([x0,y0,z0,50,'b','o'],)
+        # scat+=([x0,y0,z0,50,'g','d'],)
+        # scat+=([x,y,z,20,'r','s'],)
+        # dsp.stddisp(rc='3d',scat=scat)
+        fig,(ax0,ax1) = dsp.create_fig(rc='12')
+        scat0 = [x,y,30,'b']
+        scat1 = [x,z,30,'b']
+        pps0 = [dsp.Rectangle((0,0),ax,by,linewidth=2,edgecolor='b',alpha=0.1)]
+        pps1 = [dsp.Rectangle((0,0),ax,cz,linewidth=2,edgecolor='b',alpha=0.1)]
+        dsp.stddisp(ax=ax0,scat=scat0,patches=pps0,opt='',axPos=0)
+        dsp.stddisp(ax=ax1,scat=scat1,patches=pps1,opt='',axPos=0)
+        fig.show()
     return lmn.T
 
 def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',theta=0,**kwargs):
@@ -367,7 +380,7 @@ def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],theta=0,rep=[1,1,1],pad=0
     if sum(pad)>0:
         coords[:,0] += Nx*ax0*pad[0]
         coords[:,1] += Ny*by0*pad[1]
-        coords[:,2] += Nz*cz0
+        # coords[:,2] += Nz*cz0
         ax *= 1+2*pad[0]
         by *= 1+2*pad[1]
         # cz *= 1+2*pad[2]

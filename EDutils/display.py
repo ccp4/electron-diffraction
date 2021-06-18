@@ -102,4 +102,5 @@ def multenterbox(msg,title,fieldValues,fieldNames):
         if not len(errs):
             break
         fieldValues = easygui.multenterbox("\n".join(errs), title, fieldNames, fieldValues)
-    return dict(zip(fieldNames,fieldValues))
+    if fieldValues:
+        return dict(zip(fieldNames,fieldValues))

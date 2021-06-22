@@ -30,33 +30,9 @@ from string import ascii_letters
 from crystals import Crystal
 import utils.glob_colors as colors
 import utils.displayStandards as dsp                        ;imp.reload(dsp)
-# from scattering.structure_factor import structure_factor3D
 from . import postprocess as pp                             ;imp.reload(pp)
 from . import mupy_utils as mut                             ;imp.reload(mut)
-
-ssh_hosts = {
-    'local_london':'BG-X550',
-    'tarik-CCP4stfc':'tarik-CCP4','tarik-CCP4home':'tarik-CCP4',
-    'brno':'brno',
-    'badb':'badb',
-    'badb.rc-harwell.ac.uk':'badb',
-}
-
-temsim_hosts={
-    'BG-X550'   :'/home/ronan/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
-    'tarik-CCP4':'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
-    'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
-    'badb'      :'/home/lii26466/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
-    'badb.rc-harwell.ac.uk':'/home/lii26466/Documents/git/ccp4/src/electron-diffraction/multislice/bin/',
-}
-path_hosts={
-    'BG-X550'   :'/home/ronan/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
-    'tarik-CCP4':'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
-    'brno'      :'/home/tarik/Documents/git/ccp4/src/electron-diffraction/multislice/dat/',
-    'badb'      :'/data3/lii26466/multislice/',
-    'badb.rc-harwell.ac.uk' :'/data3/lii26466/multislice/',
-}
-
+from .config import ssh_hosts,temsim_hosts,path_hosts  
 
 class Multislice:
     ''' **DATA PARAMETERS :**\n
@@ -595,19 +571,31 @@ class Multislice:
 
         self._set_figpath()
         if not name:name=self.figpath+basename(file).replace('.npy','.png')
-        if 't' in Iopt:
-            I = np.array(im0*Imax,dtype='uint16')
-            tiff_file = name.replace('.png','.tif')
-            tifffile.imwrite(tiff_file,np.flipud(I))
-            print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
 
         t = np.linspace(0,2*np.pi/N,100)
         ct,st = np.cos(t),np.sin(t)
         plts = [[r*ct,r*st,'g--',''] for r in rings]
         if v:print('displaying pattern:',im0.shape)
 
-        return dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[qx,qy,im0],
+        fig,ax = dsp.stddisp(plts,labs=[r'$q_x(\AA^{-1})$','$q_y(\AA^{-1})$'],im=[qx,qy,im0],
             cmap=cmap,pOpt=pOpt,title=title,name=name,**kwargs)
+        if 't' in Iopt:
+            tiff_file = name.replace('.png','.tiff')
+            self.convert2tiff(tiff_file,im0,Nmax,rot,n=256,Imax=Imax)
+        return fig,ax
+
+    def convert2tiff(self,tiff_file,im0,n0,rot,n=256,Imax=5e4):
+        alpha = np.deg2rad(rot)
+        ct,st = np.cos(alpha),np.sin(alpha)
+        u_n   = np.arange(-n,n+1)
+        hi,ki = np.meshgrid(u_n,u_n)
+        Hi,Ki = ct*hi+st*ki,st*hi-ct*ki
+        H,K = np.array(np.round(Hi)+n0,dtype=int),np.array(np.round(Ki)+n0,dtype=int)
+        # dsp.stddisp(im=[I[H,K]],caxis=[0,50],pOpt='im',cmap='gray')
+
+        I = np.array(im0*Imax,dtype='uint16')
+        tifffile.imwrite(tiff_file,I[H,K]) #,np.flipud(I))
+        print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
 
     def azim_avg(self,tol=1e-6,Iopt='Incsl',out=0,**kwargs):
         ''' Display the average azimuthal diffraction pattern intensities
@@ -737,8 +725,8 @@ class Multislice:
                 else : print(colors.green+state.ljust(5)+black )
             return state
         except FileNotFoundError:
-            if v : print(colors.red+'logfile not created yet, run a simu first'+colors.black)
-            return 0
+            print(colors.red+'logfile not created yet, run a simu first'+colors.black)
+            return ''
 
     ########################################################################
     ######## Private functions

@@ -14,7 +14,7 @@ from multislice import multislice as ms     #;imp.reload(ms)
 from blochwave import bloch as bl           #;imp.reload(bl)
 from multislice import pets as pt           #;imp.reload(pt)
 from . import __version__
-from . import display as EDdisp             #;imp.reload(EDdisp)
+from . import display as EDdisp             ;imp.reload(EDdisp)
 
 pd.set_option('precision',3)
 pd.set_option('max_rows',100)
@@ -58,12 +58,13 @@ class Viewer:
             self.multi_args.pop('tag')
 
         self.load_objects()
+        self.multi_args['tail'] = self.tag+self.frame_str()
+        self.multi_args['name'] = self.multi_path
+
         self.set_mode(self.mode)
         if not (self.tifpath or self.multi):self.set_mode('rotate')
 
         # print('...Complete initialization...')
-        self.multi_args['tail'] = self.tag+self.frame_str()
-        self.multi_args['name'] = self.multi_path
 
         #print('... init figure ...')
         self.fig,self.ax = dsp.stddisp()
@@ -203,11 +204,8 @@ class Viewer:
         if self.multi_path:
             self.update_nfigs()
             self.multi = pp.load(self.multi_path,tag=self.tag+str(self.frame).zfill(3))
-            if not self.thick and self.multi:
+            if self.multi and not self.thick :
                 self.thick = self.multi.thickness
-                # self.update_frame()
-        # else:
-        #     self.update(fsolve=1)
 
         self.figpath = os.path.join(self.path,'figures')
         if not os.path.exists(self.figpath):
@@ -285,7 +283,7 @@ class Viewer:
         self.show_im = {'frames':self.show_frames,'rotate':self.show_bloch}[self.mode]
         if self.mode=='frames':
             if self.multi_path and 'M' in self.pets_opts:
-                if : self.update_frame()
+                if self.update_frame():
                     self.dthick_r,self.dthick=self.dthick,self.multi.dzs
                     self.cutoff,self.mag = self.cutoff_r,self.mag_r
                     print('frames mode. Changing dthick=%d' %self.dthick)
@@ -339,7 +337,7 @@ class Viewer:
         if 'M' in self.pets_opts and self.multi_path:
             loaded_multi = self.load_multi()
             if loaded_multi:
-                state = self.multi.check_simu_state()
+                state = self.multi.check_simu_state()       #;print(state)
                 if state=='done':
                     self.multi.set_thicks()
                     self.multi.datpath=os.path.join(self.multi_path,'')
@@ -530,6 +528,9 @@ class Viewer:
             loaded_multi=False
             if multi:
                 self.multi=multi
+                self.multi.datpath = os.path.join(self.multi_path,'')
+                self.multi.set_thicks() #; print("dz:",self.multi.dzs)
+                self.multi.save()
                 if 'xyz_params' in self.multi.__dict__.keys():
                     self.xyz_params = self.multi.xyz_params
                 else:

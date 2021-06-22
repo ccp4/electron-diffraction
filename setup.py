@@ -20,5 +20,6 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['numpy','scipy','matplotlib','colorama','pandas','cbf','crystals','TarikDrevonUtils','easygui'],
+    install_requires=['numpy','scipy','matplotlib','colorama','pandas',
+    'cbf','crystals','TarikDrevonUtils','easygui','tifffile','pickle5'],
 )

@@ -16,6 +16,7 @@ def show_frame(opts='Pqr',mag=10,rot=0,hkl_idx=[],
 
     if 'P' in opts and isinstance(df_pets,pd.DataFrame):
         qx_p,qy_p,I = df_pets[['qx','qy','I']].values.T
+        if qx_p.size:break
         scat += ([qx_p,qy_p,I,cp,mp],)
         qmax = np.ceil(max(abs(qx_p).max(),abs(qy_p).max()))
 

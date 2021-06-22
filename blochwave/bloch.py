@@ -124,7 +124,7 @@ class Bloch:
 
         hkl = self.df_G[['h','k','l']].values
         Sg  = self.df_G.Sw.values
-        Ug = self.Fhkl/self.crys.volume
+        Ug = self.Fhkl/self.crys.volume #/3
 
         # Ug[U0_idx] = U0
         # and Ug(iG,jG) are obtained from Ug[h,k,l] where h,k,l = hlk_iG-hkl_jG

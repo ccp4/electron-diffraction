@@ -37,8 +37,24 @@ def test_get_tilts():
 
 if __name__ == '__main__':
     name  = '../dat/test/'
+
+    # file = '../../tests/multislice/dat/alpha_glycine.cif'
+    # xyz = 'dat/alpha_gly.xyz'
+    file = 'diamond'
+    xyz = name+'diamond_2beams.xyz'
+    # crys = mut.import_crys(file)
+    lat_params = [10,10,20]
+    u = [0.13846063, 0.01406432, 0.99026807]
+    mut.gen_xyz2(file,xyz,lat_params,n=u,theta=0,pad=1,opts='p')
+    # mut.gen_xyz('Si',n=[1,1,1],theta=0,rep=[20,20,100],pad=[2,2,0],xyz=xyz)
+    # mut.show_grid(xyz,opts=['xy','xz'],popts='hvp',figs='f')#,xylims=[0,1000,0,1000])
+    # mut.show_grid(xyz,opts='yz')
+    # mut.show_grid(xyz,opts='xz')#,xylims=[])
+    # mut.show_grid3(xyz)
+    # mut.show_cell(file,n=[1,1,1])
+
     #
-    # multi = test_base(name,mulslice=False,opt='dsrfp',ppopt='w',tag='base',i_slice=20,v=1)
+    multi = test_base(name,mulslice=False,opt='dsrfp',ppopt='w',tag='base',i_slice=20,v=1)
     # multi = test_base(name,mulslice=False,opt='dsrp',fopt='f',ppopt='uwB',v=2,ssh='tarik-CCP4home')
     # multi = test_base(name,mulslice=False,opt='dsrp ',fopt='f',ppopt='uwBP',v=2,ssh='badb')
     # multi = test_base(name,mulslice=False,fopt='f',opt='dsr',ppopt='',ssh='tarik-CCP4home',v='nctrdDR')
@@ -54,20 +70,6 @@ if __name__ == '__main__':
     # rock.update(v=1);
     # rock.plot_rocking(iBs=[(1,1),(0,1)],iZs=None,zs=[5,15,38])
 
-    # file = '../../tests/multislice/dat/alpha_glycine.cif'
-    # xyz = 'dat/alpha_gly.xyz'
-    file = 'diamond'
-    xyz = name+'diamond_2beams.xyz'
-    # crys = mut.import_crys(file)
-    lat_params = [10,10,20]
-    u = [0.13846063, 0.01406432, 0.99026807]
-    mut.gen_xyz2(file,xyz,lat_params,n=u,theta=0,pad=1,opts='p')
-    # mut.gen_xyz('Si',n=[1,1,1],theta=0,rep=[20,20,100],pad=[2,2,0],xyz=xyz)
-    mut.show_grid(xyz,opts=['xy','xz'],popts='hvp',figs='f')#,xylims=[0,1000,0,1000])
-    # mut.show_grid(xyz,opts='yz')
-    # mut.show_grid(xyz,opts='xz')#,xylims=[])
-    # mut.show_grid3(xyz)
-    # mut.show_cell(file,n=[1,1,1])
 
     # multi = pp.load(name,tag='base',v=2)
     # multi.resume(opt='srfp',ppopt='w',Nz=30,i_slice=20)#Nhk=4)

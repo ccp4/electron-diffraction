@@ -5,7 +5,7 @@ from multislice import multislice as ms ;imp.reload(ms)
 from blochwave import bloch as bl       ;imp.reload(bl)
 
 plt.close('all')
-opts = 'b'
+opts = 'vb'
 path = 'dat/'
 
 # v = vw.Viewer(path='dat',cif_file='diamond',init_opts='R')

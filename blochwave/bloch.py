@@ -85,7 +85,7 @@ class Bloch:
         '''set thickness and update beams
         - thick : thickness
         '''
-        if isinstance(thick,int):self.thick=thick
+        if type(thick) in [int,float] :self.thick=thick
         self._set_kinematic()
         if self.solved:self._set_intensities()
 

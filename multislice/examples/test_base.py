@@ -8,7 +8,7 @@ plt.close('all')
 
 def test_base(name,**kwargs):
     multi=mupy.Multislice(name,keV=200,
-        repeat=[1,1,100],NxNy=512,slice_thick=1.3575,Nhk=6,
+        repeat=[1,1,1],NxNy=512,slice_thick=1.5,Nhk=6,
         **kwargs)
     return multi
 
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # mut.show_cell(file,n=[1,1,1])
 
     #
-    multi = test_base(name,mulslice=False,opt='dsrfp',ppopt='w',tag='base',i_slice=20,v=1)
+    multi = test_base(name,mulslice=False,opt='dsrfp',ppopt='ws',tag='base',i_slice=20,v=1)
     # multi = test_base(name,mulslice=False,opt='dsrp',fopt='f',ppopt='uwB',v=2,ssh='tarik-CCP4home')
     # multi = test_base(name,mulslice=False,opt='dsrp ',fopt='f',ppopt='uwBP',v=2,ssh='badb')
     # multi = test_base(name,mulslice=False,fopt='f',opt='dsr',ppopt='',ssh='tarik-CCP4home',v='nctrdDR')

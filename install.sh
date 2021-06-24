@@ -33,7 +33,7 @@ printf $green"installing pip\n"$black
 wget https://bootstrap.pypa.io/get-pip.py
 python3 get-pip.py --user
 pip3 install IPython
-###### local python installation 
+###### local python installation
 # wget https://www.python.org/ftp/python/3.8.5/Python-3.8.5.tgz
 # tar zxfv Python-3.8.5.tgz
 # find ~/Python-3.8.5 -type d | xargs chmod 0755
@@ -61,4 +61,5 @@ cd ~
 
 printf $green"Testing multislice\n"$black
 cd $multislice/examples
-python3 -m test_base.py
+mkdir -p ../dat/test
+python3 test_base.py

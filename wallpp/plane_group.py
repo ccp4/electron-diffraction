@@ -145,8 +145,8 @@ class Wallpaper :
         nh,nk  : number of unit cells to be displayed
         ndeg   : number of discretization points along one the direction for building the potential map'''
 
-        if self.pp_type=='p1':
-            self.buil_potential_p1(ndeg)
+        if self.pp_type=='p1' and ndeg:
+            self.build_potential_p1(ndeg)
         else:
             self.Xcell,self.fcell   = self.apply_symmetries(self.X0,self.f0)
             self.Xa,self.fa         = self.repeat_pattern(self.Xcell,self.fcell,nh,nk)
@@ -155,7 +155,8 @@ class Wallpaper :
                 self.Xc,self.fc = self.apply_symmetries(self.Xp,self.fp)
                 self.X,self.f   = self.repeat_pattern(self.Xc,self.fc,nh,nk)
 
-    def buil_potential_p1(self,ndeg=2**8):
+    def build_potential_p1(self,ndeg=2**8):
+        print('...building potential...')
         if isinstance(ndeg,int):ndeg=[ndeg]*2
         self.x,self.z = np.linspace(0,self.a,ndeg[0]),np.linspace(0,self.b,ndeg[1])
         x,z = np.meshgrid(self.x,self.z)
@@ -195,7 +196,9 @@ class Wallpaper :
         x,z,f = x.reshape(Nxz),z.reshape(Nxz),f.reshape(Nxz)
         return x[0,:],z[:,0],f
 
-    def get_potential_grid_p1(self):
+    def get_potential_grid_p1(self,ndeg=2**8):
+        if not 'fp' in self.__dict__.keys():
+            self.build_potential_p1(ndeg)
         return self.x,self.z,self.fp
 
     def plot_unit_cells(self,opts='AV',nh=3,nk=4,lvls=10,alpha=0.5,fg='12',**kwargs) :
@@ -203,12 +206,14 @@ class Wallpaper :
         pOpt :  A(Atom), V(potential), u(unit_cell), a(asym_unit)
         '''
         fig,ax = dsp.create_fig(figsize=fg,pad=[2.,5]['t' in opts])
-        colls,scat,im,cs,lOpt=[],None,None,None,''
+        colls,scat,im,cs,contours=[],[],None,None,None
+        lOpt = ''
         if self.lat_type=='hex' : lOpt += 'hq'
         if 'u' in opts : lattice.plot_lattice(self.lattice_vec,max(nh,3),max(nk,3),pOpt=lOpt,ax=ax)
         if 'a' in opts : colls=[coll.PatchCollection([self.asym_cell],alpha=0.3,linewidth=1.5,edgecolor='b')]
         #plot potential
         if 'V' in opts :
+            print('display potential')
             # na = int(self.Xcell.shape[0]/self.X0.shape[0])
             N = int(np.sqrt(self.Xp.shape[0]))
             (x,y),f = self.Xp.T, self.fp
@@ -216,14 +221,17 @@ class Wallpaper :
             # cs=ax.tricontourf(triang,self.fc,levels=lvls)
             # cont = ax.contourf(x.reshape((N,N)),y.reshape((N,N)),f.reshape((N,N)),levels=lvls)
             im = [x.reshape((N,N)),y.reshape((N,N)),f.reshape((N,N))]#,snap=True)
+            # contours = im+[lvls]
+            im+=[alpha]
             # cs = ax.pcolormesh(x.reshape((N,N)),y.reshape((N,N)),f.reshape((N,N)))#,snap=True)
+
         #plot atoms
         if 'A' in opts :
             x,y = self.Xa.T
             s,c = atoms.iloc[self.fa][['size','color']].values.T
             scat=[x.flatten(),y.flatten(),np.int_(50*np.array(s)),c]
         dsp.stddisp(fig=fig,ax=ax,labs=[r'$x(\AA)$',r'$y(\AA)$'],
-            scat=scat,colls=colls,im=im+[alpha],contour=im+[lvls],
+            scat=scat,colls=colls,im=im,contour=contours,
             title=self.name,name=self.path+self.name,
             **kwargs)
 
@@ -247,7 +255,7 @@ class Wallpaper :
             X = np.concatenate((X,u+Xcell),axis=0)
         f = np.tile(fcell,miller.shape[0])
         #print(X.shape,f.shape)
-        return X,f
+        return X,np.array(f,dtype=int)
 
 
 

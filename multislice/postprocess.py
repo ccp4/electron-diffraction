@@ -81,7 +81,7 @@ def load(datpath,tail='',tag=None,v=0):
             print(colors.green+'available tails:'+colors.yellow,tails,colors.black)
     else:
         print(colors.red+'warning:no file found'+colors.red)
-        
+
 def load_multi_obj(filename):
     '''load a saved Multislice object
     filename : pickle file (.pkl)  '''
@@ -116,7 +116,7 @@ def update_df_info(df_path,hostpath=None,files=[]):
 #########################################################################
 ### def : display
 #########################################################################
-def plot_beam_thickness(beams,rip='I',linespec='-',cm='Greens',**kwargs):
+def plot_beam_thickness(beams,rip='I',linespec='-',marker='x',cm='Greens',**kwargs):
     ''' plot the beams as function of thickness
     - beams : [hk,t,re,im,Ib] beams info from import_beams or file containing them
     - Ib : nbeams x nthicknesss
@@ -126,7 +126,7 @@ def plot_beam_thickness(beams,rip='I',linespec='-',cm='Greens',**kwargs):
     nbs = len(hk)
     csp,csr,csi,plts = dsp.getCs(cm,nbs),dsp.getCs('Blues',nbs),dsp.getCs('Reds',nbs),[]
     for i in range(nbs):
-        if 'I' in rip : plts += [[t,Ib[i],[csp[i],'%sx' %linespec],'$I_{%s}$' %(hk[i])]]
+        if 'I' in rip : plts += [[t,Ib[i],[csp[i],'%s%s' %(linespec,marker)],'$I_{%s}$' %(hk[i])]]
         if 'r' in rip : plts += [[t,re[i],csr[i],'$re$']]
         if 'i' in rip : plts += [[t,im[i],csi[i],'$im$']]
     return dsp.stddisp(plts,lw=2,labs=['$thickness(\AA)$','$I_{hk}$'],**kwargs)#,xylims=[0,t.max(),0,5])

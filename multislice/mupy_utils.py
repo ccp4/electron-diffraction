@@ -90,6 +90,17 @@ def get_lattice(lat_vec,Nmax=5):
     qy = h*a1[1]+k*b1[1]+l*c1[1]
     qz = h*a1[2]+k*b1[2]+l*c1[2]
     return (h,k,l),(qx,qy,qz)
+def get_lattice2D(lat_vec,Nmax=5):
+    '''Get a lattice up to Nmax points :
+    - lat_vec : reciprocal lattice vectors
+    - Nmax : max order '''
+    a1,b1 = lat_vec
+    N = np.arange(-Nmax,Nmax+1)
+    h,k = np.meshgrid(N,N)
+    h,k = h.flatten(),k.flatten()
+    qx = h*a1[0]+k*b1[0]
+    qz = h*a1[1]+k*b1[1]
+    return (h,k),(qx,qz)
 
 def get_ewald(K,nts=100,nps=200):
     ''' Get ewald sphere coordinates
@@ -186,9 +197,43 @@ def project_beams(K,qxyz,e0=[1,0,0],v=0):
     else:
         return px,py
 
+def project_beams2D(K,qxy):
+    u = K/np.linalg.norm(K)
+    v = np.array([u[1],-u[0]])
+    px = qxy.dot(v)
+    return px
+
 ################################################################################
 #### coordinate file generation from cif files
 ################################################################################
+import wallpp.lattice as lat        ;imp.reload(lat)
+import wallpp.plane_group as pg     ;imp.reload(pg)
+def import_wallpp(file,**kwargs):
+    ''' load file into a wallpp
+    - file  : str -
+        - .py python file containing pptype,ax,bz,angle,pattern
+        - .txt
+    '''
+    ext = file.split('.')[-1]
+    with open(file,'r') as f:lines=f.readlines()
+    if ext =='py':
+        d={}
+        exec(''.join(lines),d) #pptype,ax,bz,angle,pattern defined in the lines
+        pptype,ax,bz,angle = [d[k] for k in ['pptype','ax','bz','angle']]
+        pattern=np.array(d['pattern'])
+    elif ext=='txt':
+        lines = [l.strip() for l in lines]
+        pptype = lines[0]
+        ax,bz,angle = np.array(lines[1:4],dtype=float)
+        pattern = np.array([np.array(l.split(' '),dtype=float) for l in lines[4:]])
+    wallpp = pg.Wallpaper(pptype,ax,bz,angle,pattern,ndeg=0,**kwargs)
+    wallpp.reciprocal_vectors = np.array(wallpp.get_reciprocal_lattice_2D())
+    wallpp.lattice_vectors = np.array(wallpp.lattice_vec)
+    wallpp.pattern=pattern #np.hstack([wallpp.Xa,wallpp.fa[:,None]])
+    a1,a2 = wallpp.lattice_vectors
+    wallpp.area=abs(np.cross(a1,a2))
+    return wallpp
+
 def import_crys(file):
     if file.split('.')[-1]=='cif':
         crys = Crystal.from_cif(file)
@@ -607,6 +652,37 @@ def show_ewald_sphere(lat_params,lam=0.025,tmax=7,T=0.2,nx=20,ny=10,**kwargs):
         lw=3,#,xylims=[-nx*b1,nx*b1,-b2,ny*b2],xyTickLabs=[[],[]],
         **kwargs)
 
+
+def show_Ewald2D(K,lat,relrod=0,**kwargs):
+    ''' Displays the Ewald sphere and the reciprocal lattice
+    - K : beam
+    - lat : reciprocal lattice qx,qz
+    '''
+    #lattice
+    qx,qz = lat
+    qxmax = 1.1*max(abs(qx.max()),abs(qz.max()))
+    scat  = [qx,qz,15,'k']
+
+    # Ewald circle
+    Kx,Kz = K
+    k0 = np.linalg.norm(K)
+    v = np.array([-Kz,Kx])/k0
+    A1,A2 = qxmax*v,-qxmax*v
+
+    t = np.linspace(0,2*np.pi,1000)
+    plts = [[Kx + k0*np.cos(t),Kz +k0*np.sin(t),'m','Ewald circle']]
+    plts += [[ [Kx,0],[Kz,0],'r','$K$']]
+    plts += [[ [A1[0],A2[0]],[A1[1],A2[1]]  ,'b','detector']]
+
+    # if relrod:
+    #     H    = Nz*bz
+    #     zeta = np.linspace(0,0.25/bz,100)
+    #     Fz   = lambda i : 1/(1.1*self.ax)*np.sinc(zeta*H)**2+i/self.ax
+    #     plts +=[[Fz(i),zeta,'b--',''] for i in range(nh)]
+    return dsp.stddisp(plts,scat=scat,
+        lw=2,labs=[r'$q_x(\AA^{-1})$',r'$q_z(\AA^{-1})$'],
+        xylims=qxmax,
+        **kwargs)#lw=2,xylims=[0,3,0,3])#,xyTicks=[1/ax1,1/bz1])
 
 ################################################################################
 #### Class viewers

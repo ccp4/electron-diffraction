@@ -137,7 +137,7 @@ class Multi2D(pymultislice.Multislice):
 
     def Qz_show(self,iZs=1,opts='',cmap='jet',**kwargs):
         '''Show wave propagation in q space for slices iZs
-        - opts : O(include Origin), N(Normalize with max), S(Shape normalize) l(show label)
+        - opts : O(include Origin), n(normlize integral 1), N(Normalize with max), S(Shape normalize) l(show label)
         '''
         # if isinstance(iZs,int):iZs=slice(0,iZs,self.z.size)
         if isinstance(iZs,int):iZs=slice(0,None,iZs)
@@ -152,6 +152,8 @@ class Multi2D(pymultislice.Multislice):
             if 'O' not in opts:Pqs[:,0]=0# do not show central beam
             if 'N' in opts:
                 for i in range(z.size) : Pqs[i,:]/=Pqs[i,:].max()
+            elif 'n' in opts:
+                for i in range(z.size) : Pqs[i,:]/=Pqs[i,:].sum()
         q   = fft.fftshift(self.q.copy())
         Pqs = [fft.fftshift(Pqs[i,:]) for i in range(z.size)]
         cs  = dsp.getCs(cmap,z.size)

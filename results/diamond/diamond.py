@@ -24,6 +24,7 @@ if 'b' in opts:
     bloch.set_beams_vs_thickness((0,2000,1000))#bloch.solve()
     bloch.show_beams_vs_thickness(strong=['Ig'],ax=ax,linespec='--',xylims=['x',0,300])
 
+# integrate some reflections
 if 'i' in opts:
     multi = pp.load(path+'multi','2beams001')
     idx = np.array([[512,613],[512,512]])

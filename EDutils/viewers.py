@@ -11,7 +11,7 @@ from blochwave.bloch import load_Bloch #Bloch
 from multislice import mupy_utils as mut    #;imp.reload(mut)
 from multislice import postprocess as pp    #;imp.reload(pp)
 from multislice import multislice as ms     #;imp.reload(ms)
-from blochwave import bloch as bl           #;imp.reload(bl)
+from blochwave import bloch as bl           ;imp.reload(bl)
 from multislice import pets as pt           #;imp.reload(pt)
 from . import __version__
 from . import display as EDdisp             ;imp.reload(EDdisp)
@@ -50,6 +50,8 @@ class Viewer:
         self.xyz_params = {'theta':0,'lat_params':[20,20,100],'pad':1.0,'rep':None}
         self.dsp_d = dict(zip(self.keymap.dsp_keys,np.zeros((len(self.keymap.dsp_keys)),dtype=bool) ))
         self.opt_d = dict(zip(self.keymap.opt_keys,np.zeros((len(self.keymap.opt_keys)),dtype=bool) ))
+        self.show_Sw,self.Swtol=False,2
+        self.m={'I':1e3,'Ig':1e2,'Vg':10,'Swl':self.Swtol}
 
         # print('...load parameters...')
         if config:self.load_config(config)
@@ -89,7 +91,7 @@ class Viewer:
 
     def init_args(self,path=None,cif_file=None,bloch=None,pets=None,multi=None,tag='',
         orient=[0,0,5,5],u=None,Smax=0.01,Nmax=5,thick=None,dthick=5,thicks=(0,1000,1000),
-        xylims=1.5,cutoff=100,dcutoff=10,mag=500,cmap=None,cmap_beams='jet',
+        xylims=1.5,cutoff=50,dcutoff=10,mag=500,cmap=None,cmap_beams='jet',
         frame=1,incrate=1,drot=1,drotS=1,pets_opts='Pr',rot=0,rotS=0,
         init_opts='R'):
         # F='Sw',kargs={},**kwargs):
@@ -143,6 +145,7 @@ class Viewer:
         self.show_i     = 'i' in init_opts
         self.show_Ig    = 'I' in init_opts
         self.show_Vg    = 'V' in init_opts
+        self.show_Sw    = 'W' in init_opts
         self.show_z     = 'z' in init_opts
         self.show_u     = 'u' in init_opts
         self.show_v     = 'v' in init_opts
@@ -220,6 +223,7 @@ class Viewer:
         else:raise Exception('bloch args need be NoneType, str or Bloch object ')
         if not type(self.path)     == str : self.path = self.bloch.path
         if not type(self.cif_file) == str : self.cif_file = self.bloch.cif_file
+        self.u=self.bloch.u
 
     def init_multi(self,multi_path):
         if type(multi_path) == str:self.multi_path = multi_path
@@ -255,7 +259,7 @@ class Viewer:
         'cutoff','dcutoff','mag','xylims','Smax','Nmax','thick','dthick',       #generic
         'theta','phi','dtheta','dphi','dtheta_dphi','thicks',                   #bloch
         'frame','incrate','rot','rotS','drot','drotS','pets_opts','cmap',       #frames
-        'show_hkl','show_i','show_Ig','show_Vg','show_z','show_u','show_v',     #shows
+        'show_hkl','show_i','show_Ig','show_Vg','show_Sw','Swtol','show_z','show_u','show_v',     #shows
         'save_bloch','hold_mode','cmap_beams',#'F','fopts',
         'multi_args','xyz_params',
         ]
@@ -398,7 +402,7 @@ class Viewer:
         else:
             self.dthick=self.dthick_r
             self.cutoff_r,self.mag_r = self.cutoff,self.mag
-            self.cutoff,self.mag = 5,500
+            self.cutoff,self.mag = 50,500
             self.set_theta_phi_from_u(self.u)
             self.update(fsolve=1)
 
@@ -410,12 +414,13 @@ class Viewer:
         if self.show_u   : print('[uvw]:');print(self.bloch.u)
         if self.show_v   : print('[uvw]_rec:');print(self.bloch.Kuvw0)
         if self.show_z   : print('zones:');print(self.bloch.get_zones())
+        # if self.show_Sw  :
 
         self.Icols = []
         if self.show_i  : self.Icols += ['I']
+        if self.show_Sw : self.Icols += ['Swl']
         if self.show_Ig : self.Icols += ['Ig']
-        if self.show_Vg : self.Icols += ['Vg']
-        if any(self.Icols) : self.bloch.get_Istrong(Icols=self.Icols)
+        if any(self.Icols) : self.bloch.get_Istrong(Icols=self.Icols,m=self.m)
 
     def show_frames(self):
         title = ''
@@ -439,11 +444,6 @@ class Viewer:
             df_pets=self.rpl,im_multi=self.im,df_bloch=self.bloch.df_G,hkl_idx=hkl_idx,
             ax=self.ax,title=title,xylims=self.xylims,single_mode=not self.hold_mode,
             cmap=self.cmap,cutoff=self.cutoff,sargs=sargs,cs=cs)
-
-    # def show_bloch(self):
-    #     self.bloch.show_beams(ax=self.ax,fig=self.fig,F=self.F,fopts=self.fopts,
-    #         mag=self.mag,cutoff=self.cutoff,opts='x',
-    #         cmap=self.cmap,xylims=self.xylims,opt='',gridOn=0)#,**self.beams_args)
 
     def show(self):
         self.show_vals()
@@ -710,10 +710,11 @@ class Viewer:
         elif key == dict_k['show_I']   : self.show_i   = not self.show_i  ;print('%sshowing Istrong'   %['not ',''][self.show_i])
         elif key == dict_k['show_Ig']  : self.show_Ig  = not self.show_Ig ;print('%sshowing Ig_strong' %['not ',''][self.show_Ig])
         elif key == dict_k['show_Vg']  : self.show_Vg  = not self.show_Vg ;print('%sshowing Vg_strong' %['not ',''][self.show_Vg])
+        elif key == dict_k['show_Sw']  : self.show_Sw  = not self.show_Sw ;print('%sshowing Sw_strong' %['not ',''][self.show_Sw])
         elif key == dict_k['show_z']   : self.show_z   = not self.show_z  ;print('%sshowing zones'     %['not ',''][self.show_z])
         elif key == dict_k['show_beams_vs_thickness']:
             if not self.bloch.solved : self.update(fsolve=1)
-            self.bloch.show_beams_vs_thickness(self.thicks,cm=self.cmap_beams,strong=self.Icols)
+            self.bloch.show_beams_vs_thickness(self.thicks,cm=self.cmap_beams,strong=self.Icols,m=self.m)
         elif key== dict_k['show_Exp'] and self.tifpath:
             self.pets.show_exp(frame=self.frame)
         # Display
@@ -779,7 +780,7 @@ class Viewer:
 
     def settings(self):
         fieldNames  =['Smax','Nmax','thick','dthick',
-            'xylims','mag','cutoff','rot','rotS','pets_opts','cmap','cmap_beams']
+            'xylims','mag','cutoff','Swtol','rot','rotS','pets_opts','cmap','cmap_beams']
         if   self.mode=='rotate':
             self.dtheta_dphi=[self.dtheta,self.dphi]
             fieldNames+=['theta','phi','dtheta_dphi','thicks']
@@ -802,3 +803,4 @@ class Viewer:
             if type(self.dtheta_dphi) in [float,int]:
                 self.dtheta_dphi=[self.dtheta_dphi]*2
             self.dtheta,self.dphi = self.dtheta_dphi
+        self.m={'I':1e3,'Ig':1e2,'Vg':10,'Swl':self.Swtol}

@@ -1,6 +1,6 @@
 '''Bloch wave solver'''
 import importlib as imp
-import numpy as np,pandas as pd,pickle5,os,glob
+import numpy as np,pandas as pd,pickle5,os,glob,tifffile
 from crystals import Crystal
 from multislice import mupy_utils as mut     ;imp.reload(mut)
 from multislice import postprocess as pp     ;imp.reload(pp)
@@ -12,7 +12,8 @@ from utils import glob_colors as colors,handler3D as h3d
 
 class Bloch:
     def __init__(self,cif_file,keV=200,K=None,u=[0,0,1],Nmax=1,
-        Smax=0.2,thick=500,name='',path='',solve=0,opts='sv'):
+        Smax=0.2,thick=500,thicks=(0,1000,1000),opts='sv',
+        name='',path='',solve=True,show_thicks=False):
         ''' Bloch wave simulation class
         - cif_file : str - structure
         - name     : str - optional name (used to save object see set_name)
@@ -29,11 +30,12 @@ class Bloch:
         self.lat_vec  = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
         self.pattern  = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in self.crys.atoms] )
         self.Nmax  = 0
-        self.thick = thick
         self.update_Nmax(Nmax)
         self.set_beam(K,u,keV)
         self.set_name(name,path)
-        if solve or 'S' in opts:self.solve(Smax,opts=opts)
+        if solve or 'S' in opts:self.solve(Smax=Smax,
+            thick=thick,thicks=thicks,opts=opts)
+        if show_thicks:self.show_beams_vs_thickness(strong=['I'])
 
     def set_name(self,name='',path=''):
         '''set name for Bloch obj(will be saved as path+name+'.pkl'):
@@ -41,13 +43,13 @@ class Bloch:
         - path : The path to the simulation folder
         By default the simulation name is '<cif><zone axis>_<keV>keV_bloch'
         '''
+        basefile = self.cif_file.replace('.cif','')
         if not name:
-            basefile = self.cif_file.replace('.cif','')
             u_str = ''.join(['%d' %np.round(u) for u in self.Kabc0])
-            name='%s%s_%dkeV_bloch' %(basefile,u_str,np.round(self.keV))
-        if not path:os.path.dirname(name)
-        self.path = path                            #; print(self.path)
-        self.name = os.path.basename(name)
+            name='%s%s_%dkeV_bloch' %(os.path.basename(basefile),u_str,np.round(self.keV))
+        if not path:path=os.path.dirname(basefile)
+        self.path = path                #; print(self.path)
+        self.name = name                #;print('name:',self.name)
 
     def update_Nmax(self,Nmax):
         '''Update resolution/max order. (Updates lattice and Fhkl)
@@ -89,8 +91,8 @@ class Bloch:
         self._set_kinematic()
         if self.solved:self._set_intensities()
 
-    def solve(self,Smax=0.02,Nmax=None,K=None,u=None,keV=None,thick=None,
-        opts='sv',Vopt0=False,v=True,name=''):
+    def solve(self,Smax=0.02,Nmax=None,K=None,u=None,keV=None,thick=None,thicks=None,
+        opts='sv0',Vopt0=True,v=True,save=True):#,name=''):
         ''' diagonalize the Blochwave matrix
         - Smax    : float- maximum excitation error to be included
         - Nmax    : int - max order of reflections/resolution(see update_Nmax)
@@ -101,13 +103,13 @@ class Bloch:
         '''
         self.update_Nmax(Nmax)
         self.set_beam(K,u,keV)
-        self.set_name(name,self.path)
+        # self.set_name(name,self.path)
         self._set_excitation_errors(Smax)
         self._solve_Bloch(opts,Vopt0,v)
         self._set_Vg()
         self.set_thickness(thick)
-        self._set_kinematic()
-        if 's' in opts:self.save()
+        self.set_beams_vs_thickness(thicks)#;print('thicks solved')
+        if 's' in opts or save:self.save()
 
     ################################################################################
     #### private
@@ -180,6 +182,7 @@ class Bloch:
         self.df_G['px'] = px
         self.df_G['py'] = py
         self.df_G['Vg'] = Vg_G
+        self.df_G['Swl'] = logM(self.df_G['Sw'])
         self.df_G['L']  = np.ones(Vg_G.shape)
         # self.df_G.loc[(self.df_G.h==0) & (self.df_G.k==0) & (self.df_G.l)==0]['Vg'] = 0
         self._set_zones()
@@ -227,6 +230,10 @@ class Bloch:
         self.Sz = St
         self.Iz = np.abs(self.Sz)**2
 
+        Sw,Ug = self.df_G[['Sw','Vg']].values.T
+        Sz_kin = np.array([np.pi/self.k0*Ug*t*np.sinc(Sw*t) for t in self.z]).T
+        self.Iz_kin = np.abs(Sz_kin)**2
+
     def _set_thicks(self,thicks):
         if isinstance(thicks,tuple):thicks = np.linspace(*thicks)
         elif isinstance(thicks,float) or isinstance(thicks,int) : thicks=[thicks]
@@ -240,20 +247,32 @@ class Bloch:
     def get_kin(self):return self.df_G[['h','k','l','Sw','Vg','Sg','Ig']]
     def get_zones(self):return self.df_G[['h','k','l','zone']].values
     def get_G(self):return self.df_G[['qx','qy','qz']].values
-    def get_Istrong(self,m={'I':1000,'Ig':1000,'Vg':10},out=0,Icols=['I']):
-        cond = self.df_G.L<0
+    def get_Xig(self,tol=1e4):
+        self.df_G['Xi_g'] = self.k0/abs(self.df_G.Vg)
+        return self.df_G.loc[self.df_G.Xi_g<tol,['h','k','l','Sw','Vg','Xi_g']]
+    def get_Sw(self,Smax=1e-2):
+        Smax = min(Smax,self.Smax)
+        print(self.df_G[['h','k','l','Sw']].loc[self.df_G.Sw<=Smax])
+
+    def get_Istrong(self,m={'Swl':2,'I':1000,'Ig':1000,'Vg':10},out=0,Icols=['I'],cols=''):
+        ''' Show beams according to magnitude criteria
+        cols : q(qx,qy,qz), p(px,py), k(Sw,Vg,Ig), s(Sw), v(Vg), i(Ig), z(zone), I(I)
+        '''
+        cond = self.df_G.L>0
         Icols = [Icol for Icol in Icols if Icol in self.df_G.columns and Icol in m.keys()]
         for Icol in Icols :
             Imax = abs(self.df_G[Icol].max())
-            cond |= (abs(self.df_G[Icol])>Imax/m[Icol])
+            cond &= (abs(self.df_G[Icol])>Imax/m[Icol])
         Istrong = self.df_G.loc[cond]
+        if len(Icols):Istrong = Istrong.iloc[np.argsort(Istrong[Icols[0]])]
         if out:return Istrong.index.values
         else:
-            if any(Istrong):print(Istrong[['h','k','l','Sw']+Icols])
+            d_cols = {'q':['qx','qy','qz'], 'p':['px','py'], 'k':['Sw','Vg','Ig'],
+                's':['Sw'], 'v':['Vg'], 'i':['Ig'], 'z':['zone'], 'I':['I']}
+            C = []
+            for c in cols : C += d_cols[c]
+            if any(Istrong):print(Istrong[['h','k','l']+Icols+C])
 
-    def get_Sw(self,Smax=1):
-        Smax = min(Smax,self.Smax)
-        print(self.df_G[['h','k','l','Sw']].loc[self.df_G.Sw<=Smax])
     def is_hkl(self,Ghkl,v=1):
         Gidx = np.where(np.linalg.norm(self.get_hkl() - Ghkl,axis=1)==0)[0]
         if v:print(self.df_G.iloc[Gidx])
@@ -288,18 +307,27 @@ class Bloch:
         # print(Fvals.max())
         fig,ax = dsp.stddisp(plts,lw=2,scat=scat,caxis=[0,cutoff],cmap=cmap,cs='S',title=tle,**kwargs)
 
-    def show_beams_vs_thickness(self,thicks=None,strong=[],**kwargs):
+    def show_beams_vs_thickness(self,thicks=None,strong=[],m={},**kwargs):
         if thicks:self.set_beams_vs_thickness(thicks)
-        hkl = self.get_hkl().copy()
-        Iz  = self.Iz.copy()
-        if any(strong):
-            Istrong = self.get_Istrong(out=1,Icols=strong) #;print(Istrong)
-            Iz  = Iz[Istrong]
-            hkl = hkl[Istrong]
-        hkl = [str(tuple(h)) for h in hkl]
-        beams=[hkl,self.z,None,None,Iz]
+        beams = self.beam_vs_thickness(strong=strong,m=m)
         # beams=[hkl,self.z,np.real(self.Sz),np.imag(self.Sz),self.Iz]
         return pp.plot_beam_thickness(beams,**kwargs)
+
+
+    def QQplot(self,thicks=None,iZs=10,cmap='Spectral',**kwargs):
+        if thicks:self.set_beams_vs_thickness(thicks)
+        if isinstance(iZs,int):iZs=slice(0,None,iZs)
+        # iB = self.get_Istrong(out=1)[0]#;print(iB,self.Iz[    iB,iZs],)
+        iB = np.argsort(np.sum(self.Iz,axis=1))[-2]
+        z      = self.z.copy()[       iZs]
+        Iz_dyn = self.Iz.copy()[    :,iZs]/self.Iz[    iB,iZs]
+        Iz_kin = self.Iz_kin.copy()[:,iZs]/self.Iz_kin[iB,iZs]#;print(Iz_dyn[Iz_dyn>1e-3])
+        nzs = z.size
+        cs = dsp.getCs(cmap,nzs) #; print(len(cs),Iz_dyn.shape,Iz_kin.shape)
+        # scat=tuple( [[I_kin,I_dyn,cs[i]] for i,(I_dyn,I_kin) in enumerate(zip(self.Iz[:,::iZ],self.Iz_kin[:,::iZ]))])
+        plts=[[I_kin,I_dyn,[cs[i],'o'],'$z=%d\AA$' %z] for i,(z,I_dyn,I_kin) in enumerate(zip(z,Iz_dyn.T,Iz_kin.T))]
+        plts+=[ [[0,1],[0,1],[(0.5,)*3,'--'],''] ]
+        dsp.stddisp(plts,labs=['$I_{kin}$','$I_{dyn}$'],sargs={'alpha':0.5},**kwargs)
 
     def show_Fhkl(self,s=None,opts='m',h3D=0,**kwargs):
         '''Displays structure factor over grid
@@ -323,9 +351,24 @@ class Bloch:
     def show_H(self,**kwargs):
         dsp.stddisp(im=[np.abs(self.H)],title='abs(H)', pOpt='im')
 
+
     ################################################################################
     #### misc
     ################################################################################
+    def beam_vs_thickness(self,strong=[],m={},refl=[],thicks=None):
+        if thicks:self.set_beams_vs_thickness(thicks)
+        hkl = self.get_hkl().copy()
+        Iz  = self.Iz.copy()
+        Istrong = np.arange(hkl.size)
+        if any(strong):
+            Istrong = self.get_Istrong(out=1,Icols=strong,m=m) #;print(Istrong)
+        if any(refl):
+            hkl0 = [str(tuple(h)) for h in hkl]
+            Istrong = [i for i,refl0 in enumerate(hkl0) if refl0 in refl]
+        Iz  = Iz[Istrong]
+        hkl = [str(tuple(h)) for h in hkl[Istrong]]
+        return hkl,self.z,None,None,Iz
+
     def _get_slice(self,s):
         tle = ''
         if isinstance(s,tuple) or isinstance(s,int) or isinstance(s,str):
@@ -338,13 +381,47 @@ class Bloch:
                 elif i=='k':s = np.s_[:,n,:]
                 elif i=='l':s = np.s_[:,:,n]
         return s,tle
+
+    def get_pkl(self,file=None):
+        if not file:file=os.path.join(self.path,self.name+'.pkl')
+        return file
+
     def save(self,file=None,v=1):
         '''save this object'''
-        if not file:file=os.path.join(self.path,self.name+'.pkl')
+        file = self.get_pkl(file)
         with open(file,'wb') as out :
             pickle5.dump(self, out, pickle5.HIGHEST_PROTOCOL)
         if v:print(colors.green+"object saved\n"+colors.yellow+file+colors.black)
 
+    def convert2tiff(self,tiff_file,Imax=3e4,Nmax=256,aperpixel=0.005,gs3=0.1,rmax=10):
+        dqx,dqy = [aperpixel]*2
+        nx,ny = int(np.floor(gs3/dqx)),int(np.floor(gs3/dqy)) ;
+        ix,iy = np.meshgrid(range(-nx,nx+1),range(-ny,ny+1))
+        x,y = ix*dqx,iy*dqy
+        Pb = np.exp(-(x**2+y**2)/(gs3/3)**2)#;dsp.stddisp(im=[x,y,Pb],pOpt='im')
+
+        px,py,I = self.df_G[['px','py','I']].values.T
+
+        #convert to pixels
+        i,j = np.array([np.round(px/dqx),np.round(py/dqy)],dtype=int)+Nmax
+        # print(i,j)
+        im0 = np.zeros((2*Nmax,)*2)
+        for i0,j0,I0 in zip(i,j,I):
+            i0x,j0y = i0+ix,j0+iy
+            idx     = (i0x>=0) & (j0y>=0)  & (i0x<2*Nmax) & (j0y<2*Nmax)
+            i0x,j0y = i0+ix[idx],j0+iy[idx]
+            im0[i0x,j0y] += Pb[idx]/Pb[idx].sum()*I0
+
+        if rmax:
+            h,k = np.meshgrid(range(-Nmax,Nmax),range(-Nmax,Nmax))
+            r = np.sqrt(h**2+k**2);r[r==0]=1
+            im0 += rmax*np.random.rand(*im0.shape)#/(rmax*r)
+
+        I = np.array(im0*Imax,dtype='uint16')
+        tifffile.imwrite(tiff_file,np.flipud(I))
+        print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
+
+    # convert2tiff(Imax=3e4,Nmax=256,aperpixel=0.005,gs3=0.1)
 
 
 ################################################################################
@@ -382,4 +459,4 @@ def get_fz(opts):
 
 abs2 = lambda F:np.abs(F)**2
 logF = lambda F:np.log10(np.abs(F)+1)
-logM = lambda F:-np.log10(np.maximum(F,1e-5))
+logM = lambda F:-np.log10(np.maximum(F,1e-8))

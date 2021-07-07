@@ -172,9 +172,9 @@ def save_keys(name):
     dict_k.update(dict(zip(rbright,rbrightness_keys)))
 
     #vals
-    vals = ['hkl','I','z','u','v','beams_vs_thickness','Ig','Vg']
+    vals = ['hkl','I','z','u','v','beams_vs_thickness','Ig','Vg','Sw']
     vals = ['show_'+s for s in vals]
-    vals_keys = ['ctrl+'+c for c in 'hizuvbIV']
+    vals_keys = ['ctrl+'+c for c in 'hizuvbIVE']
     dict_k.update(dict(zip(vals,vals_keys)))
 
     # #display Bloch

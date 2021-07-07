@@ -96,16 +96,16 @@ abs2 = lambda F:np.abs(F)**2
 logF = lambda F:np.log10(np.maximum(np.abs(F),1e-6))+6
 logM = lambda F:-np.log10(np.maximum(F,1e-5))
 
-dfb = { 'B':['I' ,get_fz('l')[0],'b','o','Intensity Bloch $I_{g}$'],
-        'K':['Ig',get_fz('l')[0],'g','o','Intensity kinematic $I_{g,kin}$'],
-        'V':['Vg',get_fz('l')[0],'c','d','Potential $V_{g}$'],
-        'S':['Sw',get_fz('L')[0],'m','o','Excitation error $\zeta_{g}$'],
-        'L':['L' ,get_fz('m')[0],'k','s','Lattice']}
+cmaps = {'P':'Greys','M':'Reds','B':'Blues','K':'Greens','V':'Purples','S':'Oranges','L':'Greys'}
+dfb = { 'B':['I' ,get_fz('l')[0],dsp.getCs(cmaps['B'],3)[1],'o','Intensity Bloch $I_{g}$'],
+        'K':['Ig',get_fz('l')[0],dsp.getCs(cmaps['K'],3)[1],'o','Intensity kinematic $I_{g,kin}$'],
+        'V':['Vg',get_fz('l')[0],dsp.getCs(cmaps['V'],3)[1],'d','Potential $V_{g}$'],
+        'S':['Sw',get_fz('L')[0],dsp.getCs(cmaps['S'],3)[1],'o','Excitation error $\zeta_{g}$'],
+        'L':['L' ,get_fz('m')[0],dsp.getCs(cmaps['L'],3)[1],'s','Lattice']}
 dfb = pd.DataFrame.from_dict(dfb,orient='index',columns=['F','fz','color','marker','legend'])
 cp,mp = (0.5,)*3,'o'
 legElts={'Processed':[cp,mp],'Multislice':'r*'}
 legElts.update({C.legend:[C.color,C.marker] for c,C in dfb.iterrows()})
-cmaps = {'P':'Greys','M':'Reds','B':'viridis','K':'Greens','V':'Purples','S':'Oranges','L':'Greys'}
 
 def multenterbox(msg,title,fieldValues,fieldNames):
     fieldValues = easygui.multenterbox(msg, title, fieldNames,fieldValues)

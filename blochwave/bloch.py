@@ -182,6 +182,7 @@ class Bloch:
         self.df_G['px'] = px
         self.df_G['py'] = py
         self.df_G['Vg'] = Vg_G
+        self.df_G['Vga'] = abs(Vg_G)
         self.df_G['Swl'] = logM(self.df_G['Sw'])
         self.df_G['L']  = np.ones(Vg_G.shape)
         # self.df_G.loc[(self.df_G.h==0) & (self.df_G.k==0) & (self.df_G.l)==0]['Vg'] = 0
@@ -254,18 +255,32 @@ class Bloch:
         Smax = min(Smax,self.Smax)
         print(self.df_G[['h','k','l','Sw']].loc[self.df_G.Sw<=Smax])
 
-    def get_Istrong(self,m={'Swl':2,'I':1000,'Ig':1000,'Vg':10},out=0,Icols=['I'],cols=''):
-        ''' Show beams according to magnitude criteria
-        cols : q(qx,qy,qz), p(px,py), k(Sw,Vg,Ig), s(Sw), v(Vg), i(Ig), z(zone), I(I)
+    def get_Istrong(self,Icols=['I'],sort='',cols='',m={'Swl':2,'I':1000,'Ig':1000,'Vg':10},out=0):
+        ''' Select beams according to magnitude criterias
+        - Icols : list or dict containing magnitudes for selective condition
+        - cols :
+            - int - return indices of strong beams
+            - str - columns to display : q(qx,qy,qz), p(px,py), k(Sw,Vg,Ig), s(Sw), v(Vg), i(Ig), z(zone), I(I)
+        ####
+        - out,m : obsolete parameters
         '''
         cond = self.df_G.L>0
-        Icols = [Icol for Icol in Icols if Icol in self.df_G.columns and Icol in m.keys()]
-        for Icol in Icols :
-            Imax = abs(self.df_G[Icol].max())
-            cond &= (abs(self.df_G[Icol])>Imax/m[Icol])
-        Istrong = self.df_G.loc[cond]
-        if len(Icols):Istrong = Istrong.iloc[np.argsort(Istrong[Icols[0]])]
-        if out:return Istrong.index.values
+        if isinstance(Icols,dict):
+            m = Icols
+            Icols = list(Icols.keys())
+        elif isinstance(Icols,str):
+            cond = Icols
+            Istrong = self.df_G.loc[self.df_G.eval(cond)]
+        out |= isinstance(cols,int)
+        if isinstance(Icols,list):
+            Icols = [Icol for Icol in Icols if Icol in self.df_G.columns and Icol in m.keys()]
+            for Icol in Icols :
+                Imax = abs(self.df_G[Icol].max())
+                cond &= (abs(self.df_G[Icol])>Imax/m[Icol])
+                Istrong = self.df_G.loc[cond]
+        if len(sort):Istrong = Istrong.iloc[np.argsort(Istrong[sort])]
+        if out:
+            return Istrong.index.values
         else:
             d_cols = {'q':['qx','qy','qz'], 'p':['px','py'], 'k':['Sw','Vg','Ig'],
                 's':['Sw'], 'v':['Vg'], 'i':['Ig'], 'z':['zone'], 'I':['I']}
@@ -307,9 +322,9 @@ class Bloch:
         # print(Fvals.max())
         fig,ax = dsp.stddisp(plts,lw=2,scat=scat,caxis=[0,cutoff],cmap=cmap,cs='S',title=tle,**kwargs)
 
-    def show_beams_vs_thickness(self,thicks=None,strong=[],m={},**kwargs):
+    def show_beams_vs_thickness(self,thicks=None,strong={'I':1e3},refl=[],cond='',**kwargs):
         if thicks:self.set_beams_vs_thickness(thicks)
-        beams = self.beam_vs_thickness(strong=strong,m=m)
+        beams = self.beam_vs_thickness(strong=strong,refl=refl,cond=cond)
         # beams=[hkl,self.z,np.real(self.Sz),np.imag(self.Sz),self.Iz]
         return pp.plot_beam_thickness(beams,**kwargs)
 
@@ -355,16 +370,28 @@ class Bloch:
     ################################################################################
     #### misc
     ################################################################################
-    def beam_vs_thickness(self,strong=[],m={},refl=[],thicks=None):
+    def get_beam(self,cond='',refl=[]):
+        ''' select some beams
+        - cond : condition on the beams
+        - refl : list of tuple : indices of beams
+        '''
+        if cond:idx = self.df_G.loc[self.df_G.eval(cond)].index.values
+        elif any(refl):
+            if not isinstance(refl[0],tuple):refl=[tuple(h) for h in refl]
+            hkl = [tuple(h) for h in self.get_hkl()]
+            idx = [i for i,refl0 in enumerate(hkl) if refl0 in refl]
+        return idx
+
+    def beam_vs_thickness(self,strong={'I':1e3},refl=[],cond='',thicks=None):
         if thicks:self.set_beams_vs_thickness(thicks)
         hkl = self.get_hkl().copy()
         Iz  = self.Iz.copy()
         Istrong = np.arange(hkl.size)
-        if any(strong):
-            Istrong = self.get_Istrong(out=1,Icols=strong,m=m) #;print(Istrong)
-        if any(refl):
-            hkl0 = [str(tuple(h)) for h in hkl]
-            Istrong = [i for i,refl0 in enumerate(hkl0) if refl0 in refl]
+        if cond or any(refl):
+            Istrong = self.get_beam(cond=cond,refl=refl)
+        elif any(strong):
+            Istrong = self.get_Istrong(out=1,Icols=strong)
+        # print(Istrong)
         Iz  = Iz[Istrong]
         hkl = [str(tuple(h)) for h in hkl[Istrong]]
         return hkl,self.z,None,None,Iz

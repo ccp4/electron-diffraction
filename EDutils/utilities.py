@@ -76,7 +76,7 @@ class Rocking:
         I = np.zeros((self.ts.size,nbs,nzs))
         for i,name in enumerate(self.df.index):
             sim_obj = self.load(i)
-            refl,z,re,im,Ib = sim_obj.beam_vs_thickness(refl=refl) #;print(refl)
+            refl,z,re,im,Ib = sim_obj.beam_vs_thickness(**bargs)#refl=refl,cond='',strong=None) #;print(refl)
             I[i] = np.array(Ib[:,iZs])
 
         plts = []
@@ -107,20 +107,58 @@ class Rocking:
         return nbs,refl,nzs,iZs
 
 
-def get_uvw_rock(u0,u1=[0,1],omega=np.linspace(0,0.5,32)):
-    '''create orientation vectors around u0 to simulate rocking curve
-    - u0 : main beam orientation
-    - u1 : so that u1|x,y,z = u1[0]*e_theta+u1[1]*e_phi
-    - omega : angular spread
-    '''
-    theta,phi = np.deg2rad(theta_phi_from_u(u0))
-    ct,st,cp,sp = np.cos(theta),np.sin(theta),np.cos(phi),np.sin(phi)
-    e_theta = np.array([ct*cp,ct*st,-st])
-    e_phi = np.array([-sp,cp,0])
-    u1  = u1[0]*e_theta+u1[1]*e_phi
-    u1/=np.linalg.norm(u1)
-    uvw = get_uvw(u0,u1,omega,plot=0)
-    return uvw
+    def Sw_vs_theta(self,refl=[[0,0,0]],cond='',fz=abs,
+        cm='Spectral',**kwargs):
+        if cond:
+            refl = []
+            for i,name in enumerate(self.df.index):
+                b = self.load(i)
+                idx = b.get_beam(cond=cond)
+                hkl = b.get_hkl()[idx]
+                refl += [tuple(h) for h in hkl]
+        refl = np.unique(refl,axis=0)           #;print(refl)
+        if not isinstance(refl[0],tuple):refl=[tuple(h) for h in refl]
+        nbs,nts = len(refl),self.ts.size#;print(nts)
+
+        Sm = np.nan#self.load(0).Smax
+        Sw = pd.DataFrame(Sm*np.ones((nts,nbs)),columns=[str(h) for h in refl])
+        I  = pd.DataFrame(np.zeros((nts,nbs)),columns=[str(h) for h in refl])
+        for i,name in enumerate(self.df.index):
+            b = self.load(i)
+            idx = b.get_beam(refl=refl,cond=cond)
+            hkl0 = [str(tuple(h)) for h in b.get_hkl()[idx]]
+            Sw.loc[i,hkl0] = b.df_G.loc[idx,'Sw'].values
+            I.loc[i,hkl0] = b.df_G.loc[idx,'I'].values
+        # SwE = -np.log10(np.maximum(Sw.values.T,1e-10)) #nbs x nts
+        SwE = fz(Sw.values.T)
+        # for Sw0 in SwE :
+        #     idx = Sw0==0
+        #     Sw0[idx]=Sw0.min()
+
+        cs = dsp.getCs(cm,nbs)
+        plts = [[self.ts,Sw0,[cs[i],'-o'],''] for i,Sw0 in enumerate(SwE)]
+
+        # iSmin = np.argmax(SwE,axis=1) #locate minimums
+        idx = np.isnan(SwE)
+        SwE[idx]=0
+        iSmin = np.argmax(SwE,axis=1) #locate minimums
+        SwE[idx]=np.nan
+        # txts=[]
+        txts = [[self.ts[idx],SwE[i,idx],'%s' %str(h),cs[i]] for i,(h,idx) in enumerate(zip(refl,iSmin))]
+        dsp.stddisp(plts,texts=txts,labs=[r'$\theta$','$S_w$'],**kwargs)
+
+        IE = I.values.T
+        plts = [[self.ts,I0,[cs[i],'-o'],''] for i,I0 in enumerate(IE)]
+        dsp.stddisp(plts,labs=[r'$\theta$','$I$'],**kwargs)
+
+        # plts = [[Sw0,I0,[cs[i],'-o'],''] for i,(Sw0,I0) in enumerate(zip(IE,Sw.values.T))]
+        # dsp.stddisp(plts,labs=[r'$\theta$','$I$'],**kwargs)
+
+        # dsp.stddisp(im=[self.ts,range(nbs),Sw],
+        #     labs=['$\theta$',''],title='$S_w$',**kwargs)
+#############################################################################
+#### Excitation error
+#############################################################################
 
 
 #############################################################################
@@ -139,6 +177,14 @@ def theta_phi_from_u(u):
     phi   = np.rad2deg(np.arctan2(y,x))
     return theta,phi
 
+
+
+def get_uvw_from_theta_phi(theta,phi,e1=[0,0,1],**kwargs):
+    u0 = u_from_theta_phi(theta,phi)
+    u1 = np.cross(e1,u0);u1/=np.linalg.norm(u1)
+    uvw = get_uvw(u0,u1,**kwargs)
+    return uvw
+
 def get_uvw(u0,u1,omega,nframes=2,plot=False,h3d=False):
     ''' get a list of continuously rotated vector between u0 and u1.
     u0,u1 : initial and final vector
@@ -147,6 +193,7 @@ def get_uvw(u0,u1,omega,nframes=2,plot=False,h3d=False):
     '''
     if type(omega) in [float,int]:omega=(0,omega)
     if isinstance(omega,tuple):omega=np.linspace(omega[0],omega[1],nframes)
+    u1/=np.linalg.norm(u1)
     omega_r = np.deg2rad(omega)
     ct,st = np.cos(omega_r),np.sin(omega_r)
     u0u1  = np.hstack([np.array(u0)[:,None],np.array(u1)[:,None]])
@@ -163,6 +210,20 @@ def show_uvw(uvw,h3d=False):
     fig,ax = dsp.stddisp(plots=plts,labs=['x','y','z'],rc='3d',lw=4)
     if h3d:h3d = h3D.handler_3d(fig,persp=False,xm0=1)
 
+def get_uvw_rock(u0,u1=[0,1],omega=np.linspace(0,0.5,32)):
+    '''create orientation vectors around u0 to simulate rocking curve
+    - u0 : main beam orientation
+    - u1 : so that u1|x,y,z = u1[0]*e_theta+u1[1]*e_phi
+    - omega : angular spread
+    '''
+    theta,phi = np.deg2rad(theta_phi_from_u(u0))
+    ct,st,cp,sp = np.cos(theta),np.sin(theta),np.cos(phi),np.sin(phi)
+    e_theta = np.array([ct*cp,ct*st,-st])
+    e_phi = np.array([-sp,cp,0])
+    u1  = u1[0]*e_theta+u1[1]*e_phi
+    u1/=np.linalg.norm(u1)
+    uvw = get_uvw(u0,u1,omega,plot=0)
+    return uvw
 
 def convert2tiff(tiff_file,im0,n0,rot,n=256,Imax=5e4):
     alpha = np.deg2rad(rot)

@@ -5,9 +5,11 @@ from multislice import multislice as ms ;imp.reload(ms)
 from blochwave import bloch as bl       ;imp.reload(bl)
 
 plt.close('all')
-opts = 'vb'
+opts = ''
 path = 'dat/'
 
+v = vw.Viewer(path='dat/',cif_file='diamond',tag='r1_diamond',
+    rock='dat/bloch/rock_diamond_r1.pkl',pets=-1,multi=-1,xylims=3)
 # v = vw.Viewer(path='dat',cif_file='diamond',init_opts='R')
 if 'v' in opts:
     v = vw.Viewer(config=path+'config.pkl')

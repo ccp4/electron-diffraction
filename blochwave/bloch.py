@@ -33,9 +33,12 @@ class Bloch:
         self.update_Nmax(Nmax)
         self.set_beam(K,u,keV)
         self.set_name(name,path)
+        self._set_excitation_errors(Smax)
+        self._set_Vg()
         if solve or 'S' in opts:self.solve(Smax=Smax,
             thick=thick,thicks=thicks,opts=opts)
         if show_thicks:self.show_beams_vs_thickness(strong=['I'])
+        if 's' in opts:self.save()
 
     def set_name(self,name='',path=''):
         '''set name for Bloch obj(will be saved as path+name+'.pkl'):
@@ -92,7 +95,7 @@ class Bloch:
         if self.solved:self._set_intensities()
 
     def solve(self,Smax=0.02,Nmax=None,K=None,u=None,keV=None,thick=None,thicks=None,
-        opts='sv0',Vopt0=True,v=True,save=True):#,name=''):
+        opts='sv0',Vopt0=True,v=True,save=True):
         ''' diagonalize the Blochwave matrix
         - Smax    : float- maximum excitation error to be included
         - Nmax    : int - max order of reflections/resolution(see update_Nmax)
@@ -103,10 +106,9 @@ class Bloch:
         '''
         self.update_Nmax(Nmax)
         self.set_beam(K,u,keV)
-        # self.set_name(name,self.path)
         self._set_excitation_errors(Smax)
-        self._solve_Bloch(opts,Vopt0,v)
         self._set_Vg()
+        self._solve_Bloch(opts,Vopt0,v)
         self.set_thickness(thick)
         self.set_beams_vs_thickness(thicks)#;print('thicks solved')
         if 's' in opts or save:self.save()
@@ -375,6 +377,7 @@ class Bloch:
         - cond : condition on the beams
         - refl : list of tuple : indices of beams
         '''
+        idx=[]
         if cond:idx = self.df_G.loc[self.df_G.eval(cond)].index.values
         elif any(refl):
             if not isinstance(refl[0],tuple):refl=[tuple(h) for h in refl]

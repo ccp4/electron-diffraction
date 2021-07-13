@@ -3,7 +3,7 @@
 */dat
 */figures
 */docs_fig
-**/dat
+**/dat/*
 
 tests/dials
 tests/*/dat

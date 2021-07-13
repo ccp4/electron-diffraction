@@ -47,6 +47,24 @@ class Rocking:
         self.df['ts'] = ts
         self.save(v=1)
 
+    def set_tag(self,tag):
+        nts   = self.ts.size
+        pad   = int(np.ceil(np.log10(nts)))
+        names = [ '%s_%s%s' %(tag,'u',str(i).zfill(pad)) for i in range(nts)]
+        self.df.index = names
+        cmd ="cd %s; rename 's/%s/%s/' %s*.pkl df_%s.pkl rock_%s.pkl" %(self.path,self.tag,tag,self.tag,self.tag,self.tag)
+        Popen(cmd,shell=True)
+        self.tag = tag
+        for i,name in enumerate(names):
+            sim_obj = load_pkl(os.path.join(self.path,name+'.pkl'))
+            sim_obj.set_name(name=name,path=self.path)
+            sim_obj.save()
+            self.df.loc[name,'pkl'] = sim_obj.get_pkl()
+        df_file = os.path.join(self.path,'df_%s.pkl' %tag)
+        self.df.to_pickle(df_file)
+        print(colors.green+'Dataframe saved : '+colors.yellow+df_file+colors.black)
+        self.save()
+
     def save(self,v=0):
         '''save this object'''
         file = os.path.join(self.path,'rock_%s.pkl' %(self.tag))
@@ -66,49 +84,155 @@ class Rocking:
             obj.__getattribute__(f)(**args)
             obj.save()
 
+    def integrate_rocking(self,cond='',refl=[]):
+        refl,nbs = self._get_refl(cond=cond,refl=refl)
+        z,nzs = self.get_z()
+
+        nts = self.ts.size
+        self.Iz     = dict(zip([str(h) for h in refl], np.zeros((nbs,nzs)) ))
+        self.Iz_kin = dict(zip([str(h) for h in refl], np.zeros((nbs,nzs)) ))
+        for i in range(nts):
+            sim_obj = self.load(i)
+            idx  = sim_obj.get_beam(refl=refl,cond='')
+            if idx:
+                hkl0 = [str(tuple(h)) for h in sim_obj.get_hkl()[idx]]
+                for idB,hkl_0 in zip(idx,hkl0):
+                    self.Iz[hkl_0] += sim_obj.Iz[idB,:]
+                    self.Iz_kin[hkl_0] += sim_obj.Iz_kin[idB,:]
+        self.save()
+
+    ###############
+    #### Display
+    ###############
+    def plot_integrated(self,cond='',refl=[],cm='Spectral',**kwargs):
+        if not 'Iz' in self.__dict__:self.integrate_rocking(cond=cond,refl=refl)
+        refl,nbs = self._get_refl(cond=cond,refl=refl)
+        refl = [str(tuple(h)) for h in refl]
+        z = self.load(0).z
+        cs = dsp.getCs(cm,nbs)
+        plts = [[z,self.Iz[h],cs[i],'%s' %h] for i,h in enumerate(refl)]
+        dsp.stddisp(plts,labs=[r'$z(\AA)$','$I_{int}$'],**kwargs)
+
     def plot_rocking(self,iZs=-1,zs=None,bargs={},cmap='viridis',**kwargs):
-        '''plot rocking curve for set of beams at thickness zs
+        '''plot rocking curve for set of selected beams at thickness zs
         - iZs : int or list - slice indices (last slice by default )
         - zs  : float or list - selected thickness (in A) to show(takes preference over iZs if set)
         - bargs : see beam_vs_thickness
         '''
-        nbs,refl,nzs,iZs = self._init_rocking(iZs,zs,**bargs)      #;print(refl)
-        I = np.zeros((self.ts.size,nbs,nzs))
-        for i,name in enumerate(self.df.index):
+        iZs,nzs  = self._get_iZs(iZs,zs)    #;print(iZs)
+        refl,nbs = self._get_refl(**bargs)#;print(refl)
+        nts = self.ts.size
+        # I = np.zeros((self.ts.size,nbs,nzs))
+        I = dict(zip([str(h) for h in refl], [np.nan*np.ones((nts,nzs))]*nbs))
+        for i in range(nts):
             sim_obj = self.load(i)
-            refl,z,re,im,Ib = sim_obj.beam_vs_thickness(**bargs)#refl=refl,cond='',strong=None) #;print(refl)
-            I[i] = np.array(Ib[:,iZs])
+            idx  = sim_obj.get_beam(refl=refl,cond='')
+            if idx:
+                hkl0 = [str(tuple(h)) for h in sim_obj.get_hkl()[idx]]
+                for idB,hkl_0 in zip(idx,hkl0):
+                    I[hkl_0][i,:] = np.array(sim_obj.Iz[idB,iZs])
 
+        refl = list(I.keys())
+        z = self.load(0).z
         plts = []
         if nbs>=nzs:
             cs,ms = dsp.getCs(cmap,nbs), dsp.markers
             legElt = { '%s' %refl0:[cs[i],'-'] for i,refl0 in enumerate(refl)}
             for iz,iZ in enumerate(z[iZs]):
                 legElt.update({'$z=%d A$' %(iZ):['k',ms[iz]+'-']})
-                plts += [[self.ts,I[:,i,iz],[cs[i],ms[iz]+'-'],''] for i in range(nbs)]
+                plts += [[self.ts,I[refl0][:,iz],[cs[i],ms[iz]+'-'],''] for i,refl0 in enumerate(refl)]
         else:
             cs,ms = dsp.getCs(cmap,nzs),  dsp.markers
             legElt = { '%s' %refl0:['k','-'+ms[i]] for i,refl0 in enumerate(refl)}
             for iz,iZ in enumerate(z[iZs]):
                 legElt.update({'$z=%d A$' %(iZ):[cs[iz],'-']})
-                plts += [[self.ts,I[:,i,iz],[cs[iz],ms[i]+'-'],''] for i in range(nbs)]
+                plts += [[self.ts,I[refl0][:,iz],[cs[iz],ms[i]+'-'],''] for i,refl0 in enumerate(refl)]
 
         dsp.stddisp(plts,labs=[r'$\theta$(deg)','$I$'],legElt=legElt,**kwargs)
 
-    def _init_rocking(self,iZs,zs,**bargs):
-        sim_obj = self.load(0)
-        refl,z,re,im,Ib = sim_obj.beam_vs_thickness(**bargs)
-        if isinstance(zs,float) or isinstance(zs,float):zs = [zs]
-        if isinstance(zs,list) or isinstance(zs,np.ndarray):
-            iZs = [np.argmin(abs(z-z0)) for z0 in zs]
-        if isinstance(iZs,int):iZs=[iZs]
-        nbs = np.array(refl).size
-        nzs = z[iZs].size
-        return nbs,refl,nzs,iZs
+    def QQplot(self,zs=None,iZs=10,refl=[],cmap='Spectral',**kwargs):
+        if not 'Iz' in self.__dict__:self.integrate_rocking(cond='I>1e-4')#,refl=refl)
+        iZs,nzs  = self._get_iZs(iZs,zs)    #;print(iZs)
+        z  = self.load(0).z.copy()[iZs]
+
+        if not any(refl):
+            refl = list(self.Iz.keys());refl.remove(str((0,)*3))
+        else:
+            refl = [str(tuple(h)) for h in refl]
+        Iz_dyn = np.array([self.Iz[    h].copy()[iZs] for h in refl])
+        Iz_kin = np.array([self.Iz_kin[h].copy()[iZs] for h in refl])
+        # print(Iz_dyn.shape)
+        iB = np.argsort(np.sum(Iz_dyn,axis=1))[-1]
+        Iz_dyn/= Iz_dyn[iB,:]
+        Iz_kin/= Iz_kin[iB,:]
+        cs = dsp.getCs(cmap,nzs) #; print(len(cs),Iz_dyn.shape,Iz_kin.shape)
+
+        plts=[[I_kin,I_dyn,[cs[i],'o'],r'$z=%d \AA$' %z0] for i,(z0,I_dyn,I_kin) in enumerate(zip(z,Iz_dyn.T,Iz_kin.T))]
+        plts+=[ [[0,1],[0,1],[(0.5,)*3,'--'],''] ]
+        dsp.stddisp(plts,labs=['$I_{kin}$','$I_{dyn}$'],sargs={'alpha':0.5},**kwargs)
 
 
-    def Sw_vs_theta(self,refl=[[0,0,0]],cond='',fz=abs,
-        cm='Spectral',**kwargs):
+    def Sw_vs_theta(self,refl=[[0,0,0]],cond='',thick=None,fz=abs,opts='',
+        iTs=slice(0,None),ts=None,
+        cm='Spectral',figname='',**kwargs):
+        '''Displays Sw and I for a range of angle simulations at given thickness
+        - refl,cond : selected reflections
+        - thick : thickness
+        - fz : functor for Sw
+        - Iopt : plot I
+        '''
+        Iopt = 'I' in opts
+        iTs,nts = self._get_iTs(iTs,ts)
+        xlab,ts = r'$\theta$',self.ts.copy()[iTs]
+        if 'f' in opts:
+            xlab,ts = 'frame',np.arange(1,self.ts.size+1)[iTs]       #;print(iTs,ts)
+
+        if thick and Iopt:
+            if not self.load(0).thick==thick:self.do('set_thickness',thick=thick)
+        refl,nbs = self._get_refl(cond,refl)            #;print(nbs)
+
+        Sw = pd.DataFrame(np.ones((nts,nbs)),columns=[str(h) for h in refl])
+        if Iopt:I  = pd.DataFrame(np.zeros((nts,nbs)),columns=[str(h) for h in refl])
+        for i,name in enumerate(self.df.index[iTs]):
+            b = self.load(i) #;print(i)
+            idx = b.get_beam(refl=refl,cond=cond)
+            hkl0 = [str(tuple(h)) for h in b.get_hkl()[idx]]
+            Sw.loc[i,hkl0] = b.df_G.loc[idx,'Sw'].values
+            if Iopt:I.loc[i,hkl0] = b.df_G.loc[idx,'I'].values
+
+        #locate minimum excitation errors
+        iSmin = np.argmin(Sw.values.T,axis=1) #locate minimums
+        Sw[Sw==1]=np.nan
+        SwE = fz(Sw.values.T)
+
+        if 'i' in opts:
+            dsp.stddisp(im=[SwE],pOpt='im',labs=[xlab,'$beam$'],caxis=[fz(1e-2),fz(1e-6)],
+                cmap='Reds',title='Excitation error',name=figname+'_Sw.svg',**kwargs)
+            # print(refl)
+
+        else:
+            cs,txts = dsp.getCs(cm,nbs),[]
+            plts = [[ts,Sw0,[cs[i],'-o'],''] for i,Sw0 in enumerate(SwE)]
+            if 't' in opts:txts = [[ts[idx],SwE[i,idx],'%s' %str(h),cs[i]] for i,(h,idx) in enumerate(zip(refl,iSmin))]
+            dsp.stddisp(plts,texts=txts,labs=[xlab,'$S_w$'],name=figname+'_Sw.svg',**kwargs)
+
+        if Iopt:
+            IE = I.values.T
+            if 'i' in opts:
+                dsp.stddisp(im=[IE],pOpt='im',labs=[xlab,'$beam$'],caxis=[0,0.2],
+                    cmap='YlGnBu',title='Intensity',name=figname+'_Sw.svg',**kwargs)
+            else:
+                plts = [[ts,I0,[cs[i],'-o'],''] for i,I0 in enumerate(IE)]
+                txts = [[ts[idx],IE[i,idx],'%s' %str(h),cs[i]] for i,(h,idx) in enumerate(zip(refl,iSmin))]
+                dsp.stddisp(plts,texts=txts,labs=[xlab,'$I$'],
+                    title=r'thickness=$%d A$' %thick,name=figname+'_I.svg',**kwargs)
+            # return IE
+        return Sw
+
+    ##############################
+    #### gets
+    ##############################
+    def _get_refl(self,cond,refl):
         if cond:
             refl = []
             for i,name in enumerate(self.df.index):
@@ -116,49 +240,34 @@ class Rocking:
                 idx = b.get_beam(cond=cond)
                 hkl = b.get_hkl()[idx]
                 refl += [tuple(h) for h in hkl]
-        refl = np.unique(refl,axis=0)           #;print(refl)
+            refl = np.unique(refl,axis=0)           #;print(refl)
         if not isinstance(refl[0],tuple):refl=[tuple(h) for h in refl]
-        nbs,nts = len(refl),self.ts.size#;print(nts)
+        nbs = len(refl)#.size;print(nbs,refl)
+        return refl,nbs
 
-        Sm = np.nan#self.load(0).Smax
-        Sw = pd.DataFrame(Sm*np.ones((nts,nbs)),columns=[str(h) for h in refl])
-        I  = pd.DataFrame(np.zeros((nts,nbs)),columns=[str(h) for h in refl])
-        for i,name in enumerate(self.df.index):
-            b = self.load(i)
-            idx = b.get_beam(refl=refl,cond=cond)
-            hkl0 = [str(tuple(h)) for h in b.get_hkl()[idx]]
-            Sw.loc[i,hkl0] = b.df_G.loc[idx,'Sw'].values
-            I.loc[i,hkl0] = b.df_G.loc[idx,'I'].values
-        # SwE = -np.log10(np.maximum(Sw.values.T,1e-10)) #nbs x nts
-        SwE = fz(Sw.values.T)
-        # for Sw0 in SwE :
-        #     idx = Sw0==0
-        #     Sw0[idx]=Sw0.min()
+    def _get_iTs(self,iTs,ts):
+        t = self.ts
+        if isinstance(ts,float) or isinstance(ts,int):ts = [ts]
+        if isinstance(ts,list) or isinstance(ts,np.ndarray):
+            iTs = [np.argmin(abs(t-t0)) for t0 in ts]
+        if isinstance(iTs,int):iTs=[iTs]
+        if not type(iTs) in [list,np.ndarray,slice]:iTs = slice(0,None,1)
+        nts = t[iTs].size
+        return iTs,nts
 
-        cs = dsp.getCs(cm,nbs)
-        plts = [[self.ts,Sw0,[cs[i],'-o'],''] for i,Sw0 in enumerate(SwE)]
+    def _get_iZs(self,iZs,zs):
+        z = self.load(0).z
+        if isinstance(zs,float) or isinstance(zs,int):zs = [zs]
+        if isinstance(zs,list) or isinstance(zs,np.ndarray):
+            iZs = [np.argmin(abs(z-z0)) for z0 in zs]
+        if isinstance(iZs,int):iZs=[iZs]
+        nzs = z[iZs].size
+        return iZs,nzs
 
-        # iSmin = np.argmax(SwE,axis=1) #locate minimums
-        idx = np.isnan(SwE)
-        SwE[idx]=0
-        iSmin = np.argmax(SwE,axis=1) #locate minimums
-        SwE[idx]=np.nan
-        # txts=[]
-        txts = [[self.ts[idx],SwE[i,idx],'%s' %str(h),cs[i]] for i,(h,idx) in enumerate(zip(refl,iSmin))]
-        dsp.stddisp(plts,texts=txts,labs=[r'$\theta$','$S_w$'],**kwargs)
-
-        IE = I.values.T
-        plts = [[self.ts,I0,[cs[i],'-o'],''] for i,I0 in enumerate(IE)]
-        dsp.stddisp(plts,labs=[r'$\theta$','$I$'],**kwargs)
-
-        # plts = [[Sw0,I0,[cs[i],'-o'],''] for i,(Sw0,I0) in enumerate(zip(IE,Sw.values.T))]
-        # dsp.stddisp(plts,labs=[r'$\theta$','$I$'],**kwargs)
-
-        # dsp.stddisp(im=[self.ts,range(nbs),Sw],
-        #     labs=['$\theta$',''],title='$S_w$',**kwargs)
-#############################################################################
-#### Excitation error
-#############################################################################
+    def get_z(self):
+        z = self.load(0).z
+        nzs = z.size
+        return z,nzs
 
 
 #############################################################################
@@ -237,7 +346,6 @@ def convert2tiff(tiff_file,im0,n0,rot,n=256,Imax=5e4):
     I = np.array(im0*Imax,dtype='uint16')
     tifffile.imwrite(tiff_file,I[H,K]) #,np.flipud(I))
     print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
-
 
 def make_pets(pts_file,aperpixel,deg=0.0652,ref_cell=None,tag=''):
     center,pixel_size='AUTO',0.01,

@@ -35,3 +35,5 @@ sed -n '/_refln_zone_axis_id/,//p'  $pathname.cif_pets \
 
 echo "...orientation matrix..."
 grep _diffrn_orient_matrix_UB $pathname.cif_pets | awk '{print $2}' > $out/UB.txt
+echo "...lattice_parameters..."
+grep _cell_ $pathname.cif_pets | awk '{print $2}' > $out/cell.txt

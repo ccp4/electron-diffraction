@@ -1,7 +1,7 @@
 import importlib as imp
 import os,glob, numpy as np, pandas as pd
 from subprocess import Popen,PIPE
-from crystals import Crystal
+from crystals import Crystal,Lattice
 from utils import handler3D as h3D          ;imp.reload(h3D)
 from utils import displayStandards as dsp   ;imp.reload(dsp)
 from . import mupy_utils as mut             ;imp.reload(mut)
@@ -19,7 +19,7 @@ class Pets:
         self.out   = self.path+'/dat/'
 
         self.cif_file   = mut._get_cif_file(self.path,cif_file)
-        self.crys       = Crystal.from_cif(self.cif_file)
+        self.crys       = mut.import_crys(self.cif_file)
         self.lat_vec    = np.array(self.crys.lattice_vectors)
         self.lat_vec1   = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
         self.lat_params = self.crys.lattice_parameters
@@ -57,12 +57,15 @@ class Pets:
         self.cif = pd.read_csv(self.out+'cif.txt',sep=',',names=['id','u','v','w','prec','alpha','beta','omega','scale'])
         self.HKL = pd.read_csv(self.out+'HKL.txt',sep=',',names=['h','k','l','I','sig','F'])
         self.A   = np.load(self.out+'UB.npy')
+        self.lat_params = np.loadtxt(self.out+'cell.txt')[:-1]
+        self.lat = np.array(Lattice.from_parameters(*self.lat_params).lattice_vectors)
         self.invA = np.linalg.inv(self.A)
 
         uvw   = self.cif[['u','v','w']].values
-        beams = self.lat_vec.T.dot(uvw.T).T
+        beams = self.lat.T.dot(uvw.T).T
         self.uvw   = uvw/np.linalg.norm(uvw,axis=1)[:,None]
-        self.beams = self.K0*beams/np.linalg.norm(beams,axis=1)[:,None]
+        self.uvw0  = beams/np.linalg.norm(beams,axis=1)[:,None]
+        self.beams = self.K0*self.uvw0 #/np.linalg.norm(beams,axis=1)
         self.XYZ   = self.xyz[['x','y','z']].values.T
 
         rpl_hkl = self.invA.dot(self.rpl[['x','y','z']].values.T)
@@ -73,6 +76,8 @@ class Pets:
         px,py = self.rpl[['px','py']].values.T
         qxqy  = self.aper*(np.vstack([px,-py]).T-np.vstack([cx,-cy]).T)
         self.rpl[['qx','qy']] = qxqy
+
+        self.alpha = self.cif.alpha.values
 
     ###########################################################################
     #### get

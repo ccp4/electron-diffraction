@@ -1,14 +1,14 @@
 import importlib as imp
 import os,numpy as np
-from . import bloch                 ; imp.reload(bloch)
-from EDutils import utilities as ut #; imp.reload(ut)
-from EDutils import display as EDdisp;imp.reload(EDdisp)
+from . import bloch                  ;imp.reload(bloch)
+from EDutils import utilities as ut  ;imp.reload(ut)
+from EDutils import display as EDdisp#;imp.reload(EDdisp)
 
 
 
 def bloch_rock(tag,uvw=None,u=None,u1=None,omega=np.linspace(-1,1,3),
-    thicks=(0,1000,1000),bloch_args={},
-    ts0=0,zs=[],hkls=[],cond='',fz=abs,
+    thicks=(0,1000,1000),bloch_args={},rot=0,
+    iTs=[],ts=None,ts0=None,i=0,thick=None,zs=[],hkls=[],cond='',fz=abs,
     path='',opts='',opt='p'):
     ''' complete a rocking curve simulation sweep with Blochwave approach
     - tag : Sweep tag
@@ -36,36 +36,44 @@ def bloch_rock(tag,uvw=None,u=None,u1=None,omega=np.linspace(-1,1,3),
     # rock.do('_set_Vg')
     # cond = ''(Sw<1e-3) & (Vga>0.01)'
 
-
-    b = rock.load(ts=ts0)
-    refl=[]
-    for hkl in hkls :refl+=hkl
+    if any([c in opts for c in 'XSWIQZ']):
+        b = rock.load(i=i,ts=ts0)#;print(b.u)
+        refl=[]
+        for hkl in hkls :refl+=hkl
     for ch in opts:
-        if ch=='X' :print(b.get_Xig())
-        if ch=='S' :
+        if   ch=='X' :print(b.get_Xig())
+        elif ch=='S' :
             figname = '%s_Sw.svg' %tag
             idx = b.get_beam(cond=cond,refl=refl)#;print(idx)
-            EDdisp.show_frame(opts='SVk',df_bloch=b.df_G,single_mode=False,
-                hkl_idx=idx,mag=500,xylims=2.5,
+            EDdisp.show_frame(opts='SVkr',df_bloch=b.df_G,single_mode=False,
+                hkl_idx=idx,mag=500,rot=rot,xylims=1.5,
                 name=os.path.join(figpath,figname),opt=opt)
-
-        if ch=='W':
-            figname = '%s_Sw_theta.svg' %tag
-            rock.Sw_vs_theta(refl=refl,cond=cond, cm='hsv',fz=fz,lw=2,
-                name=os.path.join(figpath,figname),opt=opt)
-
-        if ch=='I':
+        elif ch=='W':
+            figname = '%s_theta' %tag
+            rock.Sw_vs_theta(refl=refl,cond=cond,thick=thick,fz=fz,iTs=iTs,opts='t',
+                cm='hsv',lw=2,
+                figname=os.path.join(figpath,figname),opt=opt)
+        elif ch=='I':
             figname = '%s_Iz.svg' %tag
             refl += [[0,0,0]]
             refl = [tuple(h) for h in refl]
-            b.show_beams_vs_thickness(thicks=thicks,refl=refl,cond=cond,cm='Spectral',
+            b.show_beams_vs_thickness(thicks=thicks,refl=refl,cond=cond,
+                title=r'$\theta=%.2f$' %ts0,cm='Spectral',
                 name=os.path.join(figpath,figname),opt=opt)
-
-        if ch=='R':
+        elif ch=='R':
             for i,hkl in enumerate(hkls):
-                bargs = {'refl':[tuple(h) for h in hkl]}
+                bargs = {'refl':[tuple(h) for h in hkl],'cond':''}
                 figname = '%s_beams%d.svg' %(tag,i)
                 rock.plot_rocking(zs=zs,bargs=bargs,cmap='Spectral',
                     lw=2,opt=opt,name=os.path.join(figpath,figname))
+
+        elif ch=='Z':
+            figname = '%s_Iint.svg' %tag
+            rock.plot_integrated(cond=cond,refl=refl,
+                lw=2,opt=opt,name=os.path.join(figpath,figname))
+        elif ch=='Q':
+            figname = '%s_QQ.svg' %tag
+            rock.QQplot(zs=zs,refl=refl,
+                lw=2,opt=opt,name=os.path.join(figpath,figname))
 
     return rock

@@ -6,12 +6,12 @@ _oxford_structure_analysis_title  'Alpha glycine at 2 GPa in P2(1)/n'
 _chemical_name_systematic         'Alpha glycine'
 _chemical_melting_point           ?
 
-_cell_length_a                    4.9669(9)
-_cell_length_b                    11.459(4)
-_cell_length_c                    5.4231(12)
-_cell_angle_alpha                 90
-_cell_angle_beta                  114.916(15)
-_cell_angle_gamma                 90
+_cell_length_a                    4.92512(9)
+_cell_length_b                    11.43298(4)
+_cell_length_c                    5.3776(12)
+_cell_angle_alpha                 88.85068
+_cell_angle_beta                  111.96699(15)
+_cell_angle_gamma                 90.03294
 _cell_volume                      279.92(13)
 
 _symmetry_cell_setting            'Monoclinic'

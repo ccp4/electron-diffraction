@@ -12,10 +12,11 @@ from multislice import mupy_utils as mut    #;imp.reload(mut)
 from multislice import postprocess as pp    #;imp.reload(pp)
 from multislice import multislice as ms     #;imp.reload(ms)
 from blochwave import bloch as bl           ;imp.reload(bl)
-from multislice import pets as pt           #;imp.reload(pt)
+from multislice import pets as pt           ;imp.reload(pt)
 from . import __version__
-from . import display as EDdisp             ;imp.reload(EDdisp)
-from . import viewer_config as vw_cfg       ;imp.reload(vw_cfg)
+from . import display as EDdisp             #;imp.reload(EDdisp)
+from . import viewer_config as vw_cfg       #;imp.reload(vw_cfg)
+from . import utilities as ut               ;imp.reload(ut)
 
 pd.set_option('precision',3)
 pd.set_option('max_rows',100)
@@ -42,7 +43,7 @@ class Viewer:
 
         self.path,self.cif_file,self.bloch,self.pets = None,None,None,None
         self.multi_path,self.tifpath,self.multi = None,None,None
-        self.rpl,self.im,self.Icols = None,None,[]
+        self.rpl,self.im,self.Icols,self.cond,self.rock = None,None,[],'',None
         self.nfigs,self.kargs,self.u = 0,{},[0,0,1]
         self.pattern_args = {'Iopt':'csngt','Imax':5e4,'gs':0.025,'rmax':25,'Nmax':512}
         self.multi_args = {'data':'','mulslice':False,'NxNy':512,'Nhk':0,'hk_pad':None,
@@ -68,7 +69,7 @@ class Viewer:
         self.multi_args['name'] = self.multi_path
 
         self.set_mode(self.mode)
-        if not (self.tifpath or self.multi):self.set_mode('rotate')
+        if not (self.tifpath or self.multi or self.rock):self.set_mode('rotate')
 
         # print('...Complete initialization...')
 
@@ -83,13 +84,14 @@ class Viewer:
         self.xyz_params['file'] = self.cif_file
         self.xyz_params['n']    = self.u
         if not self.thick : self.thick=100
-        self.update(fsolve=1)
-        self.update_thickness()
+        if not self.rock:
+            self.update(fsolve=1)
+            self.update_thickness()
         self.show()
         # plt.show()
 
 
-    def init_args(self,path=None,cif_file=None,bloch=None,pets=None,multi=None,tag='',
+    def init_args(self,path=None,cif_file=None,bloch=None,rock=None,pets=None,multi=None,tag='',
         orient=[0,0,5,5],u=None,Smax=0.01,Nmax=5,thick=None,dthick=5,thicks=(0,1000,1000),
         xylims=1.5,cutoff=50,dcutoff=10,mag=500,cmap=None,cmap_beams='jet',
         frame=1,incrate=1,drot=1,drotS=1,pets_opts='Pr',rot=0,rotS=0,
@@ -99,6 +101,7 @@ class Viewer:
     #### path setup (at least one of these need to be defined)
         - path      : str - path to the main folder
         - cif_file  : str - full path to .cif file (will be automatically fetched in path if not defined)
+        - rock      : Rocking object or str for a rocking object
         - bloch     : Bloch object or str (will be automatically created if not defined)
         - multi     : str - path to multislice simulations (default multi)
         - pets      : Pets object or str to .pts file -
@@ -154,13 +157,13 @@ class Viewer:
 
         # print('...init path...')
         self.set_theta_phi_from_u(u)
-        self.init_path(path,cif_file,bloch,pets,multi)
+        self.init_path(path,cif_file,bloch,rock,pets,multi)
 
     def load_config(self,config):
         with open(config,'rb') as f:d_config = pickle.load(f)
         for k,v in d_config.items(): self.__dict__[k] = v
 
-    def init_path(self,path,cif_file,bloch,pets,multi):
+    def init_path(self,path,cif_file,bloch,rock,pets,multi):
         if all([type(o)==type(None) for o in [path,cif_file,bloch,pets] ]):
             args = ['path','cif_file','bloch','pets']
             raise Exception('at least one of these must be defined : ',args)
@@ -168,6 +171,11 @@ class Viewer:
         if type(path)==str:self.path = path
         if type(cif_file)==str:self.cif_file = cif_file
         if pets:self.init_pets(pets)
+        if rock:
+            self.rock = ut.load_pkl(rock)
+            self.bloch=self.rock.load(self.frame)
+            self.pets_opts,self.mode,self.nfigs = 'B','frames',self.rock.ts.size
+            bloch = None
         if bloch:self.init_bloch(bloch)
         if multi:self.init_multi(multi)
 
@@ -189,29 +197,40 @@ class Viewer:
             # print('creating Bloch')
             self.bloch = bl.Bloch(self.cif_file,path=bloch_path)#,solve=1)
 
-        if not type(self.pets)==pt.Pets:
-            pets_path = os.path.join(self.path,'pets')
-            if not os.path.exists(pets_path):pets_path=self.path
-            pts_files = glob.glob(os.path.join(pets_path,'*.pts'))
-            if len(pts_files)>=1:
-                print(colors.green+'found .pts file. Loading %s ' %pts_files[0]+colors.black)
-                self.init_pets(pts_files[0])
+        if not type(self.pets)==pt.Pets :
+            if type(self.pets)==int:
+                print(colors.green+'ignoring pets'+colors.black)
+                self.pets = None
             else:
-                print(colors.red+'no pts files found'+colors.black)
-        if not type(self.multi_path)==str:
-            multi_path = os.path.join(self.path,'multi')
-            if os.path.exists(multi_path):
-                self.multi_path = multi_path
-                msg ='''multislice folder found '''
-                print(colors.green+msg+colors.black)
+                pets_path = os.path.join(self.path,'pets')
+                if not os.path.exists(pets_path):pets_path=self.path
+                pts_files = glob.glob(os.path.join(pets_path,'*.pts'))
+                if len(pts_files)>=1:
+                    print(colors.green+'found .pts file. Loading %s ' %pts_files[0]+colors.black)
+                    if not self.pets==-1:
+                        self.init_pets(pts_files[0])
+                else:
+                    print(colors.red+'no pts files found'+colors.black)
+
+        if not type(self.multi_path)==str :
+            if type(self.multi_path)==int:
+                print(colors.green+'ignoring multi'+colors.black)
+                self.multi_path = None
             else:
-                print(colors.red+'no multislice folder'+colors.black)
+                multi_path = os.path.join(self.path,'multi')
+                if os.path.exists(multi_path):
+                    self.multi_path = multi_path
+                    msg ='''multislice folder found '''
+                    print(colors.green+msg+colors.black)
+                else:
+                    print(colors.red+'no multislice folder'+colors.black)
 
         if self.multi_path:
             self.update_nfigs()
             self.multi = pp.load(self.multi_path,tag=self.tag+str(self.frame).zfill(3))
             if self.multi and not self.thick :
                 self.thick = self.multi.thickness
+
 
         self.figpath = os.path.join(self.path,'figures')
         if not os.path.exists(self.figpath):
@@ -226,11 +245,12 @@ class Viewer:
         self.u=self.bloch.u
 
     def init_multi(self,multi_path):
-        if type(multi_path) == str:self.multi_path = multi_path
+        if type(multi_path) in [str,int]:self.multi_path = multi_path
 
     def init_pets(self,pets):
         if type(pets)==pt.Pets : self.pets = pets
-        elif type(pets)==str : self.pets = pt.Pets(pets,gen=1)
+        elif type(pets)==str : self.pets = pt.Pets(pets,gen=1,cif_file=self.cif_file)
+        elif type(pets)==int : self.pets = pets;return
         else:raise Exception('pets args need be NoneType, str or Pets object ')
         if not type(self.path)     == str : self.path = self.pets.path
         if not type(self.cif_file) == str : self.cif_file = self.pets.cif_file
@@ -261,7 +281,7 @@ class Viewer:
         'frame','incrate','rot','rotS','drot','drotS','pets_opts','cmap',       #frames
         'show_hkl','show_i','show_Ig','show_Vg','show_Sw','Swtol','show_z','show_u','show_v',     #shows
         'save_bloch','hold_mode','cmap_beams',#'F','fopts',
-        'multi_args','xyz_params',
+        'multi_args','xyz_params','cond',
         ]
         if not config_file:
             config_file = os.path.join(self.path,'config.pkl')
@@ -328,6 +348,7 @@ class Viewer:
                     print(colors.red+'warning : multislice does not contain u switching to rotate mode'+colors.black)
                     self.set_mode('rotate');return
                     self.u=[0,0,1]
+
         if self.multi_path:
             self.xyz_params['n']   = self.u
             self.xyz_params['xyz'] = self.get_xyz()
@@ -355,8 +376,11 @@ class Viewer:
 
         if self.dsp_d['P'] and self.tifpath:
             self.rpl = self.pets.rpl.loc[self.pets.rpl.F==self.frame]
-        # if 'B' in self.pets_opts :
-        self.update(fsolve=1)#'B' in self.pets_opts)
+        if self.rock:
+            self.bloch=self.rock.load(i=self.frame-1)
+            self.u = self.bloch.u
+        else:
+            self.update(fsolve=1)#'B' in self.pets_opts)
         return 1
 
     def update_thickness(self):
@@ -414,13 +438,17 @@ class Viewer:
         if self.show_u   : print('[uvw]:');print(self.bloch.u)
         if self.show_v   : print('[uvw]_rec:');print(self.bloch.Kuvw0)
         if self.show_z   : print('zones:');print(self.bloch.get_zones())
-        # if self.show_Sw  :
 
-        self.Icols = []
-        if self.show_i  : self.Icols += ['I']
-        if self.show_Sw : self.Icols += ['Swl']
-        if self.show_Ig : self.Icols += ['Ig']
-        if any(self.Icols) : self.bloch.get_Istrong(Icols=self.Icols,m=self.m)
+        self.Icols=[] #,cond=[],[]
+        if self.show_i  : self.Icols+=['I'] #;cond += ['(I>1e-4)']
+        if self.show_Sw : self.Icols+=['Sw']#;cond += ['(Sw<1e-2)']
+        if self.show_Ig : self.Icols+=['Ig']#;cond += ['(Ig>1e-2)']
+        if self.show_Vg : self.Icols+=['Vg']#;cond += ['(Vga>1e-8)']
+        # if any(cond):cond = self.cond+' & '.join(cond);print(cond)
+        if self.cond and self.Icols:
+            idx = self.bloch.get_beam(cond=self.cond)#;print(idx)
+            cols = ['h','k','l']+self.Icols
+            print(self.bloch.df_G.loc[idx,cols])
 
     def show_frames(self):
         title = ''
@@ -439,7 +467,7 @@ class Viewer:
         if any([c in self.pets_opts for c in 'MKB']):
             title += 'thickness=%.1f$\AA$, ' %self.thick
 
-        hkl_idx = self.bloch.get_Istrong(Icols=self.Icols,out=1)
+        hkl_idx = self.bloch.get_beam(cond=self.cond)
         EDdisp.show_frame(opts=self.pets_opts,mag=self.mag,rot=self.rot,
             df_pets=self.rpl,im_multi=self.im,df_bloch=self.bloch.df_G,hkl_idx=hkl_idx,
             ax=self.ax,title=title,xylims=self.xylims,single_mode=not self.hold_mode,
@@ -779,8 +807,9 @@ class Viewer:
             self.nfigs = len(glob.glob(os.path.join(self.multi_path,'*.pkl')))
 
     def settings(self):
-        fieldNames  =['Smax','Nmax','thick','dthick',
-            'xylims','mag','cutoff','Swtol','rot','rotS','pets_opts','cmap','cmap_beams']
+        fieldNames  =['Smax','Nmax','thick','dthick','cond',
+            'xylims','mag','cutoff','Swtol','rot','rotS',
+            'pets_opts','cmap','cmap_beams']
         if   self.mode=='rotate':
             self.dtheta_dphi=[self.dtheta,self.dphi]
             fieldNames+=['theta','phi','dtheta_dphi','thicks']

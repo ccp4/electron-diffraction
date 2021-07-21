@@ -374,7 +374,7 @@ class Bloch:
     ################################################################################
     #### misc
     ################################################################################
-    def get_beam(self,cond='',refl=[]):
+    def get_beam(self,cond='',refl=[],opt=1):
         ''' select some beams
         - cond : condition on the beams
         - refl : list of tuple or list of str: indices of beams
@@ -383,21 +383,20 @@ class Bloch:
         if cond:refl = list(self.df_G.loc[self.df_G.eval(cond)].index.values)
         if any(refl):
             if not isinstance(refl[0],str):refl=[str(tuple(h)) for h in refl]
-            hkl = self.df_G.index#[tuple(h) for h in self.get_hkl()]
-            idx = [i for i,refl0 in enumerate(hkl) if refl0 in refl]
-        return idx
+            if opt:
+                hkl = self.df_G.index#[tuple(h) for h in self.get_hkl()]
+                idx = [i for i,refl0 in enumerate(hkl) if refl0 in refl]
+                return idx
+        return refl
 
     def beam_vs_thickness(self,refl=[],cond='',thicks=None):
         if thicks:self.set_beams_vs_thickness(thicks)
         hkl = self.get_hkl().copy()
         Iz  = self.Iz.copy()
-        Istrong = np.arange(hkl.size)
+        idx = np.arange(hkl.size)
         if cond or any(refl):
-            Istrong = self.get_beam(cond=cond,refl=refl)
-        elif any(strong):
-            Istrong = self.get_Istrong(out=1,Icols=strong)
-        # print(Istrong)
-        Iz  = Iz[Istrong]
+            idx = self.get_beam(cond=cond,refl=refl)
+        Iz  = Iz[idx]
         hkl = [str(tuple(h)) for h in hkl[Istrong]]
         return hkl,self.z,None,None,Iz
 

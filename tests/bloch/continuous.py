@@ -6,9 +6,9 @@ plt.close('all')
 path = 'dat/bloch/'
 
 opt='p'
-opts='IWRZ' #RI' #S(Solve) s(single)
-nframes = 10
-deg  = 0.01
+opts='R' # #ts:S(Setup) I(Iz), W(Excitation) zs,hkls:R(Rocking) Z(Iintegrated(Z)) s(solve)
+nframes = 50
+deg = 0.02
 
 bloch_args = {'cif_file':'diamond','keV':200,'thick':200,
     'Nmax':8,'Smax':0.025,'solve':1,'opts':'sv'}
@@ -16,22 +16,23 @@ bloch_args = {'cif_file':'diamond','keV':200,'thick':200,
 omega = np.arange(nframes)*deg
 uvw = ut.get_uvw_from_theta_phi(theta=12,phi=19,omega=omega,plot=0)
 
-cond = '(Sw<2e-3) & (I>1e-2) & (Vga>1e-6)'
+cond = '(Sw<2e-2) & (Vga>1e-6) & (I>1e-3)'
 # cond = '(Sw<1e-4) & (I>1e-4) '
 # fz = lambda x : -np.log10(np.maximum(x,1e-10))
 # cond = ''#'(Sw<1e-2) & (Vga>1e-6)'
 # hkls = [[-8,-2,2],[-5,1,1],[-1,7,-1],[3,7,-1],[-2,6,0]]
 refl = [[-8,-2,2],[-5,1,1],[-1,-7,1],[3,7,-1],[-2,6,0],[7,-3,-1],[5,1,-1]]
-# rock = ut.load_pkl('dat/bloch/rock_diamond_r1.pkl')
-# rock.integrate_rocking(cond=cond,refl=hkls,lw=2)
-hkls = [refl[0]]
+hkls = [[refl[1]]]
 rock = bl.bloch_rock(tag='diamond_rand',uvw=uvw,
     omega=omega,bloch_args=bloch_args,
     thicks=(0,800,400),
     ts0=1.0,refl=refl,cond=cond,
     zs=np.arange(1,6)*50,hkls=hkls,
+    Z_args={},#{'new':1},
     path=path,opts=opts,opt=opt)
 
+
+# rock = ut.load_pkl('dat/bloch/rock_diamond_rand.pkl')
 # b = rock.load(0)
 # b.get_beam(cond=cond)
 

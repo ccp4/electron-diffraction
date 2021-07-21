@@ -33,8 +33,7 @@ class Rocking:
 
         refl,nbs = self._get_refl(cond=cond,refl=refl)
         z,nzs = self._get_z()
-        hkl = [str(h) for h in refl]                          #;print(hkl)
-        hkl = [h for h in hkl if not h in self.Iz_dyn.keys()] #;print(hkl)
+        hkl  = [h for h in refl if not h in self.Iz_dyn.keys()] #;print(hkl)
         refl = [eval(h) for h in hkl]
 
         nbs,nts = len(hkl),self.ts.size
@@ -45,7 +44,7 @@ class Rocking:
                 sim_obj = self.load(i)
                 idx = sim_obj.get_beam(refl=refl,cond='')
                 if idx:
-                    hkl0 = [str(tuple(h)) for h in sim_obj.get_hkl()[idx]]
+                    hkl0 = sim_obj.df_G.iloc[idx].index #[str(tuple(h)) for h in sim_obj.get_hkl()[idx]]
                     for idB,hkl_0 in zip(idx,hkl0):
                         Iz_dyn[hkl_0] += sim_obj.Iz[idB,:]
                         Iz_kin[hkl_0] += sim_obj.Iz_kin[idB,:]
@@ -105,7 +104,6 @@ class Rocking:
         self.integrate_rocking(cond=cond,refl=refl,new=new)
 
         refl,nbs = self._get_refl(cond=cond,refl=refl)
-        refl = [str(tuple(h)) for h in refl]
         z = self.load(0).z
 
         cs = dsp.getCs(cm,nbs)
@@ -158,16 +156,16 @@ class Rocking:
 
         if thick and Iopt:
             if not self.load(0).thick==thick:self.do('set_thickness',thick=thick)
-        refl,nbs = self._get_refl(cond,refl)            #;print(nbs)
+        refl,nbs = self._get_refl(cond,refl)                        #;print(refl)
 
         Sw = pd.DataFrame(np.ones((nts,nbs)),columns=[str(h) for h in refl])
         if Iopt:I  = pd.DataFrame(np.zeros((nts,nbs)),columns=[str(h) for h in refl])
         for i,name in enumerate(self.df.index[iTs]):
             b = self.load(i) #;print(i)
-            idx = b.get_beam(refl=refl,cond=cond)
-            hkl0 = [str(tuple(h)) for h in b.get_hkl()[idx]]
-            Sw.loc[i,hkl0] = b.df_G.loc[idx,'Sw'].values
-            if Iopt:I.loc[i,hkl0] = b.df_G.loc[idx,'I'].values
+            hkl0 = b.get_beam(refl=refl,cond=cond,opt=0)
+            # hkl0 = [str(tuple(h)) for h in b.get_hkl()[idx]]
+            Sw.loc[i,hkl0] = b.df_G.loc[hkl0,'Sw'].values
+            if Iopt:I.loc[i,hkl0] = b.df_G.loc[hkl0,'I'].values
 
         #locate minimum excitation errors
         iSmin = np.argmin(Sw.values.T,axis=1) #locate minimums
@@ -206,11 +204,13 @@ class Rocking:
             refl = []
             for i,name in enumerate(self.df.index):
                 b = self.load(i)
-                idx = b.get_beam(cond=cond)
-                hkl = b.get_hkl()[idx]
-                refl += [tuple(h) for h in hkl]
-            refl = np.unique(refl,axis=0)           #;print(refl)
-        if not isinstance(refl[0],tuple):refl=[tuple(h) for h in refl]
+                # idx = b.get_beam(cond=cond)
+                # hkl = b.get_hkl()[idx]
+                # refl += [tuple(h) for h in hkl]
+                refl += b.get_beam(cond=cond,opt=0)
+        refl = np.unique(refl,axis=0)           #;print(refl)
+        # if not isinstance(refl[0],tuple):refl=[tuple(h) for h in refl]
+        if not isinstance(refl[0],str):refl=[str(tuple(h)) for h in refl]
         nbs = len(refl)#.size;print(nbs,refl)
         return refl,nbs
 

@@ -14,9 +14,9 @@ from multislice import multislice as ms     #;imp.reload(ms)
 from blochwave import bloch as bl           ;imp.reload(bl)
 from multislice import pets as pt           ;imp.reload(pt)
 from . import __version__
-from . import display as EDdisp             #;imp.reload(EDdisp)
+from . import display as EDdisp             ;imp.reload(EDdisp)
 from . import viewer_config as vw_cfg       #;imp.reload(vw_cfg)
-from . import utilities as ut               ;imp.reload(ut)
+from . import utilities as ut               #;imp.reload(ut)
 
 pd.set_option('precision',3)
 pd.set_option('max_rows',100)
@@ -43,7 +43,8 @@ class Viewer:
 
         self.path,self.cif_file,self.bloch,self.pets = None,None,None,None
         self.multi_path,self.tifpath,self.multi = None,None,None
-        self.rpl,self.im,self.Icols,self.cond,self.rock = None,None,[],'',None
+        self.rpl,self.im,self.Icols,self.rock,self.dyn_opt = None,None,[],None,1
+        self.cond = '(Sw<1e-3) & (Vga>1e-5)'
         self.nfigs,self.kargs,self.u = 0,{},[0,0,1]
         self.pattern_args = {'Iopt':'csngt','Imax':5e4,'gs':0.025,'rmax':25,'Nmax':512}
         self.multi_args = {'data':'','mulslice':False,'NxNy':512,'Nhk':0,'hk_pad':None,
@@ -94,7 +95,7 @@ class Viewer:
     def init_args(self,path=None,cif_file=None,bloch=None,rock=None,pets=None,multi=None,tag='',
         orient=[0,0,5,5],u=None,Smax=0.01,Nmax=5,thick=None,dthick=5,thicks=(0,1000,1000),
         xylims=1.5,cutoff=50,dcutoff=10,mag=500,cmap=None,cmap_beams='jet',
-        frame=1,incrate=1,drot=1,drotS=1,pets_opts='Pr',rot=0,rotS=0,
+        frame=1,incrate=1,drot=1,drotS=1,pets_opts='Pr',rot=0,rotS=0,dyn_opt=1,
         init_opts='R'):
         # F='Sw',kargs={},**kwargs):
         ''' configuration Initializer
@@ -139,6 +140,7 @@ class Viewer:
         self.thicks  = thicks #; self.F,self.fopts = F,self.df_F.loc[self.df_F.F==F].iloc[0].fopt
         #pets related
         self.pets_opts = pets_opts
+        self.dyn_opt = dyn_opt
         #multislice related
         self.tag  = tag
 
@@ -249,7 +251,7 @@ class Viewer:
 
     def init_pets(self,pets):
         if type(pets)==pt.Pets : self.pets = pets
-        elif type(pets)==str : self.pets = pt.Pets(pets,gen=1,cif_file=self.cif_file)
+        elif type(pets)==str : self.pets = pt.Pets(pets,gen=1,cif_file=self.cif_file,dyn=self.dyn_opt)
         elif type(pets)==int : self.pets = pets;return
         else:raise Exception('pets args need be NoneType, str or Pets object ')
         if not type(self.path)     == str : self.path = self.pets.path
@@ -467,9 +469,11 @@ class Viewer:
         if any([c in self.pets_opts for c in 'MKB']):
             title += 'thickness=%.1f$\AA$, ' %self.thick
 
-        hkl_idx = self.bloch.get_beam(cond=self.cond)
+        hkl_idx = self.bloch.get_beam(cond=self.cond)#;print(hkl_idx)
+        df = self.bloch.df_G
+        df = df.drop(str((0,0,0)))
         EDdisp.show_frame(opts=self.pets_opts,mag=self.mag,rot=self.rot,
-            df_pets=self.rpl,im_multi=self.im,df_bloch=self.bloch.df_G,hkl_idx=hkl_idx,
+            df_pets=self.rpl,im_multi=self.im,df_bloch=df,hkl_idx=hkl_idx,
             ax=self.ax,title=title,xylims=self.xylims,single_mode=not self.hold_mode,
             cmap=self.cmap,cutoff=self.cutoff,sargs=sargs,cs=cs)
 
@@ -742,7 +746,7 @@ class Viewer:
         elif key == dict_k['show_z']   : self.show_z   = not self.show_z  ;print('%sshowing zones'     %['not ',''][self.show_z])
         elif key == dict_k['show_beams_vs_thickness']:
             if not self.bloch.solved : self.update(fsolve=1)
-            self.bloch.show_beams_vs_thickness(self.thicks,cm=self.cmap_beams,strong=self.Icols,m=self.m)
+            self.bloch.show_beams_vs_thickness(self.thicks,cm=self.cmap_beams,cond=self.cond)
         elif key== dict_k['show_Exp'] and self.tifpath:
             self.pets.show_exp(frame=self.frame)
         # Display

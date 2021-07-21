@@ -13,7 +13,7 @@ fj = lambda q,j,eps:eps*(np.pi/ai[j])*np.exp(-(np.pi*q)**2/ai[j])
 
 def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     '''Computes structure factor in 3D from :
-    - `pattern` : Nx4 array - N atoms with each row : x,y,z,Z
+    - `pattern` : Nx4 array - N atoms with each row : fractional coordinates and Za 
     - `lat_vec` : 3x3 array - reciprocal lattice vectors (2*pi/a convention)
     - `hkl`     : list of 3 miller indices h,k,l each as 3Ndarray
     - `hklMax`  : int - max miller index in each direction from -hklMax to hklMax

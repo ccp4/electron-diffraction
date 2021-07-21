@@ -1,5 +1,6 @@
 import importlib as imp
-import os,glob, numpy as np, pandas as pd
+import os,glob, numpy as np, pandas as pd, tifffile,scipy.optimize as opt
+
 from subprocess import Popen,PIPE
 from crystals import Crystal,Lattice
 from utils import handler3D as h3D          ;imp.reload(h3D)
@@ -8,7 +9,7 @@ from . import mupy_utils as mut             ;imp.reload(mut)
 from .rotating_crystal import get_crystal_rotation
 
 class Pets:
-    def __init__(self,pts_file,cif_file=None,gen=False):
+    def __init__(self,pts_file,cif_file=None,gen=False,dyn=0):
         '''
         - pts_file : str - full path to .pts file
         - cif_file : str - full path to .cif file (automatically found if None)
@@ -27,7 +28,7 @@ class Pets:
         gen |= not os.path.exists(self.out)
         # if os.path.exists(self.out):gen |= not os.path.exists(self.out+'rpl.txt')
         if gen:self.convert_pets()
-        self.load_all()
+        self.load_all(dyn)
         self.nFrames = self.uvw.shape[0]
 
 
@@ -39,9 +40,13 @@ class Pets:
 
         A = np.loadtxt(self.out+'UB.txt')
         np.save(self.out+'UB.npy',np.reshape(A,(3,3)))
-        self.load_all()
 
-    def load_all(self):
+    def add_hkl(self,df):
+        hkl = self.invA.dot(df[['x','y','z']].values.T)
+        df[['hx','kx','lx']]  = hkl.T
+        df[['h','k','l']]     = np.array(np.round(hkl),dtype=int).T
+
+    def load_all(self,dyn=1):
         lam,omega,aper = np.loadtxt(self.out+'pts.txt')
         self.omega = omega
         self.aper  = aper
@@ -54,13 +59,16 @@ class Pets:
         self.cen = pd.read_csv(self.out+'cenloc.txt',sep=',',names=['px','py','m','n'])
         self.xyz = pd.read_csv(self.out+'xyz.txt',sep=',',names=['x','y','z','I','u0','px','py','F','alpha','Im','u1'])
         self.hkl = pd.read_csv(self.out+'hkl.txt',sep=',',names=['h','k','l','I','i','F','L'])
-        self.cif = pd.read_csv(self.out+'cif.txt',sep=',',names=['id','u','v','w','prec','alpha','beta','omega','scale'])
+        self.kin = pd.read_csv(self.out+'cif.txt',sep=',',names=['id','u','v','w','prec','alpha','beta','omega','scale'])
+        self.dyn = pd.read_csv(self.out+'dyn.txt',sep=',',names=['id','u','v','w','prec','alpha','beta','omega','scale'])
         self.HKL = pd.read_csv(self.out+'HKL.txt',sep=',',names=['h','k','l','I','sig','F'])
+        self.HKL_dyn = pd.read_csv(self.out+'HKL_dyn.txt',sep=',',names=['h','k','l','I','sig','F'])
         self.A   = np.load(self.out+'UB.npy')
         self.lat_params = np.loadtxt(self.out+'cell.txt')[:-1]
         self.lat = np.array(Lattice.from_parameters(*self.lat_params).lattice_vectors)
         self.invA = np.linalg.inv(self.A)
 
+        self.cif = [self.kin,self.dyn][dyn]
         uvw   = self.cif[['u','v','w']].values
         beams = self.lat.T.dot(uvw.T).T
         self.uvw   = uvw/np.linalg.norm(uvw,axis=1)[:,None]
@@ -68,16 +76,77 @@ class Pets:
         self.beams = self.K0*self.uvw0 #/np.linalg.norm(beams,axis=1)
         self.XYZ   = self.xyz[['x','y','z']].values.T
 
-        rpl_hkl = self.invA.dot(self.rpl[['x','y','z']].values.T)
-        self.rpl[['hx','kx','lx']]  = rpl_hkl.T
-        self.rpl[['h','k','l']]     = np.array(np.round(rpl_hkl),dtype=int).T
+        self.add_hkl(self.rpl)
+        self.add_hkl(self.cor)
+        self.add_hkl(self.xyz)
 
         cx,cy = self.cen[['px','py']].iloc[self.rpl.F-1].values.T
         px,py = self.rpl[['px','py']].values.T
         qxqy  = self.aper*(np.vstack([px,-py]).T-np.vstack([cx,-cy]).T)
         self.rpl[['qx','qy']] = qxqy
+        self.rpl['hkl'] = [str(tuple(h)) for h in self.rpl[['h','k','l']].values]
 
         self.alpha = self.cif.alpha.values
+        self.hkl.index=[str(tuple(h)) for h in self.hkl[['h','k','l']].values]
+        hkl = self.hkl[['h','k','l']].values
+        rq = np.linalg.norm(hkl.dot(self.lat_vec1),axis=1)
+        self.hkl['rq'] = rq
+
+        # hkl = [str(tuple(h)) for h in self.xyz[['h','k','l']].values]
+        # hkl0,idx,cc=np.unique(hkl,return_index=True,return_counts=True)
+        # if not len(hkl)==idx.shape[0]:print('warning reflection not unique : ',hkl0[cc>1])
+        # self.xyz.index=hkl
+
+        if dyn:
+            hkl,idx=np.unique([str(tuple(h)) for h in self.HKL_dyn[['h','k','l']].values],return_index=True)
+            self.HKL_dyn=self.HKL_dyn.iloc[idx]
+            self.HKL_dyn.index=hkl
+            hkl = self.HKL_dyn[['h','k','l']].values
+            self.HKL_dyn['rq'] = np.linalg.norm(hkl.dot(self.lat_vec1),axis=1)
+
+
+    ###########################################################################
+    #### compute :
+    ###########################################################################
+    def integrate_rpl(self,frames,cond='(I>10)',npx=10):
+        if isinstance(frames,int):frames=np.array(frames)
+        cond += ' & (F in %s) ' %str(list(frames))
+        cond += ' & (px>%d) & (py>%d) & (px<%d) & (py<%d)' %tuple([npx]*2+[512-npx]*2)
+        rpl = self.rpl.loc[self.rpl.eval(cond)]
+        # print(rpl.shape)
+        # pxy = rpl[['px','py']].values
+        x0 = np.arange(-npx,npx+1)
+        x,y = np.meshgrid(x0,x0)
+        x1,y1 = np.meshgrid(np.arange(-npx,npx+1,0.1),np.arange(-npx,npx+1,0.1))
+
+        tiffpath = os.path.join(self.path,'tiff')
+        df=pd.DataFrame(columns=['Imax','px','py','sx','sy','noise','max_err','mean_err','min_err'])
+        for i,frame in enumerate(frames):
+            print(frame)
+            im = tifffile.imread(os.path.join(tiffpath, '%s.tiff' %str(frame).zfill(5)))
+            # dsp.stddisp(im=[im],pOpt='im',caxis=[0,50],cmap='gray')
+            for j,r in rpl.loc[rpl.F==frame].iterrows():
+                px,py = int(r.px),int(r.py)
+                data  = im[py-npx:py+npx+1,px-npx:px+npx+1]
+
+                p0 = (r.I,0,0,5,5,r.i)
+                popt, pcov = opt.curve_fit(f_gauss2D, (x, y), data.ravel(), p0=p0)
+                # print('I=%.1f,x0=%.1f,y0=%.1f,sx=%.1f,sy=%.1f,noise = %.1f' %tuple(popt))
+                # dsp.stddisp(im=[data],pOpt='im',cmap='gray',caxis=[0,50])#;dsp.plt.show()
+                # fig,ax = dsp.stddisp(im=[x,y,data],cmap='gray',
+                #     contour=[x1,y1,gauss2D((x1,y1),*popt),8],cargs={'colors':'r'},pOpt='im',lw=2)
+                # fit = gauss2D((x,y),*popt)
+                # dsp.stddisp(im=[fit],pOpt='im',cmap='gray',caxis=[0,50])#;dsp.plt.show()
+                # dsp.plt.show()
+                err = abs(f_gauss2D((x,y),*popt)-data.ravel())
+                hkl = str(tuple(r[['h','k','l']].values))+'_%d' %frame
+                df.loc[hkl] = list(popt)+[err.max(),err.mean(),err.min()]
+        df['Im'] = rpl.Im.values
+        df['I']  = rpl.I.values
+        df['i']  = rpl.i.values
+        df['F']  = rpl.F.values
+        df['Iint'] = df.Imax*df.sx*df.sy*np.pi*self.aper
+        return df
 
     ###########################################################################
     #### get
@@ -97,7 +166,7 @@ class Pets:
     def get_excitation_errors(self,frame,Nmax=5,Smax=0.02):
         return mut.get_excitation_errors(self.get_beam(frame),self.lat_vec1,Nmax=Nmax,Smax=Smax)
 
-    def get_kin(self,frame,thick,Nmax=5,Smax=0.02,e0=[1,0,0],rot=0,Imag=10):
+    def get_kin(self,frame,thick,Nmax=5,Smax=0.02,e0=[1,0,0],rot=0,Imag=10,pixel=False):
         K = self.get_beam(frame)#;print(K)
         df = mut.get_kinematic_intensities(self.cif_file,K,thick,Nmax=Nmax,Smax=Smax)
         qxyz = df[['qx','qy','qz']].values
@@ -108,11 +177,115 @@ class Pets:
             ct,st = np.cos(np.deg2rad(rot)),np.sin(np.deg2rad(rot))
             px,py = ct*px-st*py,st*px+ct*py
         hkl = df[['h','k','l']].values.T
+        if pixel:
+            cx,cy = self.cen.loc[frame-1,['px','py']].values
+            aper  = self.aper
+            px= px/aper + cx
+            py=-py/aper + cy                                        #;print(px,py)
+
         return px,py,I,hkl
 
     ###########################################################################
     #### display
     ###########################################################################
+    def select_beams(self,refl,cond,opts='A'):
+        # for i,F in enumerate(self.nFrames):
+        rpl = self.rpl.loc[self.rpl.eval(cond)]
+
+    def show_Iavg(self,fz=np.log10,**kwargs):
+        hkl = self.HKL_dyn.loc[self.HKL_dyn.I>1].copy()
+
+        hkl['q0'] = np.round(hkl['rq']*100)/100
+        qs0 = np.unique(hkl['q0'])
+        Iavg0 = np.zeros(qs0.shape)
+        for i,q0 in enumerate(qs0):
+            Iavg0[i] = hkl.loc[hkl.q0==q0,'I'].mean()
+        plts = [[qs0,fz(Iavg0),'b','']]
+
+        hkl['q1'] = np.round(hkl['rq']*10)/10
+        qs1 = np.unique(hkl['q1'])
+        Iavg1 = np.zeros(qs1.shape)
+        for i,q1 in enumerate(qs1):
+            Iavg1[i] = hkl.loc[hkl.q1==q1,'I'].mean()
+
+        plts+= [[qs1,fz(Iavg1),'r','']]
+        dsp.stddisp(plts,labs=['$q(A^{-1})$','$I_{avg}$'],lw=2,#name=name+'_Iavg.svg',
+            **kwargs)
+
+    def show_Ihkl(self,**kwargs):
+        '''Show integrated intensity and average integrated intensity as function of resolution'''
+        hkl = self.HKL_dyn.copy()
+        rq = hkl['rq']
+        hkl['q']  = np.round(rq*10)/10
+        hkl['order'] = np.zeros(rq.shape)
+        qs = np.unique(hkl['q'])
+        for i,q in enumerate(qs):
+            beams = hkl.q==q
+            hklq  = hkl.loc[beams][['h','k','l']].values
+            order = np.argsort(np.sum(hklq,axis=1))
+            hkl.loc[beams,'order'] = order
+
+        cond = 'I>1'
+        rq,order,I = hkl.loc[hkl.eval(cond),['rq','order','I']].values.T
+        scat = [rq,order,10*I**(0.2),np.log10(I)]
+
+        xylims = [0.1,2,-1,order.max()+1]
+        fig,ax = dsp.stddisp(scat=scat,labs=['$q(A^{-1})$','beam order'],xyTicks=[qs,[]],xylims=xylims,
+            cs='S',sargs={'cmap':'jet'},imOpt='c',opt='')
+
+        # res = np.round(100/qs)/100
+        res = np.array([0.5,0.6,0.7,0.8,0.9,1,1.5,2,3,5])
+        q0,res = 1/res,np.array(res,dtype=str)
+        dsp.addxAxis(ax,[],xLab=r'resolution $(A)$',c=(0.5,)*3,
+            xTicks=q0,xTickLabs=res,xylims=xylims,axPos='V',#name=name+'_Ihkl.svg',
+            **kwargs)
+
+        fig.canvas.mpl_connect('button_press_event', self.on_click)
+    def on_click(self,event):
+        from matplotlib.backend_bases import MouseButton
+        if event.button is MouseButton.RIGHT:
+            x,y = event.xdata,event.ydata
+            idx = np.argmin(np.linalg.norm(self.hkl[['q','order']].values-[x,y],axis=1))
+            hkl = self.hkl.iloc[idx]
+            print(hkl[['rq','I']])
+
+    def show_Iframes(self,frames,cm='hsv',refl=[],cond='',Imax=500,opts='AH',fz=abs,
+        **kwargs):
+        # frames = np.arange(1,self.nFrames+1)[iFs]
+        refl = [str(tuple(h)) for h in refl]
+        df = self.cor
+        if 'A' in opts:
+            df0 = df.loc[df.F<=frames[-1]]
+            df0 = df0.loc[df0.eval(cond)]
+            refl = list(pd.unique([str(tuple(h)) for h in df0[['h','k','l']].values]))
+        if 'H' in opts:refl = [h for h in refl if h in self.hkl.index]
+        # print(refl)
+
+        nfs,nbs = np.array(frames).size,len(refl)
+        I  = pd.DataFrame(np.nan*np.ones((nfs,nbs)),columns=[str(h) for h in refl])
+        for i,F in enumerate(frames):
+            # condF = '(F==%d) & ' %F + cond #;print(condF)
+            dfF = df.loc[df.F==F]
+            hkl = [str(tuple(h)) for h in dfF[['h','k','l']].values]#;print(hkl)
+            # if not cond:
+            idx = [i for i,refl0 in enumerate(hkl) if refl0 in refl]#;print(idx)
+            hkl0 = np.array(hkl)[idx]                               #;print(hkl0)
+            I.loc[i,hkl0] = dfF.iloc[idx]['I'].values
+
+        I = I.loc[:,I.columns[I.max()<Imax]]
+        refl = list(I.keys())
+        Ib = fz(I.values.T)
+        Imax = np.argmax(Ib,axis=1) #locate maxI
+
+        cs,txts = dsp.getCs(cm,len(refl)),[]
+        plts = [[frames,Ib[i],[cs[i],'-o'],'%s' %hkl] for i,hkl in enumerate(refl)]
+        # if 't' in opts:txts = [[frames[idx],I[i,idx],'%s' %str(h),cs[i]] for i,(h,idx) in enumerate(zip(refl,Imax))]
+        dsp.stddisp(plts,texts=txts,labs=['frame','$I$'],**kwargs)
+        return I
+
+    def get_hklI(self,refl):
+        return self.hkl.loc[refl,'I'].values
+
     def show_ewald_sphere(self,frame=None,Smax=0.01,Nmax=10,h3d=0,
         nts=100,nps=200,**kwargs):
         K = self.get_beam(frame)
@@ -280,6 +453,19 @@ class Pets:
 
         x0,y0,z0  = R.dot(xyz0)
 
+    def qxyz_to_pxy(self,frame,qxyz):
+        alpha,beta,gamma = self.cif.iloc[frame-1][['alpha','beta','omega']]
+        alpha_r,beta_r,gamma_r = -np.deg2rad([alpha,beta,gamma])
+        ctx,stx = np.cos(alpha_r),np.sin(alpha_r)
+        cty,sty = np.cos(beta_r) ,np.sin(beta_r)
+        ctz,stz = np.cos(gamma_r),np.sin(gamma_r)
+
+        Rx = np.array([[1,0,0],[0,ctx,stx],[0,-stx,ctx]])
+        Ry = np.array([[cty,0,sty],[0,1,0],[-sty,0,cty]])
+        Rz = np.array([[ctz,stz,0],[-stz,ctz,0],[0,0,1]])
+        R = Ry.dot(Rx.dot(Rz))
+        pxy  = R.dot(qxyz)[:2,:]
+        return pxy
 
     def compare_xyz_pxpy(self,frame=32,opts='oa',view=[90,90],**kwargs):
         rpl0    = self.rpl.loc[self.rpl.F==frame]
@@ -363,3 +549,13 @@ class Pets:
         x0,y0,z0 = [0.5]*3
         plts += [ [[x0,ai[0]+x0],[y0,ai[1]+y0],[z0,ai[2]+z0],[c,'--'],'$%s^{*}$' %l]  for i,(ai,c,l) in enumerate(zip(cr2,['r','g','b'],['a','b','c'])) ]
         # dsp.stddisp(plts,rc='3d',view=[0,0],name='figures/glycine_orient.png',opt='sc')
+
+
+
+
+
+def gauss2D(X, amp, x0, y0, sx,sy,noise):
+    x,y = X
+    g = noise + amp*np.exp(-((x-x0)/sx)**2 - ((y-y0)/sy)**2)
+    return g
+f_gauss2D = lambda X,amp,x0,y0,sx,sy,noise:gauss2D(X,amp, x0, y0, sx,sy,noise).ravel()

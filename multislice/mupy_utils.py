@@ -5,14 +5,15 @@ from subprocess import check_output
 from matplotlib import rc
 from crystals import Crystal
 from scipy.spatial import ConvexHull, convex_hull_plot_2d
-from utils import displayStandards as dsp   ; imp.reload(dsp)
 from utils import glob_colors as colors,handler3D as h3d
 from utils import physicsConstants as cst
 from scattering.structure_factor import structure_factor3D
+from utils import displayStandards as dsp   ; imp.reload(dsp)
 from . import rotating_crystal as rcc       #; imp.reload(rcc)
 from . import postprocess as pp             #; imp.reload(pp)
 from . import multi_3D as MS3D              #;imp.reload(MS3D)
 from . import pymultislice                  #;imp.reload(pymultislice)
+from . import pets as pt                    ;imp.reload(pt)
 
 cs = {1:colors.unicolor(0.75),3:(1,0,0),
       6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),14:(1,0,1),17:(0,1,1)}
@@ -770,7 +771,7 @@ class Base_Viewer:
         else:
             frame = i+1
         self.frame  = frame       #starting image
-        self.i      = frame       #starting image
+        self.i      = i           #starting image
         self.inc    = 1           #increment(use 'p' or 'm' to change)
         self.cutoff = cutoff
         self.thick  = thick
@@ -909,12 +910,16 @@ class Frames_Viewer(Base_Viewer):
 
 class Viewer(Base_Viewer):
     '''similar to adxv. Works with raw cbf/tiff'''
-    def __init__(self,exp_path,v=1,**sargs):
+    def __init__(self,exp_path=None,
+        Smax=0.025,Nmax=13,rot=203,pets=None,v=1,init='',**sargs):
         ''' View cbf files
         - exp_path : path to images
         - figpath : place to save the figures
         - i : starting image
         '''
+        if isinstance(pets,str):pets = pt.Pets(pets)
+        if isinstance(pets,pt.Pets):exp_path = os.path.join(pets.path,'tiff')
+
         d_fmt = {'cbf':self.load_cbf,'tiff':self.load_tif,'tif':self.load_tif}
         self.supported_fmts = d_fmt.keys()
 
@@ -922,15 +927,54 @@ class Viewer(Base_Viewer):
         self.fmt      = self.find_format(v)
         self.figs     = np.sort(glob.glob(self.exp_path+'/*.%s' %self.fmt))#;print(self.figs)
         self.load     = d_fmt[self.fmt]
-
+        self.pets     = pets
+        if self.pets:
+            vals  = ['center','refl','pred','boxes']
+            keys  = ['c','r','s','b']
+            alias = ['1','2','3','4']
+            self.show_d = dict(zip(keys,vals))
+            self.alias  = dict(zip(alias,keys))
+            self.show_opt = dict(zip(vals,[c in init for c in keys ]))
+            self.Smax,self.Nmax,self.rot=Smax,Nmax,rot
         super().__init__(v=v,**sargs)
 
+    def call(self,event):
+        # k = event.key
+        if self.pets:
+            if event.key in self.alias.keys():event.key = self.alias[event.key]
+            if event.key in self.show_d.keys():
+                key = self.show_d[event.key]
+                self.show_opt[key] = not self.show_opt[key]
+
+            return list(self.show_d.keys())
+        else:
+            return []
     def get_im(self,**kwargs):
         fig = self.figs[self.i]
         figname = os.path.basename(fig)
         print(colors.yellow+fig+colors.black)
         im = self.load(fig)
-        dsp.stddisp(im=[im],cmap='gray',caxis=[0,self.cutoff],pOpt='t',**kwargs)
+        plts,scat,pp = [],[],[]
+        sargs = {'facecolor':'none','edgecolor':(0.7,0.7,0.15),'s':50,'marker':'o'}
+        if self.pets:
+            # df = self.rpl
+            df = self.pets.rpl
+            frame = self.i+1
+            if self.show_opt['refl']:
+                rpl = df.loc[df.F==frame]
+                plts+=[[rpl.rpx-0.5,rpl.rpy-0.5,'r+','']]
+            if self.show_opt['center']  :
+                cen = self.pets.cen.iloc[self.i]
+                plts += [[ cen.px-0.5,cen.py-0.5,'b+','']]
+            if self.show_opt['pred'] or self.show_opt['boxes']:
+                px,py,I,hkl = self.pets.get_kin(frame,rot=self.rot,thick=self.thick,Smax=self.Smax,Nmax=self.Nmax,pixel=True)
+            if self.show_opt['pred']:
+                scat  = [px,py]
+            if self.show_opt['boxes']:
+                npx = 15
+                pp = [dsp.Rectangle((px0-npx/2,py0-npx/2),npx,npx,facecolor='none',edgecolor='r') for px0,py0 in zip(px,py)]
+        dsp.stddisp(plts,patches=pp,scat=scat,im=[im],ms=20,sargs=sargs,xylims=[0,516,516,0],
+            cmap='gray',caxis=[0,self.cutoff],pOpt='tX',**kwargs)
 
     def _get_nfigs(self):
         return self.figs.size

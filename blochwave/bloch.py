@@ -171,7 +171,9 @@ class Bloch:
         self.Smax = Smax
         self.nbeams = Sw.size
         self.df_G = pd.DataFrame.from_dict(d)
+        self.df_G.index = [str(tuple(h)) for h in self.df_G[['h','k','l']].values]
         self.solved = False
+
 
     def _set_Vg(self):
         Vg     = self.Fhkl.copy()/self.crys.volume
@@ -324,9 +326,9 @@ class Bloch:
         # print(Fvals.max())
         fig,ax = dsp.stddisp(plts,lw=2,scat=scat,caxis=[0,cutoff],cmap=cmap,cs='S',title=tle,**kwargs)
 
-    def show_beams_vs_thickness(self,thicks=None,strong={'I':1e3},refl=[],cond='',**kwargs):
+    def show_beams_vs_thickness(self,thicks=None,refl=[],cond='',**kwargs):
         if thicks:self.set_beams_vs_thickness(thicks)
-        beams = self.beam_vs_thickness(strong=strong,refl=refl,cond=cond)
+        beams = self.beam_vs_thickness(refl=refl,cond=cond)
         # beams=[hkl,self.z,np.real(self.Sz),np.imag(self.Sz),self.Iz]
         return pp.plot_beam_thickness(beams,**kwargs)
 
@@ -375,17 +377,17 @@ class Bloch:
     def get_beam(self,cond='',refl=[]):
         ''' select some beams
         - cond : condition on the beams
-        - refl : list of tuple : indices of beams
+        - refl : list of tuple or list of str: indices of beams
         '''
         idx=[]
-        if cond:idx = self.df_G.loc[self.df_G.eval(cond)].index.values
-        elif any(refl):
-            if not isinstance(refl[0],tuple):refl=[tuple(h) for h in refl]
-            hkl = [tuple(h) for h in self.get_hkl()]
+        if cond:refl = list(self.df_G.loc[self.df_G.eval(cond)].index.values)
+        if any(refl):
+            if not isinstance(refl[0],str):refl=[str(tuple(h)) for h in refl]
+            hkl = self.df_G.index#[tuple(h) for h in self.get_hkl()]
             idx = [i for i,refl0 in enumerate(hkl) if refl0 in refl]
         return idx
 
-    def beam_vs_thickness(self,strong={'I':1e3},refl=[],cond='',thicks=None):
+    def beam_vs_thickness(self,refl=[],cond='',thicks=None):
         if thicks:self.set_beams_vs_thickness(thicks)
         hkl = self.get_hkl().copy()
         Iz  = self.Iz.copy()

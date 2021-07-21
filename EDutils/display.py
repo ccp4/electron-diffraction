@@ -47,8 +47,9 @@ def show_frame(opts='Pqr',mag=10,rot=0,hkl_idx=[],single_mode=False,
                 vals = I#/I.max()
                 # cs = C.color
                 cs=vals
-                # if single_mode:
-                sargs = {'vmin':0.9*vals.min(),'vmax':vals.max(),'cmap':cmaps[c]}
+                cmap_k=cmaps[c]
+                if single_mode:cmap_k = cmap
+                sargs = {'vmin':0.9*vals.min(),'vmax':vals.max(),'cmap':cmap_k}
                 scat += ( [qx_b,qy_b,vals/vals.max()*mag,cs,C.marker,sargs],)
         bs = [c for c in dfb.index if c in opts]
         if 'k' in opts and bs and any(hkl_idx):
@@ -97,7 +98,7 @@ logF = lambda F:np.log10(np.maximum(np.abs(F),1e-6))+6
 logM = lambda F:-np.log10(np.maximum(F,1e-5))
 
 cmaps = {'P':'Greys','M':'Reds','B':'Blues','K':'Greens','V':'Purples','S':'Oranges','L':'Greys'}
-dfb = { 'B':['I' ,get_fz('l')[0],dsp.getCs(cmaps['B'],3)[1],'o','Intensity Bloch $I_{g}$'],
+dfb = { 'B':['I' ,get_fz('m')[0],dsp.getCs(cmaps['B'],3)[1],'o','Intensity Bloch $I_{g}$'],
         'K':['Ig',get_fz('l')[0],dsp.getCs(cmaps['K'],3)[1],'o','Intensity kinematic $I_{g,kin}$'],
         'V':['Vg',get_fz('l')[0],dsp.getCs(cmaps['V'],3)[1],'d','Potential $V_{g}$'],
         'S':['Sw',get_fz('L')[0],dsp.getCs(cmaps['S'],3)[1],'o','Excitation error $\zeta_{g}$'],

@@ -33,7 +33,25 @@ sed -n '/_refln_zone_axis_id/,//p'  $pathname.cif_pets \
 | sed 's/^,//'  > $out/HKL.txt
 
 
+
 echo "...orientation matrix..."
 grep _diffrn_orient_matrix_UB $pathname.cif_pets | awk '{print $2}' > $out/UB.txt
 echo "...lattice_parameters..."
 grep _cell_ $pathname.cif_pets | awk '{print $2}' > $out/cell.txt
+
+
+dyn=$pathname"_dyn.cif_pets"
+echo "...dyn..."
+sed -n '/_diffrn_zone_axis_scale/,/loop_/p'  $dyn \
+| sed '1d; $d' |    sed 's/\( *\) /,/g' \
+| sed 's/^,//'  > $out/dyn.txt
+
+sed -n '/_refln_zone_axis_id/,//p'  $dyn \
+| sed '1d' |    sed 's/\( *\) /,/g' \
+| sed 's/^,//'  > $out/HKL_dyn.txt
+
+
+echo "...orientation matrix..."
+grep _diffrn_orient_matrix_UB $dyn | awk '{print $2}' > $out/UB_dyn.txt
+echo "...lattice_parameters..."
+grep _cell_ $dyn | awk '{print $2}' > $out/cell_dyn.txt

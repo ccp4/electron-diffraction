@@ -99,7 +99,8 @@ class Wallpaper :
             self.lattice_vec = np.array([[a,0],[0,b]])
         elif self.lat_type == 'oblique' :
             self.a,self.b,self.angle = a,b,angle
-            self.lattice_vec = np.array([[a,0],[b*np.cos(np.pi/180*angle),b*np.sin(np.pi/180*angle)]])
+            ang = np.deg2rad(angle)
+            self.lattice_vec = np.array([[a,0],[b*np.cos(ang),b*np.sin(ang)]])
         self.params = [self.a,self.b,np.pi/180*self.angle]
 
     def init_unit_cell(self) :
@@ -248,6 +249,9 @@ class Wallpaper :
         fcell = np.tile(f0,len(self.sym_ops)+1)
         return Xcell,fcell
 
+    def _apply_symmetries(self) :
+        self.pattern = config.apply_symmetries(self.pp,self.pattern)
+
     def repeat_pattern(self,Xcell,fcell,nh=3,nk=4) :
         u_hk,miller = lattice.get_miller(self.lattice_vec,nh,nk)
         X = np.empty(shape=(0, 2))
@@ -322,27 +326,3 @@ def wallpp_syms(pp_type,lattice_vec):
        'p6m' :[rot6(i) for i in range(1,6)]+[rot6m(i) for i in range(6)]
         }[pp_type]
     return wallpp_sym
-
-#######################################################################
-# test
-#######################################################################
-def test_wallpps() :
-    fig_path = os.path.abspath(os.path.dirname(__file__)+'/..') +'/docs/figures/'
-    a,b,angle=2,1,70
-    gen,pOpt =  True,'VA' #V
-    pOpt += 'aue sc'
-    ndeg,nh,nk = 30,3,2
-    wallpps=dict()
-    #pattern asymmetric unit cell in real coordinates
-    pattern=np.array([[0.9,0.3,1],[0.3,0.15,2],[0.45,0.4,3]])
-    for pp_type in pp_types :#['cmm'] :#,'cmm'] :# pp_types :
-        print(pp_type)
-        wallpps[pp_type] = Wallpaper(pp_type,a,b,angle,pattern,
-                                     gen,ndeg,nh,nk,
-                                     pOpt,path=fig_path)
-    #plt.show()
-    return wallpps
-
-if __name__=='__main__' :
-    wallpps = test_wallpps()
-    print(green+__file__.split('/',)[-1]+' success'+black)

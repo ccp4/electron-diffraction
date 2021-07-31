@@ -4,6 +4,7 @@
 */figures
 */docs_fig
 **/dat/*
+**/figures/*
 
 tests/dials
 tests/*/dat
@@ -17,5 +18,6 @@ multislice/data_2D
 
 
 ## Python
-*/__pycache__
+**/__pycache__
 *.egg-info
+**/.coverage

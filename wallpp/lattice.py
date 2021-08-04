@@ -15,6 +15,7 @@ class Lattice2D:
         self.rec_vec = self.reciprocal_vectors
         self.a1,self.a2 = self.lat_vec
         self.b1,self.b2 = self.rec_vec
+        self.area=abs(np.cross(self.a1,self.a2))
 
     def get_vectors(self):return self.lattice_vectors
     def get_reciprocal_vectors(self):return self.reciprocal_vectors
@@ -106,3 +107,14 @@ def params_from_lat_vec(lat_vec):
     b = np.linalg.norm(a2)
     alpha = np.rad2deg(np.arccos(a1.dot(a2)/(a*b)))
     return {'a':a,'b':b,'alpha':alpha}
+
+def get_miller(lattice_vec,nh,nk,ax=None):
+    ''' get the miller indices and correspoding vectors in format :
+            nh.nk x 2 '''
+    n_h,n_k = np.arange(nh),np.arange(nk)
+    miller = np.array(np.meshgrid(n_h,n_k)).T.reshape(((nh)*(nk),2))
+    u_h = lattice_vec.T.dot(miller.T).T
+    if ax :
+        for u in u_h:
+            ax.plot([0,u[0]],[0,u[1]],'s-g')
+    return u_h,miller

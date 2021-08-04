@@ -253,7 +253,8 @@ class Wallpaper :
         self.pattern = config.apply_symmetries(self.pp,self.pattern)
 
     def repeat_pattern(self,Xcell,fcell,nh=3,nk=4) :
-        u_hk,miller = lattice.get_miller(self.lattice_vec,nh,nk)
+        miller,u_hk = lattice.get_miller(self.lattice_vec,nh,nk)
+        # u_hk,miller = lattice.get_miller(self.lattice_vec,nh,nk)
         X = np.empty(shape=(0, 2))
         for u in u_hk :
             X = np.concatenate((X,u+Xcell),axis=0)

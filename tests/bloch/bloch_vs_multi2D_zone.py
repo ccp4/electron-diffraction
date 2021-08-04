@@ -5,8 +5,9 @@ import multislice.multi_2D as ms             ;imp.reload(ms)
 plt.close('all')
 opts = 'BM' #(Bloch) (Multislice)
 
-K = 5.024937810560445   # exact Bragg condition for 2nd beam
-keV = cst.lam2keV(1/K)
+# K = 5.024937810560445
+# keV = cst.lam2keV(1/K)
+keV=200
 
 fig,axB=dsp.create_fig()
 cmap  ='jet'
@@ -36,7 +37,7 @@ if 'M' in opts:
     Nx,Nz=5,int(thick/dz)
     x,z,f = b0.crys.get_potential_grid_p1(ndeg=2**6)
 
-    tilt = np.linspace(0,0.08,40)[0]
+    tilt = 0#np.linspace(0,0.08,40)[0]
     ms0 = ms.Multi2D([x,z,f],ax,bz,keV=keV,Nx=Nx,nz=Nz,
             dz=dz,eps=eps,sg=-1,
             iZs=1,iZv=np.inf,tilt=tilt)

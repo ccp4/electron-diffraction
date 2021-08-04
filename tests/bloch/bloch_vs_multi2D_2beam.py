@@ -21,10 +21,10 @@ if 'B' in opts:
     # p1 = mut.import_wallpp(file)
     # p1.plot_unit_cells(opts='uAa',nh=3,nk=3)
     b0  = bl.Bloch2D(file,keV=keV,u=[1,n],thick=thick,eps=e0*eps,
-        Nmax=10,Smax=0.1,solve=1)
+        Nmax=8,Smax=0.2,solve=1)
     # b0.show_beams(opts='B',fz=np.abs)
     # b0.show_ewald()
-    # b0.show_beams(opts='SVB')
+    # b0.show_beams(opts='S')
     b0.show_beams_vs_thickness(thicks=(0,thick,1000),strong=['I'],m={'I':100},
         linespec='--',marker='',cm=cmap,ax=axB,opt='')
     # b0.G('Sw')
@@ -39,7 +39,7 @@ if 'B' in opts:
 
 #multislice
 if 'M' in opts:
-    file = 'dat/2_beam.npy'
+    file_ms = 'dat/2_beam.npy'
     ax,bz = b0.crys.params[:2]
     pattern = b0.crys.pattern
     ax1 = np.sqrt(1**2+n**2)
@@ -57,11 +57,11 @@ if 'M' in opts:
         x,z = np.meshgrid(np.arange(n*ndeg)*ax1/(n*ndeg),np.arange(n*ndeg)*bz1/(n*ndeg))
         f = np.sum(np.array([pg.fv(np.stack([x.flatten(),z.flatten()]).T,X0,int(Za)) for X0 in Xa.T]),axis=0)
         f = np.reshape(f,(n*ndeg,n*ndeg))
-        np.save(file,[x,z,f])
-        print(colors.yellow+file+colors.green+" saved"+colors.black)
+        np.save(file_ms,[x,z,f])
+        print(colors.yellow+file_ms+colors.green+" saved"+colors.black)
         if 'v' in opts:scat=[Xa[0],Xa[1],15,'k']
 
-    x,z,f = np.load(file,allow_pickle=True)
+    x,z,f = np.load(file_ms,allow_pickle=True)
     dz = bz1/(n)
     Nz = np.int(thick/dz) #1000*n
     tilt = np.linspace(0,0.08,40)[28]

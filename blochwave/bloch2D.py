@@ -42,9 +42,8 @@ class Bloch_B:
             u_str = ''.join(['%d' %np.round(u) for u in self.Kabc0])
             name='%s%s_%dkeV_bloch' %(basefile,u_str,np.round(self.keV))
         if not filepath:filepath=os.path.dirname(name)
-        # print(name)
         self.path = filepath                            #; print(self.filepath)
-        self.name = os.path.basename(name)
+        self.name = os.path.basename(name)              #;print(self.name)
 
     def update_Nmax(self,Nmax):
         '''Update resolution/max order. (Updates lattice and structure factor)
@@ -81,7 +80,7 @@ class Bloch_B:
         '''set thickness and update beams
         - thick : thickness
         '''
-        if type(thick) in [int,float] :self.thick=thick
+        if type(thick) in [int,float,np.int64,np.float64] :self.thick=thick
         self._set_kinematic()
         if self.solved:self._set_intensities()
 
@@ -97,7 +96,7 @@ class Bloch_B:
         '''
         self.update_Nmax(Nmax)
         self.set_beam(K,u,keV)
-        self.set_name(name,self.path)
+        # self.set_name(name,self.path)
         self._set_excitation_errors(Smax)
         self._solve_Bloch(opts,Vopt0,v)
         self._set_Vg()
@@ -286,13 +285,16 @@ class Bloch_B:
         if v:print(colors.green+"object saved\n"+colors.yellow+file+colors.black)
 
 
+from wallpp import wallpaper as wallpp;imp.reload(wallpp)
 class Bloch2D(Bloch_B):
-    def __init__(self,file='',eps=0.1,u=[0,1],**kwargs):
+    def __init__(self,file='',crys=None,eps=0.1,u=[0,1],**kwargs):
         self.file = file
-        self.crys = mut.import_wallpp(file)
+        if not crys:crys=file
+        # self.crys = mut.import_wallpp(crys)
+        self.crys = wallpp.Wallpaper(**crys)
         self.lat_vec0 = self.crys.lattice_vectors
         self.lat_vec  = self.crys.reciprocal_vectors#/(2*np.pi)
-        self.pattern  = self.crys.pattern
+        self.pattern  = self.crys.pattern_fract
         self.refl = ['h','k']
         self.q    = ['qx','qy']
         self.ndim=2
@@ -339,8 +341,11 @@ class Bloch2D(Bloch_B):
     def get_basefile(self):
         return self.file.replace('.%s' %self.file.split('.')[-1],'')
 
-    def show_ewald(self,**kwargs):
-        mut.show_Ewald2D(self.K,self.lattice[1],**kwargs)
+    def show_ewald(self,ax=None,**kwargs):
+        fig,ax = mut.show_Ewald2D(self.K,self.lattice[1],ax=ax,legOpt=0,opt='')
+        x,z = self.df_G[['qx','qy']].values.T
+        scat = [x,z,80,'b']
+        dsp.stddisp(ax=ax,scat=scat,**kwargs)
 
     def show_beams(self,opts='B',fz=None,**kwargs):
         '''Display beam values

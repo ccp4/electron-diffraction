@@ -4,8 +4,8 @@ from wallpp import config as cg;imp.reload(cg)
 import sys,subprocess
 plt.close('all')
 
-wp = gui.Wallpaper_gui(image='figures/cygne2_100.png',config=1,
-    path='dat',pg='p3')
+# wp = gui.Wallpaper_gui(image='figures/cygne2_100.png',config=1,
+#     path='dat',pg='p3')
 
 def test_wiki_wallpp():
     for pp_type in cg.pp_types[1:]:
@@ -18,13 +18,17 @@ def convert_figures():
     df = cg.df_wallpp
     for f in files:
         pp_type = f.split('-')[1]                           #;print(pp_type)
+        # pp_type = f.split('.png')[0]                           #;print(pp_type)
         if not pp_type in df.index:                         #
             pp_type = df.loc[df['pp_long'==pp_type]].name   #;print(pp_type)
-        image = '%s.png' %pp_type                           #;print(image)
+        i = np.arange(17)[np.array(cg.pp_types)==pp_type][0]
+        # old   = '%s.png' %pp_type                           #;print(image)
+        image = 'wallpp_%s_%s.png' %(str(i).zfill(2),pp_type)    #;print(image)
         cmd = "convert %s -resize 400x400 %s" %(f,image)    #;print(cmd)
+        # cmd = "mv %s %s" %(old,image)    #;print(cmd)
         subprocess.Popen(cmd,shell=True)
 
-
+convert_figures()
 def F(npts=21,lw=0.05,x0=0.5,y0=0.5):
     x,y = np.meshgrid(np.linspace(0,1,npts),np.linspace(0,1,npts))
     F = np.zeros((npts,npts))

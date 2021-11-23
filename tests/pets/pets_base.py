@@ -1,32 +1,30 @@
-import importlib as imp
-# from subprocess import Popen,PIPE
 from utils import*                      ;imp.reload(dsp)
-import multislice.mupy_utils as mut     ;imp.reload(mut)
-import multislice.pets as pp            ;imp.reload(pp)
+from EDutils import pets as pets_imp  ;imp.reload(pets_imp)
+# import multislice.mupy_utils as mut     ;imp.reload(mut)
 plt.close('all')
 pts_path = 'glycine/glycine.pts'
-cif_file = 'glycine.cif'
 
 
-pets = pp.Pets(pts_path,gen=0)#,lam=0.02508,aper=0.005340,omega=230,gen=1)
+pets = pets_imp.Pets(pts_path,gen=False)#,lam=0.02508,aper=0.005340,omega=230,gen=1)
 frame = 65
 
-# pets.show_exp(frame,v=0)
-# pets.show_sim()
+pets.show_exp(frame,h=True)
+pets.show_uvw()
+pets.show_xyz()
+pets.show_hkl()
 
+
+# pets.show_sim()
 # pets.compare_xyz_pxpy(frame=frame,opts='oab')
 
-# pets.show_uvw()
-# pets.show_xyz()
 # pets.show_xyz(view=[0,0],opt='sc',name='pets_glycine_xyz.png')
 # pets.show_hkl(view=[0,0],opt='sc',name='pets_glycine_hkl.png')
 # pets.show_frame(frame=frame,name='pattern_%d.png' %frame, opt='psc')
 # pets.show_ewald_sphere(frame=19,Nmax=5,Smax=0.025,h3d=1)
-# pets.show_hkl()
 # K = pets.get_beam(frame)
 # df = mut.get_kinematic_pattern(cif_file,K,Nmax=5,Smax=0.02)
-pets.show_frames(frame=frame,thick=1000,Nmax=7,Smax=0.015,rot=206,Imag=10,opts='PKh',
-    v=0,pargs={'xylims':1.5})
+# pets.show_frames(frame=frame,thick=1000,Nmax=7,Smax=0.015,rot=206,Imag=10,opts='PKh',
+#     v=0,pargs={'xylims':1.5})
 
 # df = pets.compare_hkl(frame,Nmax=8,Smax=0.025,eps=None,v=0)
 

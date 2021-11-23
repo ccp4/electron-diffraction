@@ -4,7 +4,10 @@
 */figures
 */docs_fig
 **/dat/*
+**/sandbox/*
 **/figures/*
+**/docs/build
+**/docs/source/reference
 
 tests/dials
 tests/*/dat

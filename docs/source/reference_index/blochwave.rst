@@ -7,3 +7,4 @@ Blochwave
    :toctree: ../reference
 
    ~bloch
+   ~bloch_pp

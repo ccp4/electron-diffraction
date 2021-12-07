@@ -805,7 +805,7 @@ double vzatom( int Z, double radius );
 */
 
 double vzatomLUT( int Z, double rsq );
-
+double vzatomC( int Z, double rsq );
 
 /*--------------------- wavelength() -----------------------------------*/
 /*

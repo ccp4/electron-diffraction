@@ -1,18 +1,19 @@
 """Bloch wave solver"""
 import importlib as imp
 import numpy as np,pandas as pd,pickle5,os,glob,tifffile
+from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from crystals import Crystal
-from EDutils import display as EDdisp               #;imp.reload(EDdisp)
-from multislice import mupy_utils as mut            #;imp.reload(mut)
-from multislice import postprocess as pp            #;imp.reload(pp)
-from scattering import structure_factor as sf       #;imp.reload(sf)
-from scattering import scattering_factors as scatf  #;imp.reload(scatf)
 from utils import displayStandards as dsp           #;imp.reload(dsp)
 from utils import physicsConstants as cst           #;imp.reload(cst)
 from utils import glob_colors as colors,handler3D as h3d
-from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
-# from EDutils.viewers import Viewer            #;imp.reload(mut)
-from EDutils import viewers            #;imp.reload(viewers)
+
+from EDutils import display as EDdisp               #;imp.reload(EDdisp)
+# from multislice import mupy_utils as mut          #;imp.reload(mut)
+from multislice import postprocess as pp            #;imp.reload(pp)
+from scattering import structure_factor as sf       #;imp.reload(sf)
+from scattering import scattering_factors as scatf  #;imp.reload(scatf)
+from EDutils import viewers                         #;imp.reload(viewers)
+from EDutils import utilities as ut                 #;imp.reload(ut)
 from .util import*
 
 class Bloch:
@@ -51,12 +52,12 @@ class Bloch:
     ):
 
         self.cif_file = cif_file
-        self.crys     = mut.import_crys(cif_file)
+        self.crys     = ut.import_crys(cif_file)
         self.lat_vec0 = np.array(self.crys.lattice_vectors)
         self.lat_vec  = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
         self.pattern  = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in self.crys.atoms] )
         self.solved = False
-        self.Nmax   =  0
+        self.Nmax   = 0
         self.thick  = 100
         self.thicks = self._set_thicks((0,1000,1000))
 
@@ -110,7 +111,7 @@ class Bloch:
         if type(Nmax) in [int,np.int64] :
             if not Nmax==self.Nmax:
                 self.Nmax=Nmax
-                (h,k,l),(qx,qy,qz) = mut.get_lattice(self.lat_vec,self.Nmax)
+                (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
                 self.lattice = [(h,k,l),(qx,qy,qz)]
                 self.hklF,self.Fhkl = sf.structure_factor3D(self.pattern, 2*np.pi*self.lat_vec,hklMax=2*self.Nmax)
 
@@ -208,12 +209,12 @@ class Bloch:
             self._set_Vg()
         self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts)
         ##### postprocess
-        if 's' in opts:
-            self.save()
         if thick or 't' in opts:
             self.set_thickness(thick)
         if not type(thicks)==type(None) or 'z' in opts:
             self._set_beams_vs_thickness(thicks)#;print('thicks solved')
+        if 's' in opts:
+            self.save()
 
     ################################################################################
     #### private
@@ -308,7 +309,7 @@ class Bloch:
 
         pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
         Vg_G = Fhkl*pre/(self.crys.volume*np.pi)
-        px,py,e0x = mut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
+        px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
         self.e0x = e0x
         self.df_G['px'] = px
         self.df_G['py'] = py
@@ -408,7 +409,7 @@ class Bloch:
     def get_beam(self,
         cond:str='',
         refl:Iterable[tuple or str]=[],
-        index:bool=True,opt=1,
+        index:bool=True,
     ) -> Iterable[int]:
         """ select reflections according to a condition or indices
 
@@ -444,7 +445,7 @@ class Bloch:
         #### keep valid reflections only
         refl = [h for h in refl if h in self.df_G.index]
 
-        if index or opt:
+        if index:
             idx = [np.where(self.df_G.index==h)[0][0] for h in refl]
             return idx
         else:
@@ -701,12 +702,12 @@ class Bloch:
             im0 += rmax*np.random.rand(*im0.shape)#/(rmax*r)
 
         if not tiff_file:
-            tiff_file = os.path.join(self.path,self.name+'.tiff')
+            tiff_file = os.path.join(self.path,self.name+'_%dA' %self.thick+'.tiff')
         I = np.array(im0*Imax,dtype='uint16')
         tifffile.imwrite(tiff_file,np.flipud(I))
         print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
         if show:
-            viewers.Viewer(self.path,frame=1,thick=self.thick,**kwargs)
+            viewers.Base_Viewer(self.path,frame=1,thick=self.thick,**kwargs)
             # dsp.stddisp(im=[I],cmap='')
 
 

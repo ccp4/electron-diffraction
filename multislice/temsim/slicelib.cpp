@@ -151,7 +151,8 @@ using namespace std;
 // for the atomic scattering factor tables
 const int NPMAX=   12;  // number of parameters for each Z
 const int NZMIN=   1;   // min Z in featom.tab
-const int NZMAX=   103; // max Z in featom.tab
+// const int NZMAX=   103; // max Z in featom.tab
+const int NZMAX=   104; // max Z in featom.tab
 
 int feTableRead=0;      // flag to remember if the param file has been read
 double **fparams;       // to get fe(k) parameters
@@ -2203,6 +2204,7 @@ int ReadfeTable( )
     fparams[103][10] =  3.79258137e-001 ;
     fparams[103][11] =  3.89973484e-001 ;
 
+
    feTableRead = 1; /* remember that table has been read */
    return( (NZMAX-NZMIN+1)*NPMAX );
 
@@ -2421,35 +2423,7 @@ double seval( double *x, double *y, double *b, double *c,
 
 } /* end seval() */
 
-/*--------------------- sigma() -----------------------------------*/
-/*
-    return the interaction parameter sigma in radians/(kv-Angstroms)
-    keep this is one place so I don't have to keep typing in these
-    constants (that I can never remember anyhow)
 
-    ref: Physics Vade Mecum, 2nd edit, edit. H. L. Anderson
-        (The American Institute of Physics, New York) 1989
-        page 4.
-
-    kev = electron energy in keV
-
-*/
-
-double sigma( double kev )
-{
-    double s, pi, wavl, x;
-    const double emass=510.99906; /* electron rest mass in keV */
-    double wavelength( double kev );  /*  get electron wavelength */
-
-    x = ( emass + kev ) / ( 2.0*emass + kev);
-    wavl = wavelength( kev );
-    pi = 4.0 * atan( 1.0 );
-
-    s = 2.0 * pi * x / (wavl*kev);
-
-    return( s );
-
-}  /* end sigma() */
 
 /*----------------- sortByZ() ------------------------------
 
@@ -2805,6 +2779,34 @@ double vzatom( int Z, double radius )
     Z = atomic number 1 <= Z <= 98
     rsq = square of (radius in Angstroms)
 */
+double vzatomC( int Z, double rsq )
+{
+  double vz=0;
+  const double pi=3.141592654;
+  double a=0.1  ;//A
+  double V0=4000;//V
+  if      (Z==1 ){a=0.1;V0=500;}
+  else if (Z==2 ){a=0.2;V0=500;}
+  else if (Z==3 ){a=0.3;V0=500;}
+  else if (Z==4 ){a=0.4;V0=500;}
+  else if (Z==5 ){a=0.5;V0=500;}
+  else if (Z==6 ){a=0.1;V0=1000;}
+  else if (Z==7 ){a=0.2;V0=1000;}
+  else if (Z==8 ){a=0.3;V0=1000;}
+  else if (Z==9 ){a=0.4;V0=1000;}
+  else if (Z==10){a=0.5;V0=1000;}
+  else if (Z==11){a=0.1;V0=1000;}
+  else if (Z==12){a=0.1;V0=2000;}
+  else if (Z==13){a=0.1;V0=3000;}
+  else if (Z==14){a=0.1;V0=4000;}
+  else if (Z==15){a=0.1;V0=10000;}
+  else if (Z==16){a=0.1;V0=20000;}
+
+  if (rsq<=a*a)
+    vz = 2*V0*sqrt(a*a-rsq);
+
+  return( vz );
+}
 
 double vzatomLUT( int Z, double rsq )
 {
@@ -2871,6 +2873,49 @@ double vzatomLUT( int Z, double rsq )
 
 }  /* end vzatomLUT() */
 
+
+
+/*--------------------- sigma() -----------------------------------*/
+/*
+    return the interaction parameter sigma in radians/(kv-Angstroms)
+    keep this is one place so I don't have to keep typing in these
+    constants (that I can never remember anyhow)
+
+    ref: Physics Vade Mecum, 2nd edit, edit. H. L. Anderson
+        (The American Institute of Physics, New York) 1989
+        page 4.
+
+    kev = electron energy in keV
+
+*/
+
+// double sigma( double kev )
+// {
+//     double s,wavl;
+//     double wavelength( double kev );  /*  get electron wavelength */
+//     wavl = wavelength( kev );
+//     s = 20.88657838081956*wavl;
+//
+//     return( s );
+//
+// }  /* end sigma() */
+
+double sigma( double kev )
+{
+    double s, pi, wavl, x;
+    const double emass=510.99906; /* electron rest mass in keV */
+    double wavelength( double kev );  /*  get electron wavelength */
+
+    x = ( emass + kev ) / ( 2.0*emass + kev);
+    wavl = wavelength( kev );
+    pi = 4.0 * atan( 1.0 );
+
+    s = 2.0 * pi * x / (wavl*kev);
+
+    return( s );
+
+}  /* end sigma() */
+
 /*--------------------- wavelength() -----------------------------------*/
 /*
     return the electron wavelength (in Angstroms)
@@ -2884,6 +2929,15 @@ double vzatomLUT( int Z, double rsq )
     kev = electron energy in keV
 
 */
+//
+// double wavelength( double kev )
+// {
+//     double w;
+//     /* electron wavelength in Angstroms */
+//     w = 0.38782989825402714/sqrt(kev);
+//     return( w );
+//
+// }  /* end wavelength() */
 
 double wavelength( double kev )
 {
@@ -2897,8 +2951,6 @@ double wavelength( double kev )
     return( w );
 
 }  /* end wavelength() */
-
-
 
 
 

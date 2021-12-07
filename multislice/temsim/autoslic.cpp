@@ -686,18 +686,19 @@ void autoslic::calculate(cfpix &pix, cfpix &diff_pattern, cfpix &wave0, cfpix &d
                 /*??? printf("average atompot comparison = %g\n",
                            phirms/(wavlen*mm0) ); */
 
-                wave *= trans;    //  transmit
-
                 // sprintf(filename,"translayer.%03d",i_diff);
                 // cout << "writing trans layer "<< filename << "  to file ..." <<endl;
                 // FILE *fp3 = fopen(filename,"w");
                 // for( ix=0; ix<nx; ix++) {
-          	    //    for( iy=0; iy<ny; iy++) {
-          	    //       fprintf(fp3,"%g %g ", trans.re(ix,iy),trans.im(ix,iy));
-          	    //    }
-          	    //    fprintf(fp3,"\n");
+           	    //   for( iy=0; iy<ny; iy++) {
+           	    //      fprintf(fp3,"%g %g ", trans.re(ix,iy),trans.im(ix,iy));
+           	    //   }
+           	    //   fprintf(fp3,"\n");
                 // }
                 // fclose(fp3);
+
+                wave *= trans;    //  transmit
+
             }
 
             /*  bandwidth limit */
@@ -904,13 +905,16 @@ void autoslic::trlayer(  const float x[], const float y[], const float occ[],
                 if( rsq < rminsq ) rsq = rminsq;
                 /* r = sqrt( r );
                 vz = occ[i] * scale * vzatom( Znum[i], r ); slow */
-                vz = occ[i] * vzatomLUT( Znum[i], rsq );
+                // vz = occ[i] * vzatomLUT( Znum[i], rsq );
+                vz = occ[i] * vzatomC(Znum[i] , rsq );
                 trans.re(ixw,iyw) += (float) vz;
              }
           } /* end for(iy... */
        }  /* end for(ix... */
 
     } /* end for(i=0... */
+
+
 
     /* convert phase to a complex transmission function */
     sum = 0;
@@ -923,19 +927,31 @@ void autoslic::trlayer(  const float x[], const float y[], const float occ[],
         }
     }
 
+    // char filename[500];
+    // sprintf(filename,"vz");
+    // cout << "writing Vz "<< filename << "  to file ..." <<endl;
+    // FILE *fp3 = fopen(filename,"w");
+    // for( ix=0; ix<nx; ix++) {
+    //    for( iy=0; iy<ny; iy++) {
+    //       fprintf(fp3,"%g %g ", trans.re(ix,iy),trans.im(ix,iy));
+    //    }
+    //    fprintf(fp3,"\n");
+    // }
+    // fclose(fp3);
+
     *phirms = sum / ( ((double)nx)*((double)ny) );
 
     /* bandwidth limit the transmission function */
-    *nbeams = 0;
-    trans.fft();
-    for( ix=0; ix<nx; ix++) {
-        for( iy=0; iy<ny; iy++) {
-            k2 = ky2[iy] + kx2[ix];
-            if (k2 < k2max) *nbeams += 1;
-            else trans.re(ix,iy) = trans.im(ix,iy) = 0.0F;
-        }
-    }
-    trans.ifft();
+    // *nbeams = 0;
+    // trans.fft();
+    // for( ix=0; ix<nx; ix++) {
+    //     for( iy=0; iy<ny; iy++) {
+    //         k2 = ky2[iy] + kx2[ix];
+    //         if (k2 < k2max) *nbeams += 1;
+    //         else trans.re(ix,iy) = trans.im(ix,iy) = 0.0F;
+    //     }
+    // }
+    // trans.ifft();
 
     return;
 

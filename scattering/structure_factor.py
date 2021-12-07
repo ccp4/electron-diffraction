@@ -13,7 +13,7 @@ fj = lambda q,j,eps:eps*(np.pi/ai[j])*np.exp(-(np.pi*q)**2/ai[j])
 
 def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     '''Computes structure factor in 3D from :
-    - `pattern` : Nx4 array - N atoms with each row : fractional coordinates and Za 
+    - `pattern` : Nx4 array - N atoms with each row : fractional coordinates and Za
     - `lat_vec` : 3x3 array - reciprocal lattice vectors (2*pi/a convention)
     - `hkl`     : list of 3 miller indices h,k,l each as 3Ndarray
     - `hklMax`  : int - max miller index in each direction from -hklMax to hklMax
@@ -21,6 +21,9 @@ def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     #unpack
     if not hkl : hkl = get_miller3D(hklMax,sym)
     hx,ky,lz = hkl
+    # print('rearranging h,k,l so h[(hi,k,l)]=hi')
+    hx,ky,lz = np.transpose(hx,[1,0,2]),np.transpose(ky,[1,0,2]),np.transpose(lz,[1,0,2])
+    hkl = [hx,ky,lz]
     ra,fa = pattern[:,:3],pattern[:,3]
     atoms = list(np.array(np.unique(fa),dtype=int));#print(atoms)
     # get scattering factor
@@ -35,9 +38,14 @@ def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
         F_i = np.zeros(hx.shape,dtype=complex)
         idx = fa==atom
         for ri in ra[idx,:]:
+            # print(ri)
             # print(ri,np.exp(-2*pi*1J*(ri[0]*hx+ri[1]*ky+ri[2]*lz)))
             F_i += np.exp(-2*pi*1J*(ri[0]*hx+ri[1]*ky+ri[2]*lz))
         Fhkl += F_i*fq[i]
+
+    # cs=dsp.getCs('Spectral',n_atoms)
+    # plts=[[q.flatten(),fq[i].flatten(),[cs[i],'+'],atom] for i,atom in enumerate(atoms)]
+    # dsp.stddisp(plts,lw=2)
     return hkl,Fhkl
 
 def structure_factor2D(pattern,lat_vec,hk=None,hkMax=10,sym=1,v=0,eps=1):
@@ -48,6 +56,8 @@ def structure_factor2D(pattern,lat_vec,hk=None,hkMax=10,sym=1,v=0,eps=1):
     #unpack
     if not hk : hl = get_miller2D(hkMax,sym)
     hx,ky = hl
+    hx,ky = hx.T,ky.T
+    hl = [hx,ky]
     ra,fa = pattern[:,:2],pattern[:,2]
     atoms = list(np.array(np.unique(fa),dtype=int));#print(atoms)
     #scattering factor

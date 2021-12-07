@@ -3,7 +3,7 @@ import pandas as pd,numpy as np,easygui
 from utils import displayStandards as dsp ;imp.reload(dsp)
 
 
-def show_frame(opts='Pqr',mag=10,rot=0,hkl_idx=[],single_mode=False,
+def show_frame(opts='Pqr',mag=500,rot=0,hkl_idx=[],single_mode=False,
     df_pets=None,im_multi=None,df_bloch=None,cmap=None,cutoff=100,
     **kwargs):
     ''' Show a frame with information specified by opts

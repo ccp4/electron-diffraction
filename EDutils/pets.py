@@ -3,10 +3,11 @@ import os,glob, numpy as np, pandas as pd, tifffile,scipy.optimize as opt
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from subprocess import Popen,PIPE
 from crystals import Crystal,Lattice
-from utils import handler3D as h3D          ;imp.reload(h3D)
-from utils import displayStandards as dsp   ;imp.reload(dsp)
-from multislice  import mupy_utils as mut   ;imp.reload(mut)
-from EDutils import viewers as vw           ;imp.reload(vw)
+from utils import handler3D as h3D          #;imp.reload(h3D)
+from utils import displayStandards as dsp   #;imp.reload(dsp)
+from multislice  import mupy_utils as mut   #;imp.reload(mut)
+from EDutils import viewers as vw           #;imp.reload(vw)
+from EDutils import utilities as ut         #;imp.reload(ut)
 # from EDutils.viewers import Pets_Viewer
 from multislice.rotating_crystal import get_crystal_rotation
 
@@ -30,9 +31,9 @@ class Pets:
         self.path  = os.path.dirname(pts_file)
         self.out   = self.path+'/dat/'
 
-        self.cif_file   = mut._get_cif_file(self.path,cif_file)
-        self.crys       = mut.import_crys(self.cif_file)
-        self.lat_vec    = np.array(self.crys.lattice_vectors)
+        self.cif_file   = ut.find_cif_file(self.path,cif_file)
+        self.crys       = ut.import_crys(self.cif_file)
+        self.lat_vec    = y(self.crys.lattice_vectors)
         self.lat_vec1   = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
         self.lat_params = self.crys.lattice_parameters
 
@@ -581,3 +582,67 @@ def gauss2D(X, amp, x0, y0, sx,sy,noise):
     g = noise + amp*np.exp(-((x-x0)/sx)**2 - ((y-y0)/sy)**2)
     return g
 f_gauss2D = lambda X,amp,x0,y0,sx,sy,noise:gauss2D(X,amp, x0, y0, sx,sy,noise).ravel()
+
+
+
+
+def make_pets(pts_file:str,
+    aperpixel:float,deg:float=0.0652,
+    ref_cell:Sequence[float]=None,
+    tag:Optional[str]=''):
+    """creates a .pts file from info to process a simulated experiment with pets
+
+    Parameters
+    ----------
+    pts_file
+        full path to the pts file to write
+    aperpixel
+        aperture per pixel
+    deg
+        step angle between frames
+    ref_cell
+        cell info [ax,by,cz,alpha,beta,gamma] if known
+    tag
+        tag for the tiff images if there is one
+    """
+    center,pixel_size='AUTO',0.01,
+    phi,omega= deg/2 ,0
+    ax,by,cz,alpha,beta,gamma = ref_cell
+    # ax,by,cz,alpha,beta,gamma = 8.1218, 9.977, 17.725, 90.0, 90.0, 90.0
+    pts = '''lambda 0.025080
+geometry continuous
+omega  %d
+phi  %.5f
+virtualframes   7 5 1
+
+aperpixel    %.6f
+noiseparameters      2.5000      1.0000
+saturationlimit   20000
+
+center    256.0 256.0
+centermode friedelpairs 0
+
+beamstop no
+
+dstarmax  3.0
+dstarmaxps  3.0
+i/sigma    7.00    5.00
+reflectionsize  7
+
+referencecell     %.5f    %.5f     %.5f    %.5f   %.5f    %.5f 1
+
+#List of images
+#columns: file name,alpha,beta,delta omega,frame scale,calibration correction(px/rec.angstrom),ellipt.distortion correction(amplitude),ellipt.distortion correction(phase), use for calculations(0/1)
+imagelist
+'''%(omega,phi,aperpixel,  ax,by,cz,alpha,beta,gamma)
+    out = os.path.dirname(pts_file)
+    tif_files = np.sort(glob.glob(out+'/tiff/%s*.tiff' %tag))
+    alphas = np.arange(tif_files.size)*deg
+    for i,tif_file in enumerate(tif_files):
+        tif_file = os.path.basename(tif_file)
+        pts+='%s %.4f 0.0 0.0 1.0 0 0 0  1\n' %('tiff\\'+tif_file,alphas[i])
+    pts+='endimagelist\n'
+    # pts_file = out+name+'.pts'
+    with open(pts_file,'w') as f:
+        f.write(pts)
+        print(colors.green+'file saved : '+colors.yellow+pts_file+colors.black)

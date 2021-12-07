@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 # from scipy.spatial import ConvexHull, convex_hull_plot_2d
 from utils import glob_colors as colors,handler3D as h3d
 from utils import physicsConstants as cst
-from utils import displayStandards as dsp   ; imp.reload(dsp)
+from utils import displayStandards as dsp   #; imp.reload(dsp)
 # from scattering.structure_factor import structure_factor3D
 # from . import rotating_crystal as rcc       #; imp.reload(rcc)
 # from . import postprocess as pp             #; imp.reload(pp)
-from . import pets as pt                    ;imp.reload(pt)
+from . import pets as pt                      #;imp.reload(pt)
 
 
 class Base_Viewer:
@@ -49,11 +49,11 @@ class Base_Viewer:
         #### format
         d_fmt = {'cbf':self.load_cbf,'tiff':self.load_tif,'tif':self.load_tif}
         self.supported_fmts = d_fmt.keys()
-        self.fmt      = self.find_format(v=h)
-        self.load     = d_fmt[self.fmt]
+        self.fmt  = self.find_format(v=h)
+        self.load = d_fmt[self.fmt]
 
-        self.figs     = np.sort(glob.glob(self.figpath+'/*.%s' %self.fmt))#;print(self.figs)
-        self.nfigs   = self._get_nfigs()
+        self.figs  = np.sort(glob.glob(self.figpath+'/*.%s' %self.fmt))#;print(self.figs)
+        self.nfigs = self._get_nfigs()
 
         if frame:
             i = min(max(frame,0),self.nfigs)-1

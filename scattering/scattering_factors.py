@@ -23,6 +23,26 @@ def get_xray_atomic_factors(elts,qmax=2,npts=100):
     fx_q = [(ai*np.exp(-bi*q2)).sum(axis=1) + c  for ai,bi,c in zip(Ai,Bi,C)]
     return q,fx_q
 
+def get_fe(Zs,q):
+    ''' computes th atomic form factors
+    - Z : atomic numbers
+    - q : reciprocal vectors
+    returns :
+    - fq_e : nZ x Nqs
+    '''
+    fparams = np.load(dat_path+'abcd.npy',allow_pickle=True)
+    q2 = q**2
+    fq_e = np.zeros((q.size,Zs.size))
+    for iZ,Z in enumerate(Zs):
+        a,b=np.reshape(fparams[Z,:6],(3,2)).T#;
+        c,d=np.reshape(fparams[Z,6:],(3,2)).T#;print(a,b,c,d)
+        fq = np.zeros(q.shape)
+        for i in range(3):
+             fq += a[i]/(b[i]+q2)+c[i]*np.exp(-d[i]*q2)
+        fq_e[:,iZ]=fq
+    return fq_e
+
+
 def get_elec_atomic_factors(elts,q=None,qmax=2,npts=100):
     '''
     elts : list of atoms by name 'E' or atomic number Z
@@ -34,8 +54,7 @@ def get_elec_atomic_factors(elts,q=None,qmax=2,npts=100):
         Z=elts
     if not isinstance(q,np.ndarray) : q = np.linspace(0,qmax,npts)
     #dummy case to disable form factor
-    if Z==[0]:
-        return q,[np.ones(q.shape)]
+    if Z==[0]:return q,[np.ones(q.shape)]
     q2,fq_e,nelts = q**2,[],len(Z)
 
     fparams = np.load(dat_path+'abcd.npy',allow_pickle=True)

@@ -13,7 +13,7 @@ from . import rotating_crystal as rcc       #; imp.reload(rcc)
 from . import postprocess as pp             #; imp.reload(pp)
 from . import multi_3D as MS3D              #;imp.reload(MS3D)
 from . import pymultislice                  #;imp.reload(pymultislice)
-from . import pets as pt                    ;imp.reload(pt)
+# from . import pets as pt                    #;imp.reload(pt)
 
 cs = {1:colors.unicolor(0.75),3:(1,0,0),
       6:colors.unicolor(0.25),7:(0,0,1),8:(1,0,0),16:(1,1,0),14:(1,0,1),17:(0,1,1)}
@@ -35,38 +35,38 @@ def multi3D(name='./unknwon',filename='',load_opt=0,**kwargs):
             print(colors.red+'file not found : '+colors.yellow+filename+colors.black)
     return MS3D.Multi3D(name=name,**kwargs)
 
-
-def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
-    **kwargs):
-    from . import multislice as mupy            ; imp.reload(mupy)
-    '''
-    runs a set of similar simulations with one varying parameter
-    - datpath    : path to the simulation folder
-    - param,vals : the parameters and values to sweep
-    - df :
-        - int - create and save the new dataframe if 1
-        - pd.Dataframe - to update(since parsed as a reference)
-    - pargs         : bool - pass param and values to Multislice  if True
-    - do_prev       : Used for iterative fourier transform
-    - kwargs : see help(Multislice)
-    '''
-    do_df,save = isinstance(df,pd.core.frame.DataFrame),0
-    if isinstance(df,int):
-        if df : df,do_df,save = pd.DataFrame(columns=[param,'host','state']+pp.info_cols),1,1
-    nvals,prev = len(vals),None
-    for i,val in zip(range(nvals),vals):
-        if pargs:kwargs[param]=val
-        if do_prev and i: prev = multi.outf['image']
-        multi=mupy.Multislice(datpath,prev=prev,
-            ssh=ssh,tail=tail+param+str(i).zfill(int(np.ceil(nvals/10))),
-            **kwargs)
-        if do_df:
-            df.loc[multi.outf['obj']] = [np.nan]*len(df.columns)
-            df.loc[multi.outf['obj']][[param,'host','state']] = [val,ssh,'start']
-    if save :
-        df.to_pickle(datpath+'df.pkl')
-        print(colors.green+'Dataframe saved : '+colors.yellow+datpath+'df.pkl'+colors.black)
-        return df
+#
+# def sweep_var(datpath,param,vals,df=None,ssh='',tail='',pargs=True,do_prev=0,
+#     **kwargs):
+#     from . import multislice as mupy            ; imp.reload(mupy)
+#     '''
+#     runs a set of similar simulations with one varying parameter
+#     - datpath    : path to the simulation folder
+#     - param,vals : the parameters and values to sweep
+#     - df :
+#         - int - create and save the new dataframe if 1
+#         - pd.Dataframe - to update(since parsed as a reference)
+#     - pargs         : bool - pass param and values to Multislice  if True
+#     - do_prev       : Used for iterative fourier transform
+#     - kwargs : see help(Multislice)
+#     '''
+#     do_df,save = isinstance(df,pd.core.frame.DataFrame),0
+#     if isinstance(df,int):
+#         if df : df,do_df,save = pd.DataFrame(columns=[param,'host','state']+pp.info_cols),1,1
+#     nvals,prev = len(vals),None
+#     for i,val in zip(range(nvals),vals):
+#         if pargs:kwargs[param]=val
+#         if do_prev and i: prev = multi.outf['image']
+#         multi=mupy.Multislice(datpath,prev=prev,
+#             ssh=ssh,tail=tail+param+str(i).zfill(int(np.ceil(nvals/10))),
+#             **kwargs)
+#         if do_df:
+#             df.loc[multi.outf['obj']] = [np.nan]*len(df.columns)
+#             df.loc[multi.outf['obj']][[param,'host','state']] = [val,ssh,'start']
+#     if save :
+#         df.to_pickle(datpath+'df.pkl')
+#         print(colors.green+'Dataframe saved : '+colors.yellow+datpath+'df.pkl'+colors.black)
+#         return df
 
 ################################################################################
 #### Reciprocal space related
@@ -215,18 +215,21 @@ def import_wallpp(file,**kwargs):
         - .py python file containing pptype,ax,bz,angle,pattern
         - .txt
     '''
-    ext = file.split('.')[-1]
-    with open(file,'r') as f:lines=f.readlines()
-    if ext =='py':
-        d={}
-        exec(''.join(lines),d) #pptype,ax,bz,angle,pattern defined in the lines
-        pptype,ax,bz,angle = [d[k] for k in ['pptype','ax','bz','angle']]
-        pattern=np.array(d['pattern'])
-    elif ext=='txt':
-        lines = [l.strip() for l in lines]
-        pptype = lines[0]
-        ax,bz,angle = np.array(lines[1:4],dtype=float)
-        pattern = np.array([np.array(l.split(' '),dtype=float) for l in lines[4:]])
+    if isinstance(file,dict):
+        pptype,ax,bz,angle,pattern = [file[k] for k in ['pp_type','a','b','angle','pattern']]
+    else:
+        ext = file.split('.')[-1]
+        with open(file,'r') as f:lines=f.readlines()
+        if ext =='py':
+            d={}
+            exec(''.join(lines),d) #pptype,ax,bz,angle,pattern defined in the lines
+            pptype,ax,bz,angle = [d[k] for k in ['pptype','ax','bz','angle']]
+            pattern=np.array(d['pattern'])
+        elif ext=='txt':
+            lines = [l.strip() for l in lines]
+            pptype = lines[0]
+            ax,bz,angle = np.array(lines[1:4],dtype=float)
+            pattern = np.array([np.array(l.split(' '),dtype=float) for l in lines[4:]])
     wallpp = pg.Wallpaper(pptype,ax,bz,angle,pattern,ndeg=0,**kwargs)
     wallpp.reciprocal_vectors = np.array(wallpp.get_reciprocal_lattice_2D())
     wallpp.lattice_vectors = np.array(wallpp.lattice_vec)
@@ -234,15 +237,6 @@ def import_wallpp(file,**kwargs):
     a1,a2 = wallpp.lattice_vectors
     wallpp.area=abs(np.cross(a1,a2))
     return wallpp
-
-def import_crys(file):
-    if file.split('.')[-1]=='cif':
-        crys = Crystal.from_cif(file)
-    elif sum(np.array(list(Crystal.builtins))==file):
-        crys = Crystal.from_database(file)
-    else:
-        raise Exception('cannot import %s' %file)
-    return crys
 
 def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0, pad=0,fmt='%.4f',opts=''):
     if 'v' in opts:print('...import file...')
@@ -371,12 +365,19 @@ def gen_xyz(file,n=[0,0,1],rep=[1,1,1],pad=0,xyz='',theta=0,**kwargs):
     print(colors.green+'binary coords file saved :'+colors.yellow+npy_file+colors.black)
 
 def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail=''):
-    ''' convert cif file into autoslic .xyz input file
-    - file : cif_file
-    - rep : super cell repeat
-    - n : reorient of the z axis into n
-    - pad : amount of padding on each side (in unit of super cell size)
-    '''
+    """ convert cif file into autoslic .xyz input file
+
+    Parameters
+    ----------
+    file
+        cif_file
+    rep
+        super cell repeat
+    n
+        reorient of the z axis into n
+    pad
+        amount of padding on each side (in unit of super cell size)
+    """
     crys       = Crystal.from_cif(file)
     lat_vec    = np.array(crys.lattice_vectors)
     lat_params = crys.lattice_parameters[:3]
@@ -385,6 +386,7 @@ def import_cif(file,xyz='',n=[0,0,1],rep=[1,1,1],pad=0,dopt='s',lfact=1.0,tail='
     if xyz:make_xyz(xyz,pattern,lat_vec,lat_params,n=n,pad=pad,rep=rep,fmt='%.4f',dopt=dopt)
     pattern[:,1:4] = rcc.orient_crystal(pattern[:,1:4],n_u=n) #,lat_params #pattern,crys # file
     return pattern
+
 
 def make_xyz(name,pattern,lat_vec,lat_params,n=[0,0,1],theta=0,rep=[1,1,1],pad=0,fmt='%.4f',dopt='s'):
     '''Creates the.xyz file from a given compound and orientation
@@ -685,395 +687,415 @@ def show_Ewald2D(K,lat,relrod=0,**kwargs):
         xylims=qxmax,
         **kwargs)#lw=2,xylims=[0,3,0,3])#,xyTicks=[1/ax1,1/bz1])
 
-################################################################################
-#### Class viewers
-################################################################################
-class Image_viewer:
-    '''a copy of dials.image_viewer'''
-    def __init__(self,file,sym=1,pad=None):
-        basename      = file.split('_')
-        self.im       = int(basename[-1].replace('.cbf',''))
-        self.basename = '_'.join(basename[:-1])
-        file_ids      = [int(f.split('_')[-1].replace('.cbf','')) for f in glob.glob(self.basename+'*.cbf')]
-        if pad :
-            self.pad=pad
-        else:
-            self.pad=int(np.log10(max(file_ids)))+1       #;print(self.pad)
-
-        ls = np.array(check_output("head -n25 %s" %file,shell=True).decode().split('\n'))
-        px_str      = ls[['Pixel_size' in l for l in ls]][0]
-        D_str       = ls[['Detector_distance' in l for l in ls]][0] #;print(D_str)
-        lam_str     = ls[["Wavelength" in l for l in ls]][0]
-
-        self.pxy    = np.array(re.findall("\d+e-\d+", px_str),dtype=float)
-        self.D      = 1 #float(re.findall("\d+.\d+",D_str)[0])
-        self.lam    = float(re.findall("\d+.\d+",lam_str)[0])
-
-        shape = np.array(cbf.read(file).data.shape)
-        self.image = cbf.read(file).data
-
-        if sym:
-            Nx,Ny = np.array(shape/2,dtype=int)
-            self.Nx,self.Ny = Nx,Ny
-            self.pX,self.pY = np.meshgrid(np.arange(-Nx,Nx+1),np.arange(-Ny,Ny+1))
-        else:
-            Nx,Ny = shape
-            # self.pX,self.pY = np.meshgrid(np.arange(Nx),np.arange(Ny))
-            self.pX,self.pY = np.meshgrid(np.arange(Nx),np.flipud(np.arange(Ny)))
-        self.qx,self.qy = self.px2s(self.pX,self.pY)
-
-    def s2px(self,xh):
-        '''xh : recorded coordinates on image'''
-        px,py = self.pxy
-        pX = self.lam*self.D/px*xh[:,0] + self.Nx
-        pY = -self.lam*self.D/py*xh[:,1] + self.Ny
-        return pX,pY
-
-    def px2s(self,pX,pY):
-        px,py = self.pxy
-        qx,qy = px/self.D/self.lam*pX, py/self.D/self.lam*pY
-        return qx,qy
-
-    def show_image(self,im=None,lab='q',stack=1,**kwargs):
-        rc('text', usetex=False)
-        if not im:im = self.im
-        file = "%s_%s.cbf" %(self.basename,str(im).zfill(self.pad))   #;print(filename)
-        # with open(file,'wb') as f:print(file)
-        content = cbf.read(file)
-        image = content.data
-        if stack>1:
-            for i in range(1,stack):
-                filename = "%s_%s.cbf" %(self.basename,str(im+i).zfill(self.pad))   #;print(filename)
-                image+=cbf.read(filename).data
-            if 'caxis' in list(kwargs.keys()):
-                kwargs['caxis'] = list(np.array(kwargs['caxis'])*stack) #; print(kwargs['caxis'])
-        if 'q' in lab:
-            labs = ['$q_x(A^{-1})$','$q_y(A^{-1})$']
-            X,Y = self.qx,-self.qy
-        elif 'p' in lab:
-            labs = ['','']#['$p_x$','$p_y$']
-            X,Y = self.pX,self.pY
-        elif 'x' in lab:
-            labs = ['$x(mm)$','$y(mm)$']
-            px,py = self.pxy
-            X,Y = self.pX*px*1e3,self.pY*py*1e3
-        return dsp.stddisp(im=[X,Y,image],labs=labs,
-            pOpt='ptX',title="%s" %os.path.basename(file),**kwargs)
-
-class Base_Viewer:
-    def __init__(self,figpath='',frame=None,thick=5,cutoff=50,i=0,v=1,pargs={}):#,fig=None,ax=None,):
-        self.fig,self.ax = dsp.stddisp()
-        cid = self.fig.canvas.mpl_connect('key_press_event', self)
-        self.figpath = figpath
-        self.nfigs   = self._get_nfigs()
-        if frame:
-            i = min(max(frame,0),self.nfigs)-1
-        else:
-            frame = i+1
-        self.frame  = frame       #starting image
-        self.i      = i           #starting image
-        self.inc    = 1           #increment(use 'p' or 'm' to change)
-        self.cutoff = cutoff
-        self.thick  = thick
-        self.fieldNames  = ['thick','frame','cutoff','inc']
-        self.mode = 1
-        self.pargs  = pargs
-        rc('text', usetex=False)
-        self.show()
-        if v:self.show_help()
-
-    def __call__(self, event):
-        # print(event.key)
-        if event.key in ['up','right']:
-            self.i=min(self.i+self.inc,self.nfigs-1)
-            self.mode=1
-        elif event.key in ['left','down']:
-            self.i=max(0,self.i-self.inc)
-            self.mode=-1
-        self.frame=self.i+1
-
-        if event.key=='s':
-            dsp.saveFig(self.figpath+'_%s.png' %str(self.i).zfill(3),ax=self.ax)
-
-        #increment rate
-        if event.key=='p':
-            self.inc=min(self.inc+1,100)        ;print('increment rate : %d' %self.inc)
-        elif event.key=='m':
-            self.inc=max(1,self.inc-1)          ;print('increment rate : %d' %self.inc)
-        elif event.key=='ctrl+r':
-            self.inc=1                          ;print('increment rate : %d' %self.inc)
-
-        #brightness
-        if event.key=='pageup':
-            self.cutoff=min(self.cutoff+5,500)  ;print('cutoff : %d' %self.cutoff)
-        elif event.key=='pagedown':
-            self.cutoff=max(1,self.cutoff-5)    ;print('cutoff : %d' %self.cutoff)
-        elif event.key=='r':
-            self.cutoff=50                      ;print('cutoff : %d' %self.cutoff)
-
-        #thickness
-        if event.key=='ctrl+t':
-            self.thick+=5                       ;print('thickness : %d' %self.thick)
-        elif event.key=='ctrl+T':
-            self.thick=max(self.thick-5,5)      ;print('thickness : %d' %self.thick)
-
-        if event.key=='h':self.show_help()
-        elif event.key=='enter':self.settings()
-        keys = self.call(event)
-
-        update_keys = keys+['enter','ctrl+t','ctrl+T','pageup','pagedown','r','left','right','down','up']
-        if event.key in update_keys:self.show()
-
-    def settings(self):
-        fieldValues = ['%d' %self.__dict__[f] for f in self.fieldNames]
-        fieldNames = self.fieldNames.copy()
-        self.get_fieldValues(fieldNames,fieldValues)
-        dict_fv = multenterbox("Change settings","settings", fieldValues,fieldNames)
-        if dict_fv:
-            for f in self.fieldNames:
-                self.__dict__[f] = int(dict_fv[f])
-            self.set_fieldValues(dict_fv)
-        self.i = self.frame-1
-
-    def show(self):
-        tle = "frame %d, thickness=%d $\AA$" %(self.i+1,self.thick)
-        self.ax.cla()
-        self.get_im(fig=self.fig,ax=self.ax,title=tle,opt='',**self.pargs)
-        self.fig.canvas.draw()
-
-    def show_help(self):
-        msg = '''
-    'up or right'  : show frame+1
-    'down or left' : show frame-1
-    ##
-    'p' : increase increment rate
-    'm' : decrease increment rate
-    ##
-    'pageup'   : increae cutoff brightness
-    'pagedown' : decrease cutoff brightness
-    'r'        : reset cutoff brightness
-    ##
-    'ctrl+t' : increase thickness
-    'ctrl+T' : decrease thickness
-    ##
-    'enter' : change settings
-    's' : save image
-    'h' : show help
-        '''
-        print(colors.green+'shortcuts : '+colors.blue+msg+colors.black)
-    ###################################
-    ##### virtual functions
-    ###################################
-    def _get_nfigs(self):
-        print('base nfigs')
-        return 0
-    def get_im(self,**kwargs):
-        print('base get_im')
-    def get_fieldValues(self,fieldNames,fieldValues):return None
-    def set_fieldValues(self,dict_fv):return None
-    def call(self,event):return []
-
-
-class Frames_Viewer(Base_Viewer):
-    '''Viewer for pets'''
-    def __init__(self,pets,thick,Imag,kargs,**sargs):
-        self.pets   = pets
-        self.kargs  = kargs
-        super().__init__(thick=thick,cutoff=Imag,**sargs)
-
-    def get_fieldValues(self,fieldNames,fieldValues):
-        fieldNames+=list(self.kargs.keys())
-        fieldValues+=[str(f) for f in self.kargs.values()]
-    def set_fieldValues(self,dict_fv):
-        float_keys = np.setdiff1d(list(self.kargs.keys()),'opts')
-        for f in float_keys:
-            self.kargs[f] = eval(dict_fv[f])
-        self.kargs['opts']=dict_fv['opts']
-    def _get_nfigs(self):
-        return self.pets.nFrames
-    def get_im(self,**kwargs):
-        self.pets.show_frame(frame=self.i+1,thick=self.thick,Imag=self.cutoff,
-            **self.kargs,**kwargs)
-
-    def call(self,event):
-        chars = 'KkPhr'
-        keys = ['ctrl+K','ctrl+k', 'ctrl+H','ctrl+h','ctrl+g']
-
-        vals = [c in self.kargs['opts'] for c in chars]
-        for i,(c,k) in enumerate(zip(chars,keys)):
-            if event.key==k:
-                vals[i] = not vals[i]
-
-        self.kargs['opts']='q'+''.join([c for c,val in zip(chars,vals) if val])
-
-        return keys
-
-class Viewer(Base_Viewer):
-    '''similar to adxv. Works with raw cbf/tiff'''
-    def __init__(self,exp_path=None,
-        Smax=0.025,Nmax=13,rot=203,pets=None,v=1,init='',**sargs):
-        ''' View cbf files
-        - exp_path : path to images
-        - figpath : place to save the figures
-        - i : starting image
-        '''
-        if isinstance(pets,str):pets = pt.Pets(pets)
-        if isinstance(pets,pt.Pets):exp_path = os.path.join(pets.path,'tiff')
-
-        d_fmt = {'cbf':self.load_cbf,'tiff':self.load_tif,'tif':self.load_tif}
-        self.supported_fmts = d_fmt.keys()
-
-        self.exp_path = os.path.realpath(exp_path)
-        self.fmt      = self.find_format(v)
-        self.figs     = np.sort(glob.glob(self.exp_path+'/*.%s' %self.fmt))#;print(self.figs)
-        self.load     = d_fmt[self.fmt]
-        self.pets     = pets
-        if self.pets:
-            vals  = ['center','refl','pred','boxes']
-            keys  = ['c','r','s','b']
-            alias = ['1','2','3','4']
-            self.show_d = dict(zip(keys,vals))
-            self.alias  = dict(zip(alias,keys))
-            self.show_opt = dict(zip(vals,[c in init for c in keys ]))
-            self.Smax,self.Nmax,self.rot=Smax,Nmax,rot
-        super().__init__(v=v,**sargs)
-
-    def call(self,event):
-        # k = event.key
-        if self.pets:
-            if event.key in self.alias.keys():event.key = self.alias[event.key]
-            if event.key in self.show_d.keys():
-                key = self.show_d[event.key]
-                self.show_opt[key] = not self.show_opt[key]
-
-            return list(self.show_d.keys())
-        else:
-            return []
-    def get_im(self,**kwargs):
-        fig = self.figs[self.i]
-        figname = os.path.basename(fig)
-        print(colors.yellow+fig+colors.black)
-        im = self.load(fig)
-        plts,scat,pp = [],[],[]
-        sargs = {'facecolor':'none','edgecolor':(0.7,0.7,0.15),'s':50,'marker':'o'}
-        if self.pets:
-            # df = self.rpl
-            df = self.pets.rpl
-            frame = self.i+1
-            if self.show_opt['refl']:
-                rpl = df.loc[df.F==frame]
-                plts+=[[rpl.rpx-0.5,rpl.rpy-0.5,'r+','']]
-            if self.show_opt['center']  :
-                cen = self.pets.cen.iloc[self.i]
-                plts += [[ cen.px-0.5,cen.py-0.5,'b+','']]
-            if self.show_opt['pred'] or self.show_opt['boxes']:
-                px,py,I,hkl = self.pets.get_kin(frame,rot=self.rot,thick=self.thick,Smax=self.Smax,Nmax=self.Nmax,pixel=True)
-            if self.show_opt['pred']:
-                scat  = [px,py]
-            if self.show_opt['boxes']:
-                npx = 15
-                pp = [dsp.Rectangle((px0-npx/2,py0-npx/2),npx,npx,facecolor='none',edgecolor='r') for px0,py0 in zip(px,py)]
-        dsp.stddisp(plts,patches=pp,scat=scat,im=[im],ms=20,sargs=sargs,xylims=[0,516,516,0],
-            cmap='gray',caxis=[0,self.cutoff],pOpt='tX',**kwargs)
-
-    def _get_nfigs(self):
-        return self.figs.size
-
-    ###############################################################
-    #### misc
-    ###############################################################
-    def find_format(self,v=1):
-        fmts = np.unique([f.split('.')[-1] for f in os.listdir(self.exp_path)])
-        fmts = [fmt for fmt in fmts if fmt in self.supported_fmts]
-        if not len(fmts):
-            raise Exception('no supported format found in %s. Supported formats :' %(self.exp_path),self.supported_fmts)
-        fmt = fmts[0]
-        if len(fmts)>1:
-            print('warning multiple formats found',fmts)
-            print('using %s' %fmt)
-        if v:print('%s format detected' %fmt)
-        return fmt
-
-    def load_cbf(self,fig):
-        try:
-            content = cbf.read(fig)
-        except:#UnicodeDecodeError
-            self.i=self.i+self.mode
-            print(colors.red+'error reading file'+colors.black)
-            self.import_exp()
-            return
-        numpy_array_with_data = content.data
-        header_metadata = content.metadata
-        # print(colors.blue,header_metadata,colors.black)
-        return numpy_array_with_data
-
-    def load_tif(self,fig):
-        return tifffile.imread(fig)
-
-
-def multenterbox(msg,title,fieldValues,fieldNames):
-    fieldValues = easygui.multenterbox(msg, title, fieldNames,fieldValues)
-    while True:
-        if fieldValues is None:
-            break
-        errs = list()
-        for n, v in zip(fieldNames, fieldValues):
-            if v.strip() == "":errs.append('"{}" is a required field.'.format(n))
-        if not len(errs):
-            break
-        fieldValues = easygui.multenterbox("\n".join(errs), title, fieldNames, fieldValues)
-    return dict(zip(fieldNames,fieldValues))
 
 
 
 
 
-###########################################################################
-#### misc :
-###########################################################################
-def _get_cif_file(path,cif_file):
-    if not cif_file:
-        cif_file = _find_files(path,'cif')
-    return cif_file
 
 
-def _find_files(path,f_type):
-    files = glob.glob(path+'/*.%s' %f_type)
-    if len(files)==1:
-        file=files[0]
-        return file
-    else:
-        msg ='''
-    only 1 %s file should be found in path folder :
-     %s
-    but %d were found :
-     %s''' %(f_type,os.path.realpath(path),len(files),str(files))
-        raise Exception(msg)
 
-def load_tif(fig):
-    return tifffile.imread(fig)
 
-def load_cbf(fig):
-    try:
-        content = cbf.read(fig)
-        numpy_array_with_data = content.data
-        header_metadata = content.metadata
-        return numpy_array_with_data
-    except:#UnicodeDecodeError
-        self.i=self.i+self.mode
-        print(colors.red+'error reading file'+colors.black)
+#
+# ################################################################################
+# #### Class viewers
+# ################################################################################
+# class Image_viewer:
+#     '''a copy of dials.image_viewer'''
+#     def __init__(self,file,sym=1,pad=None):
+#         basename      = file.split('_')
+#         self.im       = int(basename[-1].replace('.cbf',''))
+#         self.basename = '_'.join(basename[:-1])
+#         file_ids      = [int(f.split('_')[-1].replace('.cbf','')) for f in glob.glob(self.basename+'*.cbf')]
+#         if pad :
+#             self.pad=pad
+#         else:
+#             self.pad=int(np.log10(max(file_ids)))+1       #;print(self.pad)
+#
+#         ls = np.array(check_output("head -n25 %s" %file,shell=True).decode().split('\n'))
+#         px_str      = ls[['Pixel_size' in l for l in ls]][0]
+#         D_str       = ls[['Detector_distance' in l for l in ls]][0] #;print(D_str)
+#         lam_str     = ls[["Wavelength" in l for l in ls]][0]
+#
+#         self.pxy    = np.array(re.findall("\d+e-\d+", px_str),dtype=float)
+#         self.D      = 1 #float(re.findall("\d+.\d+",D_str)[0])
+#         self.lam    = float(re.findall("\d+.\d+",lam_str)[0])
+#
+#         shape = np.array(cbf.read(file).data.shape)
+#         self.image = cbf.read(file).data
+#
+#         if sym:
+#             Nx,Ny = np.array(shape/2,dtype=int)
+#             self.Nx,self.Ny = Nx,Ny
+#             self.pX,self.pY = np.meshgrid(np.arange(-Nx,Nx+1),np.arange(-Ny,Ny+1))
+#         else:
+#             Nx,Ny = shape
+#             # self.pX,self.pY = np.meshgrid(np.arange(Nx),np.arange(Ny))
+#             self.pX,self.pY = np.meshgrid(np.arange(Nx),np.flipud(np.arange(Ny)))
+#         self.qx,self.qy = self.px2s(self.pX,self.pY)
+#
+#     def s2px(self,xh):
+#         '''xh : recorded coordinates on image'''
+#         px,py = self.pxy
+#         pX = self.lam*self.D/px*xh[:,0] + self.Nx
+#         pY = -self.lam*self.D/py*xh[:,1] + self.Ny
+#         return pX,pY
+#
+#     def px2s(self,pX,pY):
+#         px,py = self.pxy
+#         qx,qy = px/self.D/self.lam*pX, py/self.D/self.lam*pY
+#         return qx,qy
+#
+#     def show_image(self,im=None,lab='q',stack=1,**kwargs):
+#         rc('text', usetex=False)
+#         if not im:im = self.im
+#         file = "%s_%s.cbf" %(self.basename,str(im).zfill(self.pad))   #;print(filename)
+#         # with open(file,'wb') as f:print(file)
+#         content = cbf.read(file)
+#         image = content.data
+#         if stack>1:
+#             for i in range(1,stack):
+#                 filename = "%s_%s.cbf" %(self.basename,str(im+i).zfill(self.pad))   #;print(filename)
+#                 image+=cbf.read(filename).data
+#             if 'caxis' in list(kwargs.keys()):
+#                 kwargs['caxis'] = list(np.array(kwargs['caxis'])*stack) #; print(kwargs['caxis'])
+#         if 'q' in lab:
+#             labs = ['$q_x(A^{-1})$','$q_y(A^{-1})$']
+#             X,Y = self.qx,-self.qy
+#         elif 'p' in lab:
+#             labs = ['','']#['$p_x$','$p_y$']
+#             X,Y = self.pX,self.pY
+#         elif 'x' in lab:
+#             labs = ['$x(mm)$','$y(mm)$']
+#             px,py = self.pxy
+#             X,Y = self.pX*px*1e3,self.pY*py*1e3
+#         return dsp.stddisp(im=[X,Y,image],labs=labs,
+#             pOpt='ptX',title="%s" %os.path.basename(file),**kwargs)
+#
+# class Base_Viewer:
+#     def __init__(self,figpath='',frame=None,thick=5,cutoff=50,i=0,v=1,pargs={}):#,fig=None,ax=None,):
+#         self.fig,self.ax = dsp.stddisp()
+#         cid = self.fig.canvas.mpl_connect('key_press_event', self)
+#         self.figpath = figpath
+#         self.nfigs   = self._get_nfigs()
+#         if frame:
+#             i = min(max(frame,0),self.nfigs)-1
+#         else:
+#             frame = i+1
+#         self.frame  = frame       #starting image
+#         self.i      = i           #starting image
+#         self.inc    = 1           #increment(use 'p' or 'm' to change)
+#         self.cutoff = cutoff
+#         self.thick  = thick
+#         self.fieldNames  = ['thick','frame','cutoff','inc']
+#         self.mode = 1
+#         self.pargs  = pargs
+#         rc('text', usetex=False)
+#         self.show()
+#         if v:self.show_help()
+#
+#     def __call__(self, event):
+#         # print(event.key)
+#         if event.key in ['up','right']:
+#             self.i=min(self.i+self.inc,self.nfigs-1)
+#             self.mode=1
+#         elif event.key in ['left','down']:
+#             self.i=max(0,self.i-self.inc)
+#             self.mode=-1
+#         self.frame=self.i+1
+#
+#         if event.key=='s':
+#             dsp.saveFig(self.figpath+'_%s.png' %str(self.i).zfill(3),ax=self.ax)
+#
+#         #increment rate
+#         if event.key=='p':
+#             self.inc=min(self.inc+1,100)        ;print('increment rate : %d' %self.inc)
+#         elif event.key=='m':
+#             self.inc=max(1,self.inc-1)          ;print('increment rate : %d' %self.inc)
+#         elif event.key=='ctrl+r':
+#             self.inc=1                          ;print('increment rate : %d' %self.inc)
+#
+#         #brightness
+#         if event.key=='pageup':
+#             self.cutoff=min(self.cutoff+5,500)  ;print('cutoff : %d' %self.cutoff)
+#         elif event.key=='pagedown':
+#             self.cutoff=max(1,self.cutoff-5)    ;print('cutoff : %d' %self.cutoff)
+#         elif event.key=='r':
+#             self.cutoff=50                      ;print('cutoff : %d' %self.cutoff)
+#
+#         #thickness
+#         if event.key=='ctrl+t':
+#             self.thick+=5                       ;print('thickness : %d' %self.thick)
+#         elif event.key=='ctrl+T':
+#             self.thick=max(self.thick-5,5)      ;print('thickness : %d' %self.thick)
+#
+#         if event.key=='h':self.show_help()
+#         elif event.key=='enter':self.settings()
+#         keys = self.call(event)
+#
+#         update_keys = keys+['enter','ctrl+t','ctrl+T','pageup','pagedown','r','left','right','down','up']
+#         if event.key in update_keys:self.show()
+#
+#     def settings(self):
+#         fieldValues = ['%d' %self.__dict__[f] for f in self.fieldNames]
+#         fieldNames = self.fieldNames.copy()
+#         self.get_fieldValues(fieldNames,fieldValues)
+#         dict_fv = multenterbox("Change settings","settings", fieldValues,fieldNames)
+#         if dict_fv:
+#             for f in self.fieldNames:
+#                 self.__dict__[f] = int(dict_fv[f])
+#             self.set_fieldValues(dict_fv)
+#         self.i = self.frame-1
+#
+#     def show(self):
+#         tle = "frame %d, thickness=%d $\AA$" %(self.i+1,self.thick)
+#         self.ax.cla()
+#         self.get_im(fig=self.fig,ax=self.ax,title=tle,opt='',**self.pargs)
+#         self.fig.canvas.draw()
+#
+#     def show_help(self):
+#         msg = '''
+#     'up or right'  : show frame+1
+#     'down or left' : show frame-1
+#     ##
+#     'p' : increase increment rate
+#     'm' : decrease increment rate
+#     ##
+#     'pageup'   : increae cutoff brightness
+#     'pagedown' : decrease cutoff brightness
+#     'r'        : reset cutoff brightness
+#     ##
+#     'ctrl+t' : increase thickness
+#     'ctrl+T' : decrease thickness
+#     ##
+#     'enter' : change settings
+#     's' : save image
+#     'h' : show help
+#         '''
+#         print(colors.green+'shortcuts : '+colors.blue+msg+colors.black)
+#     ###################################
+#     ##### virtual functions
+#     ###################################
+#     def _get_nfigs(self):
+#         print('base nfigs')
+#         return 0
+#     def get_im(self,**kwargs):
+#         print('base get_im')
+#     def get_fieldValues(self,fieldNames,fieldValues):return None
+#     def set_fieldValues(self,dict_fv):return None
+#     def call(self,event):return []
+#
+#
+# class Frames_Viewer(Base_Viewer):
+#     '''Viewer for pets'''
+#     def __init__(self,pets,thick,Imag,kargs,**sargs):
+#         self.pets   = pets
+#         self.kargs  = kargs
+#         super().__init__(thick=thick,cutoff=Imag,**sargs)
+#
+#     def get_fieldValues(self,fieldNames,fieldValues):
+#         fieldNames+=list(self.kargs.keys())
+#         fieldValues+=[str(f) for f in self.kargs.values()]
+#     def set_fieldValues(self,dict_fv):
+#         float_keys = np.setdiff1d(list(self.kargs.keys()),'opts')
+#         for f in float_keys:
+#             self.kargs[f] = eval(dict_fv[f])
+#         self.kargs['opts']=dict_fv['opts']
+#     def _get_nfigs(self):
+#         return self.pets.nFrames
+#     def get_im(self,**kwargs):
+#         self.pets.show_frame(frame=self.i+1,thick=self.thick,Imag=self.cutoff,
+#             **self.kargs,**kwargs)
+#
+#     def call(self,event):
+#         chars = 'KkPhr'
+#         keys = ['ctrl+K','ctrl+k', 'ctrl+H','ctrl+h','ctrl+g']
+#
+#         vals = [c in self.kargs['opts'] for c in chars]
+#         for i,(c,k) in enumerate(zip(chars,keys)):
+#             if event.key==k:
+#                 vals[i] = not vals[i]
+#
+#         self.kargs['opts']='q'+''.join([c for c,val in zip(chars,vals) if val])
+#
+#         return keys
+#
+# class Viewer(Base_Viewer):
+#     '''similar to adxv. Works with raw cbf/tiff'''
+#     def __init__(self,exp_path=None,
+#         Smax=0.025,Nmax=13,rot=203,pets=None,v=1,init='',**sargs):
+#         """ View cbf files
+#         - exp_path : path to images
+#         - figpath : place to save the figures
+#         - i : starting image
+#         """
+#         if isinstance(pets,str):pets = pt.Pets(pets)
+#         if isinstance(pets,pt.Pets):exp_path = os.path.join(pets.path,'tiff')
+#
+#         d_fmt = {'cbf':self.load_cbf,'tiff':self.load_tif,'tif':self.load_tif}
+#         self.supported_fmts = d_fmt.keys()
+#
+#         self.exp_path = os.path.realpath(exp_path)
+#         self.fmt      = self.find_format(v)
+#         self.figs     = np.sort(glob.glob(self.exp_path+'/*.%s' %self.fmt))#;print(self.figs)
+#         self.load     = d_fmt[self.fmt]
+#         self.pets     = pets
+#         if self.pets:
+#             vals  = ['center','refl','pred','boxes']
+#             keys  = ['c','r','s','b']
+#             alias = ['1','2','3','4']
+#             self.show_d = dict(zip(keys,vals))
+#             self.alias  = dict(zip(alias,keys))
+#             self.show_opt = dict(zip(vals,[c in init for c in keys ]))
+#             self.Smax,self.Nmax,self.rot=Smax,Nmax,rot
+#         super().__init__(v=v,**sargs)
+#
+#     def call(self,event):
+#         # k = event.key
+#         if self.pets:
+#             if event.key in self.alias.keys():event.key = self.alias[event.key]
+#             if event.key in self.show_d.keys():
+#                 key = self.show_d[event.key]
+#                 self.show_opt[key] = not self.show_opt[key]
+#
+#             return list(self.show_d.keys())
+#         else:
+#             return []
+#     def get_im(self,**kwargs):
+#         fig = self.figs[self.i]
+#         figname = os.path.basename(fig)
+#         print(colors.yellow+fig+colors.black)
+#         im = self.load(fig)
+#         plts,scat,pp = [],[],[]
+#         sargs = {'facecolor':'none','edgecolor':(0.7,0.7,0.15),'s':50,'marker':'o'}
+#         if self.pets:
+#             # df = self.rpl
+#             df = self.pets.rpl
+#             frame = self.i+1
+#             if self.show_opt['refl']:
+#                 rpl = df.loc[df.F==frame]
+#                 plts+=[[rpl.rpx-0.5,rpl.rpy-0.5,'r+','']]
+#             if self.show_opt['center']  :
+#                 cen = self.pets.cen.iloc[self.i]
+#                 plts += [[ cen.px-0.5,cen.py-0.5,'b+','']]
+#             if self.show_opt['pred'] or self.show_opt['boxes']:
+#                 px,py,I,hkl = self.pets.get_kin(frame,rot=self.rot,thick=self.thick,Smax=self.Smax,Nmax=self.Nmax,pixel=True)
+#             if self.show_opt['pred']:
+#                 scat  = [px,py]
+#             if self.show_opt['boxes']:
+#                 npx = 15
+#                 pp = [dsp.Rectangle((px0-npx/2,py0-npx/2),npx,npx,facecolor='none',edgecolor='r') for px0,py0 in zip(px,py)]
+#         dsp.stddisp(plts,patches=pp,scat=scat,im=[im],ms=20,sargs=sargs,xylims=[0,516,516,0],
+#             cmap='gray',caxis=[0,self.cutoff],pOpt='tX',**kwargs)
+#
+#     def _get_nfigs(self):
+#         return self.figs.size
+#
+#     ###############################################################
+#     #### misc
+#     ###############################################################
+#     def find_format(self,v=1):
+#         fmts = np.unique([f.split('.')[-1] for f in os.listdir(self.exp_path)])
+#         fmts = [fmt for fmt in fmts if fmt in self.supported_fmts]
+#         if not len(fmts):
+#             raise Exception('no supported format found in %s. Supported formats :' %(self.exp_path),self.supported_fmts)
+#         fmt = fmts[0]
+#         if len(fmts)>1:
+#             print('warning multiple formats found',fmts)
+#             print('using %s' %fmt)
+#         if v:print('%s format detected' %fmt)
+#         return fmt
+#
+#     def load_cbf(self,fig):
+#         try:
+#             content = cbf.read(fig)
+#         except:#UnicodeDecodeError
+#             self.i=self.i+self.mode
+#             print(colors.red+'error reading file'+colors.black)
+#             self.import_exp()
+#             return
+#         numpy_array_with_data = content.data
+#         header_metadata = content.metadata
+#         # print(colors.blue,header_metadata,colors.black)
+#         return numpy_array_with_data
+#
+#     def load_tif(self,fig):
+#         return tifffile.imread(fig)
+#
+#
+# def multenterbox(msg,title,fieldValues,fieldNames):
+#     fieldValues = easygui.multenterbox(msg, title, fieldNames,fieldValues)
+#     while True:
+#         if fieldValues is None:
+#             break
+#         errs = list()
+#         for n, v in zip(fieldNames, fieldValues):
+#             if v.strip() == "":errs.append('"{}" is a required field.'.format(n))
+#         if not len(errs):
+#             break
+#         fieldValues = easygui.multenterbox("\n".join(errs), title, fieldNames, fieldValues)
+#     return dict(zip(fieldNames,fieldValues))
+#
+#
 
-def find_format(exp_path,v=1):
-    d_fmt = {'cbf':load_cbf,'tiff':load_tif,'tif':load_tif}
-    supported_fmts = d_fmt.keys()
 
-    fmts = np.unique([f.split('.')[-1] for f in os.listdir(exp_path)])
-    fmts = [fmt for fmt in fmts if fmt in supported_fmts]
-    if not len(fmts):
-        raise Exception('no supported format found in %s. Supported formats :' %(exp_path),supported_fmts)
-    fmt = fmts[0]
-    if len(fmts)>1:
-        print('warning multiple formats found',fmts)
-        print('using %s' %fmt)
-    if v:print('%s format detected' %fmt)
-    return fmt,d_fmt[fmt]
+#
+# ###########################################################################
+# #### misc :
+# ###########################################################################
+# def _get_cif_file(path,cif_file):
+#     if not cif_file:
+#         cif_file = _find_files(path,'cif')
+#     return cif_file
+#
+#
+# def _find_files(path,f_type):
+#     files = glob.glob(path+'/*.%s' %f_type)
+#     if len(files)==1:
+#         file=files[0]
+#         return file
+#     else:
+#         msg ='''
+#     only 1 %s file should be found in path folder :
+#      %s
+#     but %d were found :
+#      %s''' %(f_type,os.path.realpath(path),len(files),str(files))
+#         raise Exception(msg)
+#
+# # def load_tif(fig):
+# #     return tifffile.imread(fig)
+# #
+# # def load_cbf(fig):
+# #     try:
+# #         content = cbf.read(fig)
+# #         numpy_array_with_data = content.data
+# #         header_metadata = content.metadata
+# #         return numpy_array_with_data
+# #     except:#UnicodeDecodeError
+# #         self.i=self.i+self.mode
+# #         print(colors.red+'error reading file'+colors.black)
+#
+# def find_format(exp_path,v=1):
+#     d_fmt = {'cbf':load_cbf,'tiff':load_tif,'tif':load_tif}
+#     supported_fmts = d_fmt.keys()
+#
+#     fmts = np.unique([f.split('.')[-1] for f in os.listdir(exp_path)])
+#     fmts = [fmt for fmt in fmts if fmt in supported_fmts]
+#     if not len(fmts):
+#         raise Exception('no supported format found in %s. Supported formats :' %(exp_path),supported_fmts)
+#     fmt = fmts[0]
+#     if len(fmts)>1:
+#         print('warning multiple formats found',fmts)
+#         print('using %s' %fmt)
+#     if v:print('%s format detected' %fmt)
+#     return fmt,d_fmt[fmt]
+#
+#
+# def import_crys(file):
+#     if file.split('.')[-1]=='cif':
+#         crys = Crystal.from_cif(file)
+#     elif sum(np.array(list(Crystal.builtins))==file):
+#         crys = Crystal.from_database(file)
+#     else:
+#         raise Exception('cannot import %s' %file)
+#     return crys

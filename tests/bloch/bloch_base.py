@@ -2,14 +2,13 @@ from utils import*                  ;imp.reload(dsp)
 from pytest_html import extras
 from blochwave import bloch         ;imp.reload(bloch)
 import blochwave,time,sys,pytest,os
-
 plt.close('all')
+
 path = 'dat'
 dir=os.path.dirname(__file__)
 file=os.path.basename(__file__)
 ref=os.path.join(dir,'ref','base')
 out=os.path.join(dir,'out','base')
-
 
 b0 = bloch.Bloch('diamond',path=path,keV=200,u=[0,0,1],Nmax=8,Smax=0.05,
     opts='svt',thick=100)
@@ -30,6 +29,20 @@ def test_beam_thickness(extra):
     extra.append(extras.image('file://'+beam_svg))
     extra.append(extras.url(  'file://'+beam_svg))
 
+def test_convert2tiff(extra):
+    tiff_file=out+"/I.tiff"
+    v=b0.convert2tiff(tiff_file=tiff_file,
+        show=False,cutoff=10,thick=200,Imax=1e7)
+    import tifffile
+    im=tifffile.imread(tiff_file)
+
+    png_file=tiff_file.replace('.tiff','.png')
+    dsp.stddisp(im=[im],cmap='gray',caxis=[0,20],pOpt='t',
+        opt='sc',name=png_file)
+
+    extra.append(extras.url('file://'  +png_file))
+    extra.append(extras.image('file://'+png_file))
+
 @pytest.mark.slow
 def test_bloch_convergence(n=3):
     Nmaxs = np.arange(4,4*n+1,4)
@@ -47,9 +60,6 @@ def test_bloch_convergence(n=3):
     dsp.stddisp(plts,labs=['Nmax','I'],lw=2)
     return b
 
-@pytest.mark.lvl1
-def test_tiff():
-    b0.convert2tiff(show=True,cutoff=10,thick=200,Imax=1e7)
 
 @pytest.mark.lvl2
 def test_set_beam():
@@ -90,7 +100,7 @@ def check_multi_spot():
 # test_set_beam(b0)
 # test_show_Fhkl(b0)
 
-
+# test_convert2tiff()
 # b = bloch_convergence(n=6)
 
 # b0 = bloch.Bloch('diamond',path=path,u=[10,2,5],Nmax=3,Smax=0.1,opts='svt')#,thicks=(0,100,100))

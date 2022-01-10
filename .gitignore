@@ -9,6 +9,10 @@
 **/docs/build
 **/docs/source/reference
 
+**/tests/**/ref
+**/tests/**/out
+**/tests/**/report
+
 tests/dials
 tests/*/dat
 multislice/examples/dat

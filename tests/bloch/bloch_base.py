@@ -1,25 +1,37 @@
 from utils import*                  ;imp.reload(dsp)
+from pytest_html import extras
 from blochwave import bloch         ;imp.reload(bloch)
+import blochwave,time,sys,pytest,os
+
 plt.close('all')
 path = 'dat'
+dir=os.path.dirname(__file__)
+file=os.path.basename(__file__)
+ref=os.path.join(dir,'ref','base')
+out=os.path.join(dir,'out','base')
 
-def test_bloch_solve():
-    b0 = bloch.Bloch('diamond',path=path,keV=200,u=[0,0,1],Nmax=8,Smax=0.05,
-        opts='svt',thick=100)
+
+b0 = bloch.Bloch('diamond',path=path,keV=200,u=[0,0,1],Nmax=8,Smax=0.05,
+    opts='svt',thick=100)
+
+def test_beam_thickness(extra):
+
+    idx   = b0.get_beam()
+    beams = b0.get_beams_vs_thickness(dict_opt=False,idx=idx)
+    np.save(out+'/beams.npy',beams)
+    beams_ref = np.load(out+'/beams.npy')
+    assert np.abs(beams-beams_ref).sum() <1e-3
+    beam_svg = out+"/beams.svg"
     b0.show_beams_vs_thickness(thicks=(0,200,1000),
-        beam_args={'cond':'(Vga>1e-4) & (Sw<1e-2)'},cm='jet')
-    b0.convert2tiff(show=True,cutoff=10,thick=200,Imax=1e7)
-    return b0
+        beam_args={'cond':'(Vga>1e-4) & (Sw<1e-2)'},cm='jet',
+        opt='sc',name=beam_svg)
 
-# def zone_axis_config():
-#     u0s = [[0,0,1],[1,1,1],[10,2,1],[14,5,2],[3,6,8]]
-#     b = {}
-#     for u0 in u0s:
-#         b0 = bloch.Bloch('diamond',Smax=0.035,u0=u0,Nmax=12,solve=0,opts='',path='dat/')
-#         b0.show_beams(opts='VSk',title=str(u0))
-#         b[str(u0)]=b0
 
-def bloch_convergence(n=3):
+    extra.append(extras.image('file://'+beam_svg))
+    extra.append(extras.url(  'file://'+beam_svg))
+
+@pytest.mark.slow
+def test_bloch_convergence(n=3):
     Nmaxs = np.arange(4,4*n+1,4)
     refl = [[0,0,0],[2,2,0],[4,0,0],[4,4,0]]
     refl = [str(tuple(h))  for h in refl]
@@ -35,7 +47,33 @@ def bloch_convergence(n=3):
     dsp.stddisp(plts,labs=['Nmax','I'],lw=2)
     return b
 
+@pytest.mark.lvl1
+def test_tiff():
+    b0.convert2tiff(show=True,cutoff=10,thick=200,Imax=1e7)
 
+@pytest.mark.lvl2
+def test_set_beam():
+    b0.set_beam(keV=200)
+    b0.set_beam(u=[1,0,1])
+    b0.set_beam(K=1/cst.keV2lam(100)*np.array([1,0,0]))
+@pytest.mark.lvl2
+def test_show_Fhkl():
+    b0.show_Fhkl(xylims=6,h3D=1,ms=30,cmap='Greens')
+    b0.show_Fhkl(s=np.s_[:,:,3],xylims=6,ms=30,cmap='Greens')
+    b0.show_Fhkl(s='h=0',opts='l',xylims=7,ms=50,cmap='Greens',pOpt='im',caxis=[0,1.5])
+
+
+
+
+
+
+def zone_axis_config():
+    u0s = [[0,0,1],[1,1,1],[10,2,1],[14,5,2],[3,6,8]]
+    b = {}
+    for u0 in u0s:
+        b0 = bloch.Bloch('diamond',Smax=0.035,u0=u0,Nmax=12,solve=0,opts='',path='dat/')
+        b0.show_beams(opts='VSk',title=str(u0))
+        b[str(u0)]=b0
 
 def check_multi_spot():
     ar = b0.df_G[['px','py']].values
@@ -47,16 +85,8 @@ def check_multi_spot():
         print(b0.df_G.iloc[ids][['h','k','l','px','py','Vg']])
     # rep = np.setdiff1d(np.arange(133),idr[idx])
 
-def test_set_beam(b0):
-    b0.set_beam(keV=200)
-    b0.set_beam(u=[1,0,1])
-    b0.set_beam(K=1/cst.keV2lam(100)*np.array([1,0,0]))
-def test_show_Fhkl(b0):
-    b0.show_Fhkl(xylims=6,h3D=1,ms=30,cmap='Greens')
-    b0.show_Fhkl(s=np.s_[:,:,3],xylims=6,ms=30,cmap='Greens')
-    b0.show_Fhkl(s='h=0',opts='l',xylims=7,ms=50,cmap='Greens',pOpt='im',caxis=[0,1.5])
-
-b0 = test_bloch_solve()
+#test_beam_thickness()
+# b0 = test_bloch_solve()
 # test_set_beam(b0)
 # test_show_Fhkl(b0)
 

@@ -1,47 +1,35 @@
-from utils import*                  ;imp.reload(dsp)
-from pytest_html import extras
-from blochwave import bloch         ;imp.reload(bloch)
 import blochwave,time,sys,pytest,os
+from pytest_html import extras
+from utils import*                  ;imp.reload(dsp)
+from utils import pytest_util       ;imp.reload(pytest_util)
+from blochwave import bloch         ;imp.reload(bloch)
 plt.close('all')
 
 path = 'dat'
-dir=os.path.dirname(__file__)
-file=os.path.basename(__file__)
-ref=os.path.join(dir,'ref','base')
-out=os.path.join(dir,'out','base')
-
 b0 = bloch.Bloch('diamond',path=path,keV=200,u=[0,0,1],Nmax=8,Smax=0.05,
     opts='svt',thick=100)
 
-def test_beam_thickness(extra):
-
+@pytest_util.cmp_ref(__file__)
+def test_beam_thickness():
     idx   = b0.get_beam()
-    beams = b0.get_beams_vs_thickness(dict_opt=False,idx=idx)
-    np.save(out+'/beams.npy',beams)
-    beams_ref = np.load(out+'/beams.npy')
-    assert np.abs(beams-beams_ref).sum() <1e-3
-    beam_svg = out+"/beams.svg"
-    b0.show_beams_vs_thickness(thicks=(0,200,1000),
+    return b0.get_beams_vs_thickness(dict_opt=False,idx=idx)
+
+@pytest_util.add_link(__file__)
+def test_show_beam_thickness():
+    return b0.show_beams_vs_thickness(thicks=(0,200,1000),
         beam_args={'cond':'(Vga>1e-4) & (Sw<1e-2)'},cm='jet',
-        opt='sc',name=beam_svg)
+        opt='')
 
-
-    extra.append(extras.image('file://'+beam_svg))
-    extra.append(extras.url(  'file://'+beam_svg))
-
-def test_convert2tiff(extra):
-    tiff_file=out+"/I.tiff"
+@pytest_util.add_link(__file__)
+def test_convert2tiff():
+    import tifffile
+    tiff_file=path+"/I.tiff"
     v=b0.convert2tiff(tiff_file=tiff_file,
         show=False,cutoff=10,thick=200,Imax=1e7)
-    import tifffile
     im=tifffile.imread(tiff_file)
+    return dsp.stddisp(im=[im],
+        cmap='gray',caxis=[0,20],pOpt='t',opt='')
 
-    png_file=tiff_file.replace('.tiff','.png')
-    dsp.stddisp(im=[im],cmap='gray',caxis=[0,20],pOpt='t',
-        opt='sc',name=png_file)
-
-    extra.append(extras.url('file://'  +png_file))
-    extra.append(extras.image('file://'+png_file))
 
 @pytest.mark.slow
 def test_bloch_convergence(n=3):
@@ -73,6 +61,46 @@ def test_show_Fhkl():
     b0.show_Fhkl(s='h=0',opts='l',xylims=7,ms=50,cmap='Greens',pOpt='im',caxis=[0,1.5])
 
 
+
+
+################################################################################
+################################################################################
+################################################################################
+#### rubbish
+################################################################################
+################################################################################
+################################################################################
+# out,ref,dir=pytest_util.get_path(__file__)
+# @pytest.mark.old
+# def test_beam_thickness_old(extra):
+#
+#     idx   = b0.get_beam()
+#     beams = b0.get_beams_vs_thickness(dict_opt=False,idx=idx)
+#     np.save(out+'/beams.npy',beams)
+#     beams_ref = np.load(out+'/beams.npy')
+#     assert np.abs(beams-beams_ref).sum() <1e-3
+#     beam_svg = out+"/beams.svg"
+#     b0.show_beams_vs_thickness(thicks=(0,200,1000),
+#         beam_args={'cond':'(Vga>1e-4) & (Sw<1e-2)'},cm='jet',
+#         opt='sc',name=beam_svg)
+#
+#     extra.append(extras.image('file://'+beam_svg))
+#     extra.append(extras.url(  'file://'+beam_svg))
+#
+# @pytest.mark.old
+# def test_convert2tiff_old(extra):
+#     tiff_file=out+"/I.tiff"
+#     v=b0.convert2tiff(tiff_file=tiff_file,
+#         show=False,cutoff=10,thick=200,Imax=1e7)
+#     import tifffile
+#     im=tifffile.imread(tiff_file)
+#
+#     png_file=tiff_file.replace('.tiff','.png')
+#     dsp.stddisp(im=[im],cmap='gray',caxis=[0,20],pOpt='t',
+#         opt='sc',name=png_file)
+#
+#     extra.append(extras.url('file://'  +png_file))
+#     extra.append(extras.image('file://'+png_file))
 
 
 

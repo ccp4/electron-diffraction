@@ -11,16 +11,15 @@ path=out+'/felix/'
 b = bl.Bloch(cif_file='GaAs',u=[-1,1,0],keV=200,Nmax=10,Smax=0.2,path=out,solve=0)
 
 cif='GaAs_felix.cif'
-if not os.path.exists(path+'intensities.txt'):
-    bf=b.copy()
-    bf._solve_Felix(cif,nbeams=200,thicks=(10,250,10))
+if not os.path.exists(path+'eigenvals.txt'):
+    bf=copy.copy(b)
+    bf._solve_Felix(cif,nbeams=200,thicks=(10,20,10))
 
-A   = np.loadtxt(path+'intensities.txt')
+A   = np.loadtxt(path+'eigenvals.txt')
 hkl = np.array(A[:,:3],dtype=int)
 hkl_str = [str(tuple(h)) for h in hkl]
 b.solve(hkl=hkl,Smax=0,Nmax=10)#Smax=0.02,Nmax=7)
 # idx = b.get_beam(refl=hkl_str)
-
 
 # @pytest.mark.new
 @pytest_util.cmp_ref(__file__)
@@ -53,10 +52,11 @@ def test_coords():
 def test_structure_factor():
     df  = pd.read_csv(path+'StructureFactors.txt',sep="  *",names=['h','k','l','qx','qy','qz','Fr','Fi'],engine='python')
     df.index=[str(tuple(hkl)) for hkl in df[['h','k','l']].values]
+    df=df.loc[hkl_str] #
 
     df['Rg'] = np.linalg.norm(df[['qx','qy','qz']].values,axis=1)
     df['q']  = df.Rg/(2*np.pi)
-    df['qb'] = b.df_G.q.loc[df.index]
+    df['qb'] = b.df_G.q.loc[hkl_str]
     # Za = np.array(b.pattern[:,-1],dtype=int)
     # fj = scatf.get_fe(Za,df.q)
 
@@ -74,50 +74,59 @@ def test_structure_factor():
     print(dmax)
     assert dmax<1e-4
 
+def get_H():
+    H = np.loadtxt(path+'matrix.txt')/100
+    H = H[:,3::2]+1J*H[:,4::2]
+    return H
 
 @pytest.mark.lvl1
 def test_excitation():
-    b._set_excitation_errors(hkl=hkl)
-    dfM = pd.DataFrame(hkl,columns=['hkl'])
-    dfM.index = hkl_str
-    dfM['Sw_bloch'] = b.df_G.loc[hkl,'Sw']*(2*np.pi)
+    H=get_H()
+    dfM = pd.DataFrame(hkl_str,columns=['hkl'],index=hkl_str)
     dfM['Sw_felix'] = np.diag(H).real
+    dfM['Sw_bloch'] = b.df_G.loc[hkl_str]['Sw']*(2*np.pi)
     print('mean excitation diff:',abs(dfM.Sw_felix-dfM.Sw_bloch).mean())
-    assert abs(dfM.Sw_felix-dfM.Sw_bloch).sum()<1e-6
+    dmax = abs(dfM.Sw_felix-dfM.Sw_bloch).max()
+    print(dfM);print(dmax)
+    assert dmax<1e-3
 
-#
-# @pytest.mark.lvl1
-# def test_Matrix():
-#         H = (A[:,3::2]+1J*A[:,4::2])/100
-#         Hdiff = abs(b.H-H)
-#         print('mean matrix error :' ,Hdiff.mean())
-#         assert Hdiff.sum()<1e-4
+
+@pytest.mark.lvl1
+def test_matrix():
+    H=get_H()
+    Hdiff = abs(b.H-H)
+    print('mean matrix error :' ,Hdiff.mean())
+    print('max matrix error :' ,Hdiff.max())
+    assert Hdiff.max()<1e-3
 
 def get_eigen():
-        g = np.loadtxt(path+'eigenvals.txt')
-        C = np.loadtxt(path+'eigenvec.txt')
-        g = g[:,3::2]+1J*g[:,4::2];g=g[:,0]
-        C = C[:,3::2]+1J*C[:,4::2]
-        return g,C
+    g = np.loadtxt(path+'eigenvals.txt')
+    C = np.loadtxt(path+'eigenvec.txt')
+    g = g[:,3::2]+1J*g[:,4::2];g=g[:,0]
+    C = C[:,3::2]+1J*C[:,4::2]
+    return g,C
 
 
 @pytest.mark.lvl1
 def test_eigen():
-        g,C=get_eigen()
-        # Hb = b.H[np.ix_(idx,idx)]
-        # gammaj,Cj = np.linalg.eigh(Hb)
+        #felix
+        g,C = get_eigen()
+        idx_g  = np.argsort(g)
+        g = g[idx_g]
+        C = C[:,idx_g]
+        #bloch
         idx_b  = np.argsort(b.gammaj)
         gammaj = b.gammaj[idx_b]
         Cj     = b.CjG[:,idx_b]
-        # idx_g = np.argsort(g)
-        # g     = g[idx_g]
-        # C     = C[:,idx_g]
 
         # print('Cj.gamma.Cjdag',np.linalg.norm(Cj.dot(np.diag(gammaj)).dot(np.linalg.inv(Cj))-b.H))
         # print('C.g.Cdag',np.linalg.norm(C.dot(np.diag(g)).dot(np.linalg.inv(C))-H))
-        print('mean eigen val error percentage :',(abs(g-gammaj)/abs(g)).mean()*100)
-        assert (abs(g-gammaj)/abs(g)).sum()<1e-2
-        # print('mean eigen vec error percentage :',np.linalg.norm(Cj+1J*C,axis=1).mean()*100)
+        dg = (abs(g-gammaj)/abs(g))
+        dfg = pd.DataFrame(np.array([g,gammaj,dg]).T,columns=['felix','bloch','diff'])
+        print('mean eigen val error percentage :',dg.mean())
+        print('max eigen val error percentage :' ,dg.max())
+        print(dfg)
+        assert dg.mean()<5e-2
 
 @pytest_util.add_link(__file__)
 def test_intensities():
@@ -160,4 +169,8 @@ def test_intensities():
         return dsp.stddisp(plts,lw=2,legElt=legElt,
             xylims=['x',0,zA],opt='')
 
+# test_excitation()
+# test_matrix()
+# test_structure_factor()
+# test_eigen()
 # test_intensities()

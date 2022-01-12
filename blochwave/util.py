@@ -1,5 +1,72 @@
 import numpy as np
 
+def get_inp(npx,nbeams,u,keV,thicks):
+    inp = """# Input file for Felix version :
+# ------------------------------------
+
+# ------------------------------------
+
+# control flags
+IWriteFLAG                = 0
+IImageFLAG                = 1
+IScatterFactorMethodFLAG  = 0
+IBlochMethodFLAG          = 0
+IMaskFLAG                 = 1
+IHolzFLAG                 = 0
+IAbsorbFLAG               = 0
+IAnisoDebyeWallerFlag     = 0
+IByteSize                 = 8
+    """
+
+    inp+="""
+# radius of the beam in pixels
+IPixelCount               = %d
+
+# beam selection criteria
+IMinReflectionPool        = %d
+IMinStrongBeams           = %d
+IMinWeakBeams             = 0
+    """ %(npx,nbeams,nbeams)
+
+    inp+="""
+# crystal settings
+RDebyeWallerConstant      = 0.0
+RAbsorptionPer            = 7.8
+
+# microscope settings
+ROuterConvergenceAngle    = 3.03
+IIncidentBeamDirection    = [%f,%f,%f]
+IXDirection               = [1,1,0]
+INormalDirection          = [-1,1,0]
+RAcceleratingVoltage (kV) = %.1f
+RAcceptanceAngle          = 0.0
+    """ %(u[0],u[1],u[2],keV)
+
+    inp+="""
+# Image Output Options
+RInitialThickness        = %.1f
+RFinalThickness          = %.1f
+RDeltaThickness          = %.1f
+IReflectOut              = 1
+    """ %(thicks[0],thicks[1],thicks[2])
+
+    inp+="""
+#Refinement Specific Flags
+IRefineModeFLAG          = S
+IWeightingFLAG           = 0
+IRefineMethodFLAG        = 3
+ICorrelationFLAG         = 2
+IImageProcessingFLAG     = 4
+RBlurRadius              = 0.0
+INoofUgs                 = 40
+IAtomicSites             = (1,2)
+IPrint                   = 0
+RSimplexLengthScale      = 20.0
+RExitCriteria            = 0.00001
+    """
+
+    return inp
+
 def load_Bloch(path='',tag='',file='',v=1):
     """load a saved Bloch object
     filename : pickle file (.pkl)  """

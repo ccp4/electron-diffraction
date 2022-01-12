@@ -2,6 +2,7 @@
 import importlib as imp
 import numpy as np,pandas as pd,pickle5,os,glob,tifffile
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
+from subprocess import check_output#Popen,PIPE
 from crystals import Crystal
 from utils import displayStandards as dsp           #;imp.reload(dsp)
 from utils import physicsConstants as cst           #;imp.reload(cst)
@@ -14,7 +15,7 @@ from scattering import structure_factor as sf       #;imp.reload(sf)
 from scattering import scattering_factors as scatf  #;imp.reload(scatf)
 from EDutils import viewers                         #;imp.reload(viewers)
 from EDutils import utilities as ut                 #;imp.reload(ut)
-from .util import*
+from . import util as bloch_util                    ;imp.reload(bloch_util)
 
 class Bloch:
     """
@@ -219,6 +220,37 @@ class Bloch:
     ################################################################################
     #### private
     ################################################################################
+    def _solve_Felix(self,felix_cif,npx=20,nbeams=200,thicks=(10,250,10),show_log=False):
+
+        inp = bloch_util.get_inp(npx,nbeams,self.u,self.keV,thicks)
+        with open("%s/felix.inp" %self.path,'w') as f:f.write(inp)
+
+        print(colors.blue+"preparing simulation"+colors.black)
+        cmd="""cd %s;
+        if [ ! -d felix ];then mkdir felix;fi;
+        cp %s felix/felix.cif;
+        mv felix.inp felix;
+        """ %(self.path,os.path.realpath(felix_cif))
+        # p=Popen(cmd,shell=True)#;p.wait();o,e = p.communicate();if e:print(e)
+        p=check_output(cmd,shell=True).decode();print(p)
+
+        print(colors.blue+"... running felix ..."+colors.black)
+        cmd="""cd %s;
+        cd felix;
+        felix.OPT64NGNU.d > felix.log 2>&1;
+        """ %self.path
+        p=check_output(cmd,shell=True).decode() #;print(p)
+
+        if show_log:
+            print(colors.blue+"felix output"+colors.black)
+            with open('%s/felix/felix.log' %self.path,'r') as f:print('\n'.join(f.readlines()))
+
+        g = np.loadtxt(os.path.join(self.path,'felix/eigenvals.txt'))
+        C = np.loadtxt(os.path.join(self.path,'felix/eigenvec.txt'))
+        self.gammaj = g[:,3::2]+1J*g[:,4::2];g=g[:,0]
+        self.CjG = C[:,3::2]+1J*C[:,4::2]
+        self.invCjG=np.conj(C.T)
+
     def _solve_Bloch(self,show_H=False,Vopt0=True,v=False):
         ''' Diagonalize the Hamiltonian'''
         # Ug is a (2*Nmax+1)^3 tensor :
@@ -315,7 +347,7 @@ class Bloch:
         self.df_G['py'] = py
         self.df_G['Vg'] = Vg_G
         self.df_G['Vga'] = abs(Vg_G)
-        self.df_G['Swl'] = logM(self.df_G['Sw'])
+        self.df_G['Swl'] = bloch_util.logM(self.df_G['Sw'])
         self.df_G['L']  = np.ones(Vg_G.shape)
         self._set_zones()
         self.df_G.loc[str((0,0,0)),'Vg'] = 0
@@ -342,7 +374,7 @@ class Bloch:
         Sw,Ug = self.df_G[['Sw','Vg']].values.T
         t,sig = self.thick, self.sig
 
-        #[Ug]=[A-2], [k0]=[A^-1], [t]=[A], [Fhkl]=[fe]=[A]
+        #[Ug]=[A-2], [k0]=[A^-1], [t]=[A], [Fhkl]=3[fe]=[A]
         Sg = np.pi/self.k0*Ug*t*np.sinc(Sw*t)
         self.df_G['Sg'] = Sg
         self.df_G['Ig'] = np.abs(Sg)**2
@@ -463,7 +495,7 @@ class Bloch:
         dict_opt
             returns I(z) as a dictionary
         idx
-            beam indices (see meth:~Bloch.get_beam for beam selection)
+            beam indices in dataFrame (see meth:~`Bloch.get_beam` for selected beams from their miller indices)
         iZs
             selected thicknesses
         returns
@@ -707,8 +739,9 @@ class Bloch:
         tifffile.imwrite(tiff_file,np.flipud(I))
         print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
         if show:
-            viewers.Base_Viewer(self.path,frame=1,thick=self.thick,**kwargs)
+            v=viewers.Base_Viewer(self.path,frame=1,thick=self.thick,**kwargs)
             # dsp.stddisp(im=[I],cmap='')
+            return v
 
 
     ###################################################################################

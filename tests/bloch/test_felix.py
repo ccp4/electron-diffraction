@@ -10,15 +10,27 @@ plt.close('all')
 # i=0
 # path='ref/'
 # cif = 'GaAs' #path+'GaAs_0000.cif'
+cif='out/felix_dat/GaAs_short/felix.cif'
 
-path='out/felix_dat/GaAs_short/'
-b = bl.Bloch('GaAs',u=[-1,1,0],keV=200,Nmax=10,Smax=0.2,path=path,solve=0)
+out,ref,dir = pytest_util.get_path(__file__)
+path=out+'/felix/'
+# b = bl.Bloch('GaAs',u=[-1,1,0],keV=200,Nmax=10,Smax=0.2,path=out,solve=0)
+b = bl.Bloch(cif_file='GaAs',u=[-1,1,0],keV=200,Nmax=10,Smax=0.2,path=out,solve=0)
+# b._solve_Felix(cif,nbeams=200,thicks=(10,250,10))
 
 A   = np.loadtxt(path+'intensities.txt')
 hkl = np.array(A[:,:3],dtype=int)
 hkl_str = [str(tuple(h)) for h in hkl]
 b.solve(hkl=hkl,Smax=0,Nmax=10)#Smax=0.02,Nmax=7)
 idx = b.get_beam(refl=hkl_str)
+
+
+@pytest.mark.new
+@pytest_util.cmp_ref(__file__)
+def test_solve_felix():
+    b._solve_Felix(cif,nbeams=200,thicks=(10,250,10))
+    return b.gammaj
+
 
 
 @pytest.mark.lvl2
@@ -84,21 +96,25 @@ def test_Matrix():
         print('mean matrix error :' ,Hdiff.mean())
         assert Hdiff.sum()<1e-4
 
-@pytest.mark.lvl1
-def test_eigen():
+def get_eigen():
         g = np.loadtxt(path+'eigenvals.txt')
         C = np.loadtxt(path+'eigenvec.txt')
         g = g[:,3::2]+1J*g[:,4::2];g=g[:,0]
         C = C[:,3::2]+1J*C[:,4::2]
+        return g,C
 
+
+@pytest.mark.lvl1
+def test_eigen():
+        g,C=get_eigen()
         # Hb = b.H[np.ix_(idx,idx)]
         # gammaj,Cj = np.linalg.eigh(Hb)
         idx_b  = np.argsort(b.gammaj)
         gammaj = b.gammaj[idx_b]
         Cj     = b.CjG[:,idx_b]
-        idx_g = np.argsort(g)
-        g     = g[idx_g]
-        C     = C[:,idx_g]
+        # idx_g = np.argsort(g)
+        # g     = g[idx_g]
+        # C     = C[:,idx_g]
 
         print('Cj.gamma.Cjdag',np.linalg.norm(Cj.dot(np.diag(gammaj)).dot(np.linalg.inv(Cj))-b.H))
         print('C.g.Cdag',np.linalg.norm(C.dot(np.diag(g)).dot(np.linalg.inv(C))-H))
@@ -115,9 +131,11 @@ def test_intensities():
         idx = np.arange(1,10)
         I=I[idx]            #;print(I.shape)
         #### force calculations with felix eigen solutions
-        # b.gammaj=gammaj
-        # b.CjG=Cj
-        # b.invCjG=np.linalg.inv(Cj)
+        # g,C=get_eigen()
+        # b.gammaj=g
+        # b.CjG=C
+        # print(g.shape,C.shape)
+        # b.invCjG=np.linalg.inv(C)
 
         b._set_beams_vs_thickness(thicks=z)
         Ib = b.get_beams_vs_thickness(idx=idx)
@@ -125,6 +143,7 @@ def test_intensities():
         # dsp.stddisp([z,Rfz,'b-'],labs=['$z$','Rf'])
         # print('max Rfactor error :',np.max(Rfz))
         # idI = I>1e-4
+        print(Ib.shape)
         dI = np.abs(Ib-I)
         print('error in I : max=%.2f, mean=%.2E' %(dI.max(),dI.mean()))
         # print('diff with ref:',abs(Rfz-np.load(path+'Rfz.npy')).sum())

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from EDutils import display as EDdisp #;imp.reload(EDdisp)
 from EDutils import rotate_exp        ;imp.reload(rotate_exp)
 from EDutils import utilities as ut   #;imp.reload(ut)
-from EDutils import viewers as vw     #;imp.reload(vw)
+from EDutils import viewers as vw     ;imp.reload(vw)
 from . import bloch                   ;imp.reload(bloch)
 
 class Bloch_cont(rotate_exp.Rocking):
@@ -37,8 +37,45 @@ class Bloch_cont(rotate_exp.Rocking):
             b.save()
 
     def show_tiff(self,**kwargs):
-        vw.Base_Viewer(self.figpath,**kwargs)
+        return vw.Base_Viewer(self.figpath,**kwargs)
+    def plot_rocking(self,cond='',refl=[],**kwargs):
+        if not any(refl) and not cond:cond=strong_beams
+        return super().plot_rocking(cond=cond,refl=refl,**kwargs)
 
+def strong_beams(dfG,
+        tol:float=1e-2,n:int=10,
+        opt:str=''):
+    """keep the n strongest beams, i.e. those with intensity I>tol not including central beam
+
+    Parameters
+    ----------
+    dfG
+        the bloch dataframe
+    tol
+        strong beam criteria
+    n
+        number of strong beams
+    opt
+        include Origin(O) Friedel pairs(F)
+    Returns
+    ----------
+    x
+        list of beams
+    """
+    dfM=dfG.copy()
+    if not 'O' in opt:
+        dfM = dfM.drop(str((0,0,0)))
+    # if not 'F' in opt:
+    #     dfM = dfM.drop(str((0,0,0)))
+
+    dfM = dfM.sort_values('I',ascending=False)[:n]
+
+    # if dfM.I.max()<tol:
+    #     df=dfM[:1]
+    # else:
+    df  = dfM.loc[dfM.I>tol]
+    # print(dfM)
+    return list(df.index.values)
 
 # def bloch_rock(tag,path='',opts='',
 #     uvw=None,u=None,u1=None,omega=np.linspace(-1,1,3),

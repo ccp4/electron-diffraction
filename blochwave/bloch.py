@@ -437,7 +437,6 @@ class Bloch:
     ################################################################################
     #### getter
     ################################################################################
-
     def get_beam(self,
         cond:str='',
         refl:Iterable[tuple or str]=[],
@@ -448,7 +447,7 @@ class Bloch:
         Parameters
         ----------
         cond
-            condition on the beams
+            condition on the beams (can be a function see meth:~`bloch_pp.strong_beams` for example)
         list-tuple/str refl
             list of beams either as tuple or str
         index
@@ -468,8 +467,11 @@ class Bloch:
             self.df_G.index = [str(tuple(h)) for h in self.df_G[['h','k','l']].values]
 
         if cond:
-            # print(cond)
-            refl = list(self.df_G.loc[self.df_G.eval(cond)].index.values)
+            if isinstance(cond,str):
+                refl = list(self.df_G.loc[self.df_G.eval(cond)].index.values)
+            else:
+                refl=cond(self.df_G)
+
         if len(list(refl)):
             if not isinstance(refl[0],str):
                 refl = [str(tuple(h)) for h in refl]
@@ -639,7 +641,7 @@ class Bloch:
         s
             slice or str('k=0' => Fhkl(k=0)) or int('l==<int>')
         """
-        fz,fz_str = get_fz(opts)
+        fz,fz_str = bloch_util.get_fz(opts)
         s,s_str = self._get_slice(s)
         tle = 'Structure factor($\AA$), showing %s in %s'  %(fz_str,s_str)
         h,k,l = self.hklF

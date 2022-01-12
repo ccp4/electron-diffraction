@@ -86,11 +86,18 @@ class Rocking:
                 z,{beam:I(z)}
         """
         iZs,nzs  = self._get_iZs(iZs,zs)        #;print(iZs)
+        z0 = self.load(0).z.copy()[iZs]
+        print('setting thickness to %dA' %z0[-1])
+        self.do('set_thickness',thick=z0,v=0)
+
         refl,nbs = self.get_beams(cond=cond,refl=refl)  #;print(refl)
         nts = self.ts.size
         I = {}
         for h in refl : I[str(h)]=np.nan*np.ones((nts,nzs))
+
+        #gather the intensities
         for i in range(nts):
+            # print(colors.red,i,colors.black)
             sim_obj = self.load(i)
             hkl0  = sim_obj.get_beam(refl=refl,index=False)
             if hkl0:
@@ -144,14 +151,14 @@ class Rocking:
         dsp.stddisp(plts,labs=[r'$z(\AA)$','$I_{int}$'],**kwargs)
 
     def plot_rocking(self,cmap='viridis',x:str='Sw',
-        cond='',refl=[],iZs=slice(0,None,1),zs=None,
+        cond='',refl=[],iZs=-1,zs=None,
         **kwargs):
         """plot rocking curve for set of selected beams at thickness zs
 
         Parameters
         ----------
         cond,refl,iZs,zs
-            select beams and thicknesses (see :meth:~Rocking.get_rocking)
+            select beams and thicknesses (see :meth:`~Rocking.get_rocking`)
         x
             to display on x axis
         kwargs
@@ -182,7 +189,7 @@ class Rocking:
                     # plts += [[ts,I[refl0][:,iz],[cs[iz],ms[i]+'-'],''] for i,refl0 in enumerate(refl)]
                     plts += [[df[x],I[refl0][df.frame,iz],[cs[iz],ms[i]+'-'],'']]
             legElt.update({'$z=%d A$' %(zi):[cs[iz],'-'] for iz,zi in enumerate(z) })
-        dsp.stddisp(plts,labs=[xlab,'$I$'],legElt=legElt,**kwargs)
+        return dsp.stddisp(plts,labs=[xlab,'$I$'],legElt=legElt,**kwargs)
 
 
     def Sw_vs_theta(self,refl=[[0,0,0]],cond='',thick=None,fz=abs,opts='',
@@ -298,6 +305,7 @@ class Rocking:
         if not isinstance(refl[0],str):
             refl=[str(tuple(h)) for h in refl]
         nbs = len(refl)#.size;print(nbs,refl)
+        print('total number of beams:%d' %nbs)
         return refl,nbs
 
     def _get_iTs(self,iTs,ts):
@@ -371,13 +379,13 @@ class Rocking:
         sim_obj = ut.load_pkl(file)
         return sim_obj
 
-    def do(self,f,**args):
+    def do(self,f,v=True,**args):
         """ apply function to all simus
         """
         for i in range(self.df.shape[0]):
             obj = self.load(i)
             obj.__getattribute__(f)(**args)
-            obj.save()
+            obj.save(v=v)
 
 
 def rock_name(path,tag):

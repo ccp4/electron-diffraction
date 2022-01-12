@@ -106,7 +106,6 @@ abs2 = lambda F:np.abs(F)**2
 logF = lambda F:np.log10(np.abs(F)+1)
 logM = lambda F:-np.log10(np.maximum(F,1e-8))
 
-
 # def show_beams(self,F='I',fopts='m',opts='xN',mag=500,cutoff=0,cmap='Greens',**kwargs):
 #     """Display beam values
 #     - F : 'I'(intensity),'S'(scattered beams),'Vg'(potential)

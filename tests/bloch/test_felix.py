@@ -6,20 +6,24 @@ from utils import pytest_util
 import pytest,os,copy
 plt.close('all')
 
-out,ref,dir = pytest_util.get_path(__file__)
-path=out+'/felix/'
-b = bl.Bloch(cif_file='GaAs',u=[-1,1,0],keV=200,Nmax=10,Smax=0.2,path=out,solve=0)
+try:
+    out,ref,dir = pytest_util.get_path(__file__)
+    path=out+'/felix/'
+    b = bl.Bloch(cif_file='GaAs',u=[-1,1,0],keV=200,Nmax=10,Smax=0.2,path=out,solve=0)
 
-cif='GaAs_felix.cif'
-if not os.path.exists(path+'eigenvals.txt'):
-    bf=copy.copy(b)
-    bf._solve_Felix(cif,nbeams=200,thicks=(10,20,10))
+    cif='GaAs_felix.cif'
+    if not os.path.exists(path+'eigenvals.txt'):
+        bf=copy.copy(b)
+        bf._solve_Felix(cif,nbeams=200,thicks=(10,20,10))
 
-A   = np.loadtxt(path+'eigenvals.txt')
-hkl = np.array(A[:,:3],dtype=int)
-hkl_str = [str(tuple(h)) for h in hkl]
-b.solve(hkl=hkl,Smax=0,Nmax=10)#Smax=0.02,Nmax=7)
-# idx = b.get_beam(refl=hkl_str)
+    A   = np.loadtxt(path+'eigenvals.txt')
+    hkl = np.array(A[:,:3],dtype=int)
+    hkl_str = [str(tuple(h)) for h in hkl]
+    b.solve(hkl=hkl,Smax=0,Nmax=10)#Smax=0.02,Nmax=7)
+    # idx = b.get_beam(refl=hkl_str)
+except:
+    pass
+
 
 # @pytest.mark.new
 @pytest_util.cmp_ref(__file__)
@@ -27,8 +31,6 @@ def test_solve_felix():
     bf=copy.copy(b)
     bf._solve_Felix(cif,nbeams=200,thicks=(10,250,10))
     return bf.gammaj
-
-
 
 @pytest.mark.lvl2
 def test_coords():

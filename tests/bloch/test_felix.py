@@ -10,7 +10,7 @@ out,ref,dir = pytest_util.get_path(__file__)
 path=out+'/felix/'
 b = bl.Bloch(cif_file='GaAs',u=[-1,1,0],keV=200,Nmax=10,Smax=0.2,path=out,solve=0)
 
-cif='out/felix_dat/GaAs_short/felix.cif'
+cif='GaAs_felix.cif'
 if not os.path.exists(path+'intensities.txt'):
     b._solve_Felix(cif,nbeams=200,thicks=(10,250,10))
 
@@ -18,7 +18,7 @@ A   = np.loadtxt(path+'intensities.txt')
 hkl = np.array(A[:,:3],dtype=int)
 hkl_str = [str(tuple(h)) for h in hkl]
 b.solve(hkl=hkl,Smax=0,Nmax=10)#Smax=0.02,Nmax=7)
-idx = b.get_beam(refl=hkl_str)
+# idx = b.get_beam(refl=hkl_str)
 
 
 # @pytest.mark.new

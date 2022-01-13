@@ -5,10 +5,13 @@ from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from utils import displayStandards as dsp   #;imp.reload(dsp)
 from utils import glob_colors as colors     #;imp.reload(colors)
 from utils import handler3D as h3D          #;imp.reload(h3D)
+from scipy.integrate import trapz
 from . import utilities as ut               ;imp.reload(ut)
 
 class Rocking:
-    def __init__(self,Simu,uvw,tag,path,Sargs):
+    def __init__(self,Simu:object,
+            uvw:list,tag:str,path:str,
+            Sargs:dict):
         """ simulate rocking curve
 
         Parameters
@@ -16,7 +19,7 @@ class Rocking:
         Simu
             Simulator object
         uvw
-            orientation vectors
+            list of orientation vectors
         tag
             a tag identifying the sweep
         Sargs
@@ -27,37 +30,65 @@ class Rocking:
         self.uvw  = uvw
         self.Sargs = Sargs
         self.df = ut.sweep_var(Simu,params='u',vals=uvw,tag=tag,path=path,**Sargs)
-        ts = np.arange(uvw.shape[0])
+        self.n_simus=uvw.shape[0]
+        ts            = np.arange(self.n_simus)
         self.ts       = ts
         self.df['ts'] = ts
         self.Iz_dyn = {}
         self.Iz_kin = {}
+        self._build_index()
         self.save(v=1)
 
     ###########################################################################
     #### compute
     ###########################################################################
+    def _build_index(self):
+        frames = [ i for i,name in enumerate(self.df.index)]
+        beams = np.unique(np.hstack([self.load(i).df_G.index.values for i,name in enumerate(self.df.index)]))
+        self.nbeams = beams.size
+        print('...building index...')
+        self.beams = pd.DataFrame(index=beams,columns=['Frame','Sw'])
+        for h in beams:
+            self.beams.loc[h,'Frame']=[]
+            self.beams.loc[h,'Sw']=[]
+        for i,f in enumerate(self.df.index):
+            for h,c in self.load(i).df_G.iterrows():
+                self.beams.loc[h,'Frame'].append(i)
+                self.beams.loc[h,'Sw'   ].append(c.Sw.real)
+        self.df['nbeams']=[self.load(i).df_G.index.shape[0] for i,f in enumerate(self.df.index)]
+        self.save(v=1)
+
+    def reset_int(self):
+        self.Iz_dyn,self.Iz_kin = {},{}
+
     def _integrate_rocking(self,refl=[],new=0):
-        if new:self.Iz_dyn,self.Iz_kin = {},{}
+        if not new:
+            # refl,nbs = self.get_beams(cond=cond,refl=refl)
+            nbs=len(refl)
+            refl  = [h for h in refl if not h in self.Iz_dyn.keys()] #;print(hkl)
 
-        # refl,nbs = self.get_beams(cond=cond,refl=refl)
-        nbs=len(refl)
+        hkl = [eval(h) for h in refl]
         z,nzs = self._get_z()
-        hkl  = [h for h in refl if not h in self.Iz_dyn.keys()] #;print(hkl)
-        refl = [eval(h) for h in hkl]
-
         nbs,nts = len(hkl),self.ts.size
         if nbs:
-            Iz_dyn  = dict(zip(hkl, np.zeros((nbs,nzs)) ))
-            Iz_kin  = dict(zip(hkl, np.zeros((nbs,nzs)) ))
+            Iz_dyns  = dict(zip(refl, [np.zeros((nts,nzs)) for h in refl] ))
+            Iz_kins  = dict(zip(refl, [np.zeros((nts,nzs)) for h in refl] ))
             for i in range(nts):
                 sim_obj = self.load(i)
                 idx = sim_obj.get_beam(refl=refl,cond='',index=True)
                 if idx:
                     hkl0 = sim_obj.df_G.iloc[idx].index #[str(tuple(h)) for h in sim_obj.get_hkl()[idx]]
                     for idB,hkl_0 in zip(idx,hkl0):
-                        Iz_dyn[hkl_0] += sim_obj.Iz[idB,:]
-                        Iz_kin[hkl_0] += sim_obj.Iz_kin[idB,:]
+                        Iz_dyns[hkl_0][i,:] = sim_obj.Iz[idB,:]
+                        Iz_kins[hkl_0][i,:] = sim_obj.Iz_kin[idB,:]
+
+            Iz_dyn  = dict()
+            Iz_kin  = dict()
+            for h in refl:
+                df_b = self.beams.loc[h]
+                s = np.sign(df_b.Sw[1]-df_b.Sw[0])
+                Iz_dyn[h]=[s*trapz(Iz_dyns[h][df_b.Frame,iz],df_b.Sw) for iz in range(nzs)]
+                Iz_kin[h]=[s*trapz(Iz_kins[h][df_b.Frame,iz],df_b.Sw) for iz in range(nzs)]
 
             self.Iz_dyn.update(Iz_dyn)
             self.Iz_kin.update(Iz_kin)
@@ -66,7 +97,7 @@ class Rocking:
 
     def get_rocking(self,iZs:Optional[slice]=-1,
         zs:Optional[Iterable[float]]=None,
-        refl:Sequence[tuple]=[],cond:str=''):
+        refl:Sequence[tuple]=[],cond:str='',opts:str=''):
         """Get intensities at required beams and thicknesses
 
         Parameters
@@ -79,6 +110,8 @@ class Rocking:
             reflections to get
         cond
             condition to apply to selecte reflections
+        opts
+            F(include friedel), O(include central beam)
 
         Returns
         -------
@@ -86,16 +119,17 @@ class Rocking:
                 z,{beam:I(z)}
         """
         iZs,nzs  = self._get_iZs(iZs,zs)        #;print(iZs)
-        z0 = self.load(0).z.copy()[iZs]
-        print('setting thickness to %dA' %z0[-1])
-        self.do('set_thickness',thick=z0,v=0)
+        z0 = self.load(0).z.copy()[iZs][-1]
+        if not self.load(0).thick==z0:
+            print('setting thickness to %dA' %z0)
+            self.do('_set_I',v=0,iZ=iZs[-1])
 
-        refl,nbs = self.get_beams(cond=cond,refl=refl)  #;print(refl)
+        refl,nbs = self.get_beams(cond=cond,refl=refl,opts=opts)  #;print(refl)
         nts = self.ts.size
         I = {}
         for h in refl : I[str(h)]=np.nan*np.ones((nts,nzs))
 
-        #gather the intensities
+        print("gathering the intensities")
         for i in range(nts):
             # print(colors.red,i,colors.black)
             sim_obj = self.load(i)
@@ -145,52 +179,56 @@ class Rocking:
         self._integrate_rocking(refl=refl,new=new)
         nbs = len(refl)
         z = self.load(0).z
+        Iz = np.array([self.Iz_dyn[h] for i,h in enumerate(refl)])
 
         cs = dsp.getCs(cm,nbs)
-        plts = [[z,self.Iz_dyn[h],cs[i],'%s' %h] for i,h in enumerate(refl)]
-        dsp.stddisp(plts,labs=[r'$z(\AA)$','$I_{int}$'],**kwargs)
+        plts = [[z,Iz[i],cs[i],'%s' %h] for i,h in enumerate(refl)]
+        fig,ax=dsp.stddisp(plts,labs=[r'$z(\AA)$','$I_{int}$'],**kwargs)
+        vw=Rock_viewer(self,fig,ax,z,Iz,refl)
+        return fig,ax
+
 
     def plot_rocking(self,cmap='viridis',x:str='Sw',
-        cond='',refl=[],iZs=-1,zs=None,
+        cond='',refl=[],opts:str='',iZs=-1,zs=None,
         **kwargs):
         """plot rocking curve for set of selected beams at thickness zs
 
         Parameters
         ----------
-        cond,refl,iZs,zs
+        cond,refl,iZs,zs,opts
             select beams and thicknesses (see :meth:`~Rocking.get_rocking`)
         x
             to display on x axis
         kwargs
             args to pass to dsp.stddisp
         """
-        z,I = self.get_rocking(cond=cond,refl=refl,zs=zs,iZs=iZs)
+        z,I = self.get_rocking(cond=cond,refl=refl,opts=opts,zs=zs,iZs=iZs)
         refl,plts = list(I.keys()),[]           #;print(refl)
         xlab = {'frame':'frame','Sw':r'$S_w(\AA^{-1})$','theta':r'$\theta(deg)$'}[x]
 
+        print('gathering plots')
         nbs,nzs = len(refl),z.size
-        if nbs>nzs:
+        if nbs>=nzs:
             cs,ms = dsp.getCs(cmap,nbs), dsp.markers
             legElt = { '%s' %refl0:[cs[i],'-'] for i,refl0 in enumerate(refl)}
             for iz,zi in enumerate(z):
                 legElt.update({'$z=%d A$' %(zi):['k',ms[iz]+'-']})
                 for i,refl0 in enumerate(refl):
-                    df=self.get_frames(refl0,cols=['Sw'])
-                    # plts += [[df.Sw,I[refl0][df.frame,iz],[cs[i],ms[iz]+'-'],'']]
-                    plts += [[df[x],I[refl0][df.frame,iz],[cs[i],ms[iz]+'-'],'']]
+                    df_b=self.beams.loc[refl0]
+                    plts += [[df_b.Sw,I[refl0][df_b.Frame,iz],[cs[i],ms[iz]+'-'],'']]
         else:
             # rocking for different thicknesses
             cs,ms = dsp.getCs(cmap,nzs),  dsp.markers
             legElt = { '%s' %refl0:['k','-'+ms[i]] for i,refl0 in enumerate(refl)}
             # self.get_frames(hkl,iTs=slice(0,None))
             for i,refl0 in enumerate(refl):
-                df=self.get_frames(refl0,cols=['Sw'])
                 for iz,zi in enumerate(z):
-                    # plts += [[ts,I[refl0][:,iz],[cs[iz],ms[i]+'-'],''] for i,refl0 in enumerate(refl)]
-                    plts += [[df[x],I[refl0][df.frame,iz],[cs[iz],ms[i]+'-'],'']]
+                    df_b=self.beams.loc[refl0]
+                    plts += [[df_b.Sw,I[refl0][df_b.Frame,iz],[cs[iz],ms[i]+'-'],'']]
             legElt.update({'$z=%d A$' %(zi):[cs[iz],'-'] for iz,zi in enumerate(z) })
-        return dsp.stddisp(plts,labs=[xlab,'$I$'],legElt=legElt,**kwargs)
 
+        # print('displaying')
+        return dsp.stddisp(plts,labs=[xlab,'$I$'],legElt=legElt,**kwargs)
 
     def Sw_vs_theta(self,refl=[[0,0,0]],cond='',thick=None,fz=abs,opts='',
         iTs=slice(0,None),ts=None,
@@ -213,6 +251,8 @@ class Rocking:
         xlab,ts = r'$\theta$',self.ts.copy()[iTs]
         if 'f' in opts:
             xlab,ts = 'frame',np.arange(1,self.ts.size+1)[iTs]       #;print(iTs,ts)
+
+        # dsp.stddisp([[r.Frame,r.Sw,[c,'-o'],h] for c,(h,r) in zip(dsp.getCs('jet',len(refl)),rock.beams.loc[refl].iterrows()) ] )
 
         if Iopt:
             if thick:
@@ -295,7 +335,7 @@ class Rocking:
             df.loc[i,cols] = vals.real
         return df
 
-    def get_beams(self,cond='',refl=[]):
+    def get_beams(self,cond='',refl=[],opts=''):
         if cond:
             refl = []
             for i,name in enumerate(self.df.index):
@@ -304,8 +344,14 @@ class Rocking:
         refl = np.unique(refl)           #;print(refl)
         if not isinstance(refl[0],str):
             refl=[str(tuple(h)) for h in refl]
+        if not 'F' in opts:
+            refl=ut.remove_friedel_pairs(refl)
+        if 'O' in opts:
+            refl=np.hstack([refl,str((0,0,0))])
+
         nbs = len(refl)#.size;print(nbs,refl)
         print('total number of beams:%d' %nbs)
+
         return refl,nbs
 
     def _get_iTs(self,iTs,ts):
@@ -393,3 +439,36 @@ def rock_name(path,tag):
 
 def load_rock(path,tag):
     return load_pkl(file=exp.rock_name(path,tag))
+
+class Rock_viewer:
+    def __init__(self,rock,fig,ax,z,Iz,refl):
+        self.rock=rock
+        self.fig = fig
+        self.ax = ax
+        self.z  = z
+        self.Iz = Iz
+        self.refl=refl
+        cid = self.fig.canvas.mpl_connect('key_press_event', self)
+
+    def __call__(self, event):
+        # print(event.key)
+        keys={
+            'single':'enter' ,
+            'thicks':'z'     ,
+        }
+        if event.key == keys['single']:
+            z,I=dsp.plt.ginput(n=1)[0]
+            iz = abs(self.z-z).argmin()
+            ih = abs(I-self.Iz[:,iz]).argmin()
+            print(iz,ih)
+            refl,iZs = [self.refl[ih]],[iz]
+
+        elif event.key == keys['thicks']:
+            dats=dsp.plt.ginput(n=-1)
+            iZs = [abs(self.z-z).argmin() for z,I in dats]
+            I,z = dats[0]
+            ih  = abs(I-self.Iz[:,iZs[0]]).argmin()
+            refl,iZs = [self.refl[ih]],iZs
+
+        if event.key in keys.values():
+            self.rock.plot_rocking(refl=refl,iZs=iZs)

@@ -69,7 +69,7 @@ class Base_Viewer:
         self.pargs  = pargs
         rc('text', usetex=False)
 
-        self.fig,self.ax = dsp.stddisp()
+        self.fig,self.ax = dsp.stddisp(opt='')
         cid = self.fig.canvas.mpl_connect('key_press_event', self)
         self.show()
 
@@ -88,7 +88,7 @@ class Base_Viewer:
         'ctrl+T' : decrease thickness
         ##
         'enter' : change settings
-        's' : save image
+        'S' : save image
         'h' : show help
         '''
         if not 'msgD' in self.__dict__:
@@ -105,8 +105,8 @@ class Base_Viewer:
             self.mode=-1
         self.frame=self.i+1
 
-        if event.key=='s':
-            dsp.saveFig(self.figpath+'_%s.png' %str(self.i).zfill(3),ax=self.ax)
+        if event.key=='S':
+            dsp.saveFig(self.get_figname(),ax=self.ax)
 
         #increment rate
         if event.key=='p':
@@ -135,7 +135,7 @@ class Base_Viewer:
         keys = self.call(event)
 
         update_keys = keys+['enter','ctrl+t','ctrl+T','pageup','pagedown','r','left','right','down','up']
-        if event.key in update_keys:self.show()
+        if event.key in update_keys:self.update_im()
 
     def settings(self):
         fieldValues = ['%d' %self.__dict__[f] for f in self.fieldNames]
@@ -149,20 +149,28 @@ class Base_Viewer:
         self.i = self.frame-1
 
     def show(self):
-        self.ax.cla()
-
-        fig = self.figs[self.i]
-        figname = os.path.basename(fig)
-        im = self.load(fig)
-        print(colors.yellow+fig+colors.black)
-
+        im=self.load(self.figs[self.i])
         self.show_im(im,**self.pargs)
+        self.im = self.ax.get_images()[0]
+
+    def update_im(self):
+        fig = self.figs[self.i]
+        im = self.load(fig)
+        self.im.set_data(im)
+        dsp.stddisp(ax=self.ax,title='image %d' %self.i,
+            cmap='gray',caxis=[0,self.cutoff],pOpt='t',
+            name=self.get_figname(),**self.pargs)
         self.fig.canvas.draw()
+
+        # figname=os.path.basename(fig)
+        print(colors.yellow+fig+colors.black)
 
     def show_help(self):
         print(colors.green+'shortcuts : '+colors.blue+self.msg+colors.magenta+self.msgD+colors.black)
     def _get_nfigs(self):
         return self.figs.size
+    def get_figname(self):
+        return self.figs[self.i][:-3]+'.png'
 
     ###################################
     ##### virtual functions
@@ -170,7 +178,8 @@ class Base_Viewer:
     def show_im(self,im,**kwargs):
         """The function used to display the frames"""
         dsp.stddisp(im=[im],ax=self.ax,title='image %d' %self.i,
-            cmap='gray',caxis=[0,self.cutoff],pOpt='t',**kwargs)
+            cmap='gray',caxis=[0,self.cutoff],pOpt='tX',xylims=[0,516,0,516],
+            name=self.get_figname(),**kwargs)
 
     def get_fieldValues(self,fieldNames,fieldValues):return None
     def set_fieldValues(self,dict_fv):return None

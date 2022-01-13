@@ -33,19 +33,38 @@ def test_show_tiff():
         h=False)
     return vw.fig,vw.ax
 
+@pytest.mark.lvl1
 @pytest_util.add_link(__file__)
-def test_plot_rocking():
+def test_plot_rocking_cond():
     rock.set_beams_vs_thickness(thicks=(0,100,100))
-    cond=lambda dfG:bl.strong_beams(dfG,tol=0.1,n=5)
-    return rock.plot_rocking(cond=cond)
+    cond=lambda dfG:bl.strong_beams(dfG,tol=1e-2,n=5)
+    return rock.plot_rocking(cond=cond,opts='',opt='')
+
+@pytest_util.add_link(__file__)
+def test_plot_rocking_quick():
+    return rock.plot_rocking(refl=[str((2,2,0))],zs=[50,100],opts='',opt='')
 
 
+@pytest_util.cmp_ref(__file__)
+def test_integrate_rocking():
+    refl,h=rock.get_beams(cond=lambda dfG:bl.strong_beams(dfG,tol=1e-2,n=5))
+    rock._integrate_rocking(refl=refl,new=1)
+    return list(rock.Iz_dyn.values())[0]
+
+@pytest_util.add_link(__file__)
+def test_plot_integrate():
+    refl,h=rock.get_beams(cond=lambda dfG:bl.strong_beams(dfG,tol=1e-2,n=5))
+    # refl=refl[2:3]
+    return rock.plot_integrated(refl=refl,opt='',new=1)
+
+# rock._build_index()
 # test_rock()
-# fig,ax=test_plot_rocking()
-# cond='(abs(Sw)<1e-2) & (I>1e-3)'
-# # cond='(Vga>1e-4) & (abs(Sw)<5e-2)'
-# # cond='(Vga>1e-4) & (abs(Sw)<1e-2) & (I>1e-3)'
-# hkls=rock.get_beams(cond=cond)[0]
+# fig,ax=test_plot_rocking_quick()
+# test_plot_integrate()
+
+# rock.plot_rocking(refl=['(-2, -2, 0)','(-2, 2, 0)','(2, 2, 0)','(2, -2, 0)'])
+# hkls=bl.strong_beams(rock.load(20).df_G,tol=1e-3,n=5,opt='F')
+# print(hkls)
 # hkls = ['(-2, -2, 0)','(-2, 2, 0)','(2, 2, 0)','(2, -2, 0)']
 # i=0
 # df = rock.get_frames(hkls[i])

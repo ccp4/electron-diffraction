@@ -468,3 +468,13 @@ def project_beams2D(K,qxy):
     v = np.array([u[1],-u[0]])
     px = qxy.dot(v)
     return px
+
+
+def remove_friedel_pairs(reflF):
+    hkls = np.array([np.array(h[1:-1].split(','),dtype=int)  for h in reflF])
+    refl=[]
+    for h,hkl in zip(reflF,hkls):
+        if not str(tuple(-hkl)) in refl:
+            refl.append(h)
+    print('removing Friedel pairs')
+    return refl

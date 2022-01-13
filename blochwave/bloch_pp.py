@@ -44,7 +44,7 @@ class Bloch_cont(rotate_exp.Rocking):
 
 def strong_beams(dfG,
         tol:float=1e-2,n:int=10,
-        opt:str=''):
+        opt:str='F'):
     """keep the n strongest beams, i.e. those with intensity I>tol not including central beam
 
     Parameters
@@ -63,19 +63,24 @@ def strong_beams(dfG,
         list of beams
     """
     dfM=dfG.copy()
-    if not 'O' in opt:
-        dfM = dfM.drop(str((0,0,0)))
-    # if not 'F' in opt:
-    #     dfM = dfM.drop(str((0,0,0)))
+    if not 'O' in opt:dfM = dfM.drop(str((0,0,0)))
+    dfM = dfM.sort_values('I',ascending=False)[:2*n]
+    if not 'F' in opt:remove_friedel_pairs(dfM)
 
-    dfM = dfM.sort_values('I',ascending=False)[:n]
+    df = dfM.loc[dfM.I>tol]
+    if df.shape[0]>n:df = df[:n]
 
-    # if dfM.I.max()<tol:
-    #     df=dfM[:1]
-    # else:
-    df  = dfM.loc[dfM.I>tol]
     # print(dfM)
     return list(df.index.values)
+
+def remove_friedel_pairs(dfM):
+    refl=[]
+    for h,hkl in zip(dfM.index,dfM[['h','k','l']].values):
+        if not str(tuple(-hkl)) in refl:
+            refl.append(h)
+    # print('removing Friedel pairs')
+    dfM=dfM.loc[refl]
+
 
 # def bloch_rock(tag,path='',opts='',
 #     uvw=None,u=None,u1=None,omega=np.linspace(-1,1,3),

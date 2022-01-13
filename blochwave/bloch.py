@@ -171,6 +171,7 @@ class Bloch:
         self._set_kinematic()
         if self.solved:self._set_intensities()
 
+
     def solve(self,
         Smax:Optional[float]=None,hkl:Optional[Iterable[int]]=None,
         Nmax:Optional[int]=None,
@@ -369,6 +370,11 @@ class Bloch:
         S = S[id0,:]
         self.df_G['S'] = S
         self.df_G['I'] = np.abs(S)**2
+
+    def _set_I(self,iZ=-1):
+        idx=self.get_beam(refl=self.df_G.index)
+        self.thick=self.z[iZ]
+        self.df_G.I=self.Iz[idx,iZ]
 
     def _set_kinematic(self):
         Sw,Ug = self.df_G[['Sw','Vg']].values.T

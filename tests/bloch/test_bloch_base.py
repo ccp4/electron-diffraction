@@ -45,7 +45,7 @@ def test_bloch_convergence(n=3):
 
     cs = dsp.getCs('jet',nbs)
     plts = [[Nmaxs,I[:,iB],[cs[iB],'-o'],'%s' %h] for iB,h in enumerate(refl)]
-    dsp.stddisp(plts,labs=['Nmax','I'],lw=2)
+    dsp.stddisp(plts,labs=['Nmax','I'],lw=2,opt='')
     return b
 
 
@@ -56,9 +56,9 @@ def test_set_beam():
     b0.set_beam(K=1/cst.keV2lam(100)*np.array([1,0,0]))
 @pytest.mark.lvl2
 def test_show_Fhkl():
-    b0.show_Fhkl(xylims=6,h3D=1,ms=30,cmap='Greens')
-    b0.show_Fhkl(s=np.s_[:,:,3],xylims=6,ms=30,cmap='Greens')
-    b0.show_Fhkl(s='h=0',opts='l',xylims=7,ms=50,cmap='Greens',pOpt='im',caxis=[0,1.5])
+    b0.show_Fhkl(xylims=6,h3D=1,ms=30,cmap='Greens',opt='')
+    b0.show_Fhkl(s=np.s_[:,:,3],xylims=6,ms=30,cmap='Greens',opt='')
+    b0.show_Fhkl(s='h=0',opts='l',xylims=7,ms=50,cmap='Greens',pOpt='im',caxis=[0,1.5],opt='')
 
 
 

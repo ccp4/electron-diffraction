@@ -86,10 +86,13 @@ class Rocking:
             Iz_kin  = dict()
             for h in refl:
                 df_b = self.beams.loc[h]
-                s = np.sign(df_b.Sw[1]-df_b.Sw[0])
-                Iz_dyn[h]=[s*trapz(Iz_dyns[h][df_b.Frame,iz],df_b.Sw) for iz in range(nzs)]
-                Iz_kin[h]=[s*trapz(Iz_kins[h][df_b.Frame,iz],df_b.Sw) for iz in range(nzs)]
-
+                if len(df_b.Sw)>1:
+                    s = np.sign(df_b.Sw[1]-df_b.Sw[0])
+                    Iz_dyn[h]=[s*trapz(Iz_dyns[h][df_b.Frame,iz],df_b.Sw) for iz in range(nzs)]
+                    Iz_kin[h]=[s*trapz(Iz_kins[h][df_b.Frame,iz],df_b.Sw) for iz in range(nzs)]
+                else:
+                    Iz_dyn[h] = [Iz_dyns[h][df_b.Frame,iz] for iz in range(nzs)]
+                    Iz_kin[h] = [Iz_kins[h][df_b.Frame,iz] for iz in range(nzs)]
             self.Iz_dyn.update(Iz_dyn)
             self.Iz_kin.update(Iz_kin)
             self.save()

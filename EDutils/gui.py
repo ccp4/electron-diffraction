@@ -15,8 +15,8 @@ from blochwave import bloch as bl           ;imp.reload(bl)
 from multislice import pets as pt           ;imp.reload(pt)
 from . import __version__
 from . import display as EDdisp             ;imp.reload(EDdisp)
-from . import gui_config as cfg       #;imp.reload(cfg)
-from . import utilities as ut               #;imp.reload(ut)
+from . import gui_config as cfg             ;imp.reload(cfg)
+from . import utilities as ut               ;imp.reload(ut)
 
 pd.set_option('precision',3)
 pd.set_option('max_rows',100)

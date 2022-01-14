@@ -29,3 +29,4 @@ multislice/data_2D
 **/__pycache__
 *.egg-info
 **/.coverage
+**/htmlcov

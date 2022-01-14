@@ -5,7 +5,7 @@ from utils import pytest_util
 import pytest,os
 plt.close('all')
 
-tag='big'
+tag='small'
 npts={'big':50,'small':5}[tag]
 
 @pytest.mark.slow
@@ -40,22 +40,24 @@ def test_plot_rocking_cond():
     cond=lambda dfG:bl.strong_beams(dfG,tol=1e-2,n=5)
     return rock.plot_rocking(cond=cond,opts='',opt='')
 
+@pytest.mark.lvl1
 @pytest_util.add_link(__file__)
 def test_plot_rocking_quick():
     return rock.plot_rocking(refl=[str((2,2,0))],zs=[50,100],opts='',opt='')
 
-
+@pytest.mark.lvl1
 @pytest_util.cmp_ref(__file__)
 def test_integrate_rocking():
     refl,h=rock.get_beams(cond=lambda dfG:bl.strong_beams(dfG,tol=1e-2,n=5))
     rock._integrate_rocking(refl=refl,new=1)
     return list(rock.Iz_dyn.values())[0]
 
+@pytest.mark.lvl1
 @pytest_util.add_link(__file__)
 def test_plot_integrate():
     refl,h=rock.get_beams(cond=lambda dfG:bl.strong_beams(dfG,tol=1e-2,n=5))
     # refl=refl[2:3]
-    return rock.plot_integrated(refl=refl,opt='',new=1)
+    return rock.plot_integrated(refl=refl,opt='')
 
 # rock._build_index()
 # test_rock()

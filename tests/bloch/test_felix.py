@@ -130,6 +130,7 @@ def test_eigen():
         print(dfg)
         assert dg.mean()<5e-2
 
+@pytest.mark.lvl1
 @pytest_util.add_link(__file__)
 def test_intensities():
         with open(path+'felix.inp','r') as f:l=[l.strip() for l in f.readlines()]

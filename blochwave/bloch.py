@@ -238,8 +238,8 @@ class Bloch:
         print(colors.blue+"... running felix ..."+colors.black)
         cmd="""cd %s;
         cd felix;
-        felix.OPT64NGNU.d > felix.log 2>&1;
-        """ %self.path
+        %s/bin/felix > felix.log 2>&1;
+        """ %(self.path,os.path.dirname(__file__))
         p=check_output(cmd,shell=True).decode() #;print(p)
 
         if show_log:

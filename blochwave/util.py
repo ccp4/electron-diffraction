@@ -1,5 +1,49 @@
 import numpy as np
 
+
+
+def strong_beams(dfG,
+        tol:float=1e-2,n:int=10,
+        opt:str='F'):
+    """keep the n strongest beams, i.e. those with intensity I>tol not including central beam
+
+    Parameters
+    ----------
+    dfG
+        the bloch dataframe
+    tol
+        strong beam criteria
+    n
+        number of strong beams
+    opt
+        include Origin(O) Friedel pairs(F)
+    Returns
+    ----------
+    x
+        list of beams
+    """
+    dfM=dfG.copy()
+    if not 'O' in opt:dfM = dfM.drop(str((0,0,0)))
+    dfM = dfM.sort_values('I',ascending=False)[:2*n]
+
+    df = dfM.loc[dfM.I>tol]
+    if not 'F' in opt:
+        df=remove_friedel_pairs(df)
+
+    if df.shape[0]>n:df = df[:n]
+
+    # print(dfM)
+    return list(df.index.values)
+
+def remove_friedel_pairs(dfM):
+    refl=[]
+    for h,hkl in zip(dfM.index,dfM[['h','k','l']].values):
+        if not str(tuple(-hkl)) in refl:
+            refl.append(h)
+    print('removing Friedel pairs')
+    dfM=dfM.loc[refl]
+    return dfM
+
 def get_inp(npx,nbeams,u,keV,thicks):
     inp = """# Input file for Felix version :
 # ------------------------------------

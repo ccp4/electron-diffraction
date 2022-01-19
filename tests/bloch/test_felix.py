@@ -5,11 +5,12 @@ from scattering import scattering_factors as scatf  ;imp.reload(scatf)
 from utils import pytest_util
 import pytest,os,copy
 plt.close('all')
+keV=200
 
 try:
     out,ref,dir = pytest_util.get_path(__file__)
     path=out+'/felix/'
-    b = bl.Bloch(cif_file='GaAs',u=[-1,1,0],keV=200,Nmax=10,Smax=0.2,path=out,solve=0)
+    b = bl.Bloch(cif_file='GaAs',u=[-1,1,0],keV=keV,Nmax=10,Smax=0.2,path=out,solve=0)
 
     cif='GaAs_felix.cif'
     if not os.path.exists(path+'eigenvals.txt'):
@@ -25,7 +26,7 @@ except:
     pass
 
 
-# @pytest.mark.new
+@pytest.mark.new
 @pytest_util.cmp_ref(__file__)
 def test_solve_felix():
     bf=copy.copy(b)
@@ -170,10 +171,11 @@ def test_intensities():
         plts += [[z,Ib,[c,'-x'],''] for Ib,c in zip(Ib,cs)]
         legElt = {'bloch':'k-x','felix':'k--o'}
         return dsp.stddisp(plts,lw=2,legElt=legElt,
-            xylims=['x',0,zA],opt='')
+            xylims=['x',0,zA],opt='p')
 
 # test_excitation()
 # test_matrix()
 # test_structure_factor()
 # test_eigen()
-# test_intensities()
+# test_solve_felix()
+# fig,ax=test_intensities();fig.show()

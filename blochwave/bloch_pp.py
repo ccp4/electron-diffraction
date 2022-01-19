@@ -73,13 +73,7 @@ def strong_beams(dfG,
     # print(dfM)
     return list(df.index.values)
 
-def remove_friedel_pairs(dfM):
-    refl=[]
-    for h,hkl in zip(dfM.index,dfM[['h','k','l']].values):
-        if not str(tuple(-hkl)) in refl:
-            refl.append(h)
-    # print('removing Friedel pairs')
-    dfM=dfM.loc[refl]
+
 
 
 # def bloch_rock(tag,path='',opts='',

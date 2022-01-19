@@ -33,7 +33,7 @@ def sweep_var(Simu:object,
     Returns
     -------
         pd.DataFrame
-            info about the set of simulations
+            info about the set of simulations with params pkl
     """
     if isinstance(params,str):
         params=[params]

@@ -6,7 +6,7 @@ EDutils
 .. autosummary::
    :toctree: ../reference
 
-   ~rotate_exp
    ~viewers
+   ~rotate_exp
    ~pets
    ~utilities

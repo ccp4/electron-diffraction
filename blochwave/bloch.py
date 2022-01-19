@@ -49,7 +49,9 @@ class Bloch:
         beam:Optional[dict]={},keV:float=200,u:Sequence[float]=[0,0,1],
         Nmax:int=1,
         Smax:float=0.2,
-        solve:bool=True,**kwargs,
+        solve:bool=True,
+        eps:float=1,
+        **kwargs,
     ):
 
         self.cif_file = cif_file
@@ -61,6 +63,7 @@ class Bloch:
         self.Nmax   = 0
         self.thick  = 100
         self.thicks = self._set_thicks((0,1000,1000))
+        self.eps=eps
 
         self.update_Nmax(Nmax)
         beam_args={'keV':keV,'u':u}
@@ -263,7 +266,7 @@ class Bloch:
         Sg  = self.df_G.Sw.values
         pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
 
-        Ug = pre*self.Fhkl/(self.crys.volume*np.pi) #/3
+        Ug = pre*self.Fhkl/(self.crys.volume*np.pi)*self.eps #/3
 
         #####################
         # setting average potential to 0
@@ -313,7 +316,7 @@ class Bloch:
             h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
             qx,qy,qz,Sw,Swa = qx[idx],qy[idx],qz[idx],Sw[idx],Swa[idx]
         q = np.linalg.norm(np.array([qx,qy,qz]).T,axis=1)
-        d = dict(zip(['h','k','l','qx','qy','qz','q','Sw','Swa'],[h,k,l,qx,qy,qz,q,Sw,Swa]))
+        d = dict(zip(['h','k','l','qx','qy','qz','q','Sw','Swa'],[h,k,l,qx,qy,qz,q,Sw,abs(Sw)]))
 
         self.Smax = Smax
         self.nbeams = Sw.size
@@ -340,8 +343,8 @@ class Bloch:
             Fhkl[tuple(V0_idx)] = 0
             Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
 
-        pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
-        Vg_G = Fhkl*pre/(self.crys.volume*np.pi)
+        self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
+        Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
         px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
         self.e0x = e0x
         self.df_G['px'] = px
@@ -473,6 +476,9 @@ class Bloch:
             self.df_G.index = [str(tuple(h)) for h in self.df_G[['h','k','l']].values]
 
         if cond:
+            if isinstance(cond,dict):
+                cond_args=cond.copy()
+                cond=lambda dfG:bloch_util.strong_beams(dfG,**cond_args)
             if isinstance(cond,str):
                 refl = list(self.df_G.loc[self.df_G.eval(cond)].index.values)
             else:
@@ -682,6 +688,7 @@ class Bloch:
         gs3:float=0.1,
         rmax:int=0,
         thick:float=None,
+        iz:int=None,
         show:bool=False,**kwargs,
     ):
         """Write intensities to a tiff file
@@ -713,9 +720,13 @@ class Bloch:
             will contain all reflections.
         """
         Nmax=Nmax//2
-        if thick:
-            self.set_thickness(thick)
+        thick = self.thick
+        if thick:self.set_thickness(thick)
         px,py,I = self.df_G[['px','py','I']].values.T
+        if isinstance(iz,int):
+            idb=self.get_beam(refl=self.df_G.index)
+            I = self.Iz[idb,iz]
+            thick = self.z[iz]
         if not aperpixel:
             aperpixel = 1.1*max(px.max(),py.max())/Nmax
             print('aperpixel set to %.1E A^-1' %aperpixel)
@@ -735,21 +746,29 @@ class Bloch:
             idx     = (i0x>=0) & (j0y>=0)  & (i0x<2*Nmax) & (j0y<2*Nmax)
             i0x,j0y = i0+ix[idx],j0+iy[idx]
             im0[i0x,j0y] += Pb[idx]/Pb[idx].sum()*I0
-
+            im0[i0,j0]=I0
         if rmax:
             h,k = np.meshgrid(range(-Nmax,Nmax),range(-Nmax,Nmax))
             r = np.sqrt(h**2+k**2);r[r==0]=1
             im0 += rmax*np.random.rand(*im0.shape)#/(rmax*r)
 
+
         if not tiff_file:
-            tiff_file = os.path.join(self.path,self.name+'_%dA' %self.thick+'.tiff')
+            tiff_file = os.path.join(self.path,self.name+'_%dA' %thick+'.tiff')
         I = np.array(im0*Imax,dtype='uint16')
-        tifffile.imwrite(tiff_file,np.flipud(I))
+
+        ix,iy = np.meshgrid(range(2*Nmax),range(2*Nmax))
+        # dsp.stddisp(im=[ix,iy,I],plots=[j,i,'bo'],xylims=[0,512,0,512],
+        #     cmap='gray',caxis=[0,10],imOpt='tX',pargs={'fillstyle':'none'})
+
+        tifffile.imwrite(tiff_file,I)#np.flipud(I))
         print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
         if show:
             v=viewers.Base_Viewer(self.path,frame=1,thick=self.thick,**kwargs)
             # dsp.stddisp(im=[I],cmap='')
             return v
+        else:
+            return tiff_file
 
 
     ###################################################################################

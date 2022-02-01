@@ -3,6 +3,7 @@ import importlib as imp
 import os,numpy as np
 from subprocess import Popen
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
+from utils import displayStandards as dsp;imp.reload(dsp)
 from EDutils import display as EDdisp #;imp.reload(EDdisp)
 from EDutils import rotate_exp        ;imp.reload(rotate_exp)
 from EDutils import utilities as ut   #;imp.reload(ut)
@@ -25,8 +26,8 @@ class Bloch_cont(rotate_exp.Rocking):
             Popen('mkdir %s' %self.figpath,shell=True)
         self.save()
 
-    def set_beams_vs_thickness(self,thicks):
-        self.do('_set_beams_vs_thickness',thicks=thicks)
+    def set_beams_vs_thickness(self,thicks,v=1):
+        self.do('_set_beams_vs_thickness',thicks=thicks,v=v)
         self.z = self.load(0).z
 
     def convert2tiff(self,**kwargs):
@@ -35,6 +36,16 @@ class Bloch_cont(rotate_exp.Rocking):
             b = self.load(i)
             b.convert2tiff(tiff_file=self.figpath+'/%s.tiff' %b.name,**kwargs)
             b.save()
+
+    def convert2png(self,cutoff=20,n=None,**kwargs):
+        import tifffile
+        for i in range(self.df[:n].shape[0]):
+            b = self.load(i)
+            tiff_file=self.figpath+'/%s.tiff' %b.name
+            im=tifffile.imread(tiff_file)
+            dsp.stddisp(im=[im],
+                cmap='gray',caxis=[0,cutoff],axPos='F',pOpt='p',
+                opt='sc',name=tiff_file.replace('.tiff','.png'),figsize='im',**kwargs)
 
     def show_tiff(self,**kwargs):
         return vw.Base_Viewer(self.figpath,**kwargs)
@@ -69,6 +80,8 @@ def strong_beams(dfG,
 
     df = dfM.loc[dfM.I>tol]
     if df.shape[0]>n:df = df[:n]
+    if df.shape[0]==0:df= dfM[:n]
+    # print(df.shape,n)
 
     # print(dfM)
     return list(df.index.values)

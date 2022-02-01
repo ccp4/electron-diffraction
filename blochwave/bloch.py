@@ -7,9 +7,7 @@ from crystals import Crystal
 from utils import displayStandards as dsp           #;imp.reload(dsp)
 from utils import physicsConstants as cst           #;imp.reload(cst)
 from utils import glob_colors as colors,handler3D as h3d
-
 from EDutils import display as EDdisp               #;imp.reload(EDdisp)
-# from multislice import mupy_utils as mut          #;imp.reload(mut)
 from multislice import postprocess as pp            #;imp.reload(pp)
 from scattering import structure_factor as sf       #;imp.reload(sf)
 from scattering import scattering_factors as scatf  #;imp.reload(scatf)
@@ -23,8 +21,8 @@ class Bloch:
 
     Parameters
     ---------
-    cif_file
-        structure (see import_crys)
+    file
+        structure file (3D:cif_file or wallpaper info in 2D)
     name
         optional name (used to save object see set_name)
     path
@@ -53,18 +51,13 @@ class Bloch:
         eps:float=1,
         **kwargs,
     ):
-
-        self.cif_file = cif_file
-        self.crys     = ut.import_crys(cif_file)
-        self.lat_vec0 = np.array(self.crys.lattice_vectors)
-        self.lat_vec  = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
-        self.pattern  = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in self.crys.atoms] )
         self.solved = False
         self.Nmax   = 0
         self.thick  = 100
         self.thicks = self._set_thicks((0,1000,1000))
         self.eps=eps
 
+        self._set_structure(cif_file)
         self.update_Nmax(Nmax)
         beam_args={'keV':keV,'u':u}
         beam_args.update(beam)
@@ -79,6 +72,7 @@ class Bloch:
         #     self.show_beams_vs_thickness(strong=['I'])
         # if 's' in opts:
         #     self.save()
+
 
     def set_name(self,name='',path=''):
         """
@@ -295,6 +289,13 @@ class Bloch:
         self.invCjG = np.linalg.inv(self.CjG)
         self.solved = True
 
+    def _set_structure(self,cif_file):
+        self.cif_file = cif_file
+        self.crys     = ut.import_crys(cif_file)
+        self.lat_vec0 = np.array(self.crys.lattice_vectors)
+        self.lat_vec  = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
+        self.pattern  = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in self.crys.atoms] )
+
     def _set_excitation_errors(self,Smax=0.02,hkl=None):
         """ get excitation errors for Sg<Smax
         - Smax : maximum excitation error to be included
@@ -364,9 +365,12 @@ class Bloch:
         zones = np.argsort(Khkl)
         self.df_G['zone'] = zones[ar]
 
+    def _get_central_beam(self):
+        return self.get_beam(refl=[str((0,0,0))],index=True)[0]
+
     def _set_intensities(self):
         """get beam intensities at thickness"""
-        id0 = self.is_hkl([0,0,0],v=0)
+        id0 = self._get_central_beam()
         gammaj,CjG = self.gammaj,self.CjG
         S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*self.thick))).dot(self.invCjG)
         # S = S[:,id0]
@@ -583,7 +587,8 @@ class Bloch:
 
     def show_beams_vs_thickness(self,
         thicks:Optional[Sequence]=None,
-        beam_args:dict=None,
+        beam_args:dict={},
+        refl:Iterable=None,
         iZs:Iterable=slice(0,None,1),
         **kwargs
     ):
@@ -595,6 +600,8 @@ class Bloch:
             thickness range (see :meth:~Bloch.set_beams_vs_thickness)
         iZs
             thickness index
+        refl
+            selected beams
         beam_args
             To pass to get_beam
         kwargs
@@ -605,6 +612,9 @@ class Bloch:
             self._set_beams_vs_thickness(thicks)
 
         ### beam selection
+        if isinstance(refl,list):
+            if not isinstance(beam_args,dict):beam_args={}
+            beam_args['refl']= refl
         if isinstance(beam_args,dict):
             beam_args.update({'index':True})
             idx = self.get_beam(**beam_args)
@@ -649,14 +659,13 @@ class Bloch:
         Parameters
         -----------
         opts
-            see get_fz
+            see bloch_util:get_fz
         s
             slice or str('k=0' => Fhkl(k=0)) or int('l==<int>')
         """
         fz,fz_str = bloch_util.get_fz(opts)
         s,s_str = self._get_slice(s)
         tle = 'Structure factor($\AA$), showing %s in %s'  %(fz_str,s_str)
-        h,k,l = self.hklF
         Fhkl  = self.Fhkl #.copy()
         if isinstance(s,tuple):
             Fhkl   = Fhkl[s]
@@ -664,6 +673,7 @@ class Bloch:
             i,j    = np.meshgrid(np.arange(-nx,nx+1),np.arange(-ny,ny+1))
             fig,ax = dsp.stddisp(scat=[i,j,fz(Fhkl)],title=tle,**kwargs)
         else:
+            h,k,l = self.hklF
             fig,ax = dsp.stddisp(scat=[h,k,l,fz(self.Fhkl)],title=tle,rc='3d',**kwargs)
             if h3D:h3d.handler_3d(fig,persp=False)
 
@@ -746,7 +756,7 @@ class Bloch:
             idx     = (i0x>=0) & (j0y>=0)  & (i0x<2*Nmax) & (j0y<2*Nmax)
             i0x,j0y = i0+ix[idx],j0+iy[idx]
             im0[i0x,j0y] += Pb[idx]/Pb[idx].sum()*I0
-            im0[i0,j0]=I0
+            # im0[i0,j0]=I0
         if rmax:
             h,k = np.meshgrid(range(-Nmax,Nmax),range(-Nmax,Nmax))
             r = np.sqrt(h**2+k**2);r[r==0]=1
@@ -838,3 +848,100 @@ class Bloch:
         legElt={'$%s$' %h:'k-'+ms[i] for i,h in enumerate(hkl)}
         legElt.update({'$%s$' %l:[c,'-'] for c,l in zip(cs,self.df.index)})
         dsp.stddisp(plts,labs=['$z$','$I$'],legElt=legElt,lw=2)
+
+
+from wallpp import wallpaper as wallpp  ;imp.reload(wallpp)
+from multislice import mupy_utils as mut;imp.reload(mut)
+class Bloch2D(Bloch):
+    def _set_structure(self,file):
+        '''wallpaper file (see import_wallpp)'''
+        self.file = file
+        if not crys:crys=file
+        self.crys = mut.import_wallpp(crys)
+        # self.crys = wallpp.Wallpaper(**crys)
+        self.lat_vec0 = self.crys.lattice_vectors
+        self.lat_vec  = self.crys.reciprocal_vectors#/(2*np.pi)
+        self.pattern  = self.crys.pattern_fract
+
+    def convert2tiff(self):
+        printf('not relevant in 2D')
+    def show_Fhk(self,opts='m',**kwargs):
+        """Displays structure factor over grid
+
+        Parameters
+        -----------
+        opts
+            see bloch_util:get_fz
+        """
+        fz,fz_str = bloch_util.get_fz(opts)
+        Fhk   = self.Fhk
+        nx,ny  = np.array((np.array(Fhk.shape)-1)/2,dtype=int)
+        i,j    = np.meshgrid(np.arange(-nx,nx+1),np.arange(-ny,ny+1))
+        return dsp.stddisp(scat=[i,j,fz(Fhk)],title=tle,**kwargs)
+
+    def update_Nmax(self,Nmax:int):
+        """
+        Update resolution/max order
+
+        Parameters
+        ----------
+        Nmax
+            maximum h,k order
+        """
+        if type(Nmax) in [int,np.int64] :
+            if not Nmax==self.Nmax:
+                self.Nmax=Nmax
+                (h,k),(qx,qz) = mut.get_lattice2D(self.lat_vec,self.Nmax)
+                self.lattice = [(h,k),(qx,qz)]
+                self.hkF,self.Fhk = sf.structure_factor2D(self.pattern, 2*np.pi*self.lat_vec,hkMax=2*self.Nmax,eps=self.eps)
+
+
+    def _get_central_beam():
+        return self.get_beam(refl=[str(0,0)],index=True)[0]
+    def _set_zones(self):return
+
+    def _set_excitation_errors(self,Smax=0.02):
+        ''' get excitation errors for Sg<Smax
+        - Smax : maximum excitation error to be included
+        '''
+        K,K0 = self.K,self.k0
+        (h,k),(qx,qy) = self.lattice
+
+        Kx,Ky = K
+        Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2) - K0)
+        if Smax:
+            idx = Sw<Smax
+            h,k = np.array([h[idx],k[idx]],dtype=int)
+            qx,qy,Sw = qx[idx],qy[idx],Sw[idx]
+        d = dict(zip(['h','k','qx','qy','Sw'],[h,k,qx,qy,Sw]))
+
+        self.Smax   = Smax
+        self.nbeams = Sw.size
+        self.df_G   = pd.DataFrame.from_dict(d)
+        self.solved = False
+
+    def _set_Vg(self):
+        #in 2D Fhk is just the Fourier transform of fv
+        vg = self.Fhk.copy()
+        #It needs to be converted into a scattering amplitude [A]
+        #Fg[no dim] = vg[kVA^2], sig=[1/kVA], k0[A-1]
+        Fg = vg*self.sig*self.k0/np.pi
+        # Vg[A^-2]
+        Vg_G =  Fg/self.crys.area
+
+        #self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
+        # Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
+        # px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
+        # self.e0x = e0x
+        # self.df_G['px'] = px
+        # self.df_G['py'] = py
+        self.set_beam_positions()
+        self.df_G['Vg'] = Vg_G
+        self.df_G['Vga'] = abs(Vg_G)
+        self.df_G['Swl'] = bloch_util.logM(self.df_G['Sw'])
+        self.df_G['L']  = np.ones(Vg_G.shape)
+        self._set_zones()
+        self.df_G.loc[str((0,0)),'Vg'] = 0
+
+    def set_beam_positions(self):
+        self.df_G['px'] = mut.project_beams2D(K=self.K,qxy=self.get_G())

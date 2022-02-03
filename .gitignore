@@ -5,6 +5,7 @@
 */docs_fig
 **/dat/*
 **/sandbox/*
+**/old
 **/figures/*
 **/docs/build
 **/docs/source/reference
@@ -15,6 +16,7 @@
 **/tests/**/report
 
 tests/dials
+tests/felix
 tests/*/dat
 multislice/examples/dat
 multislice/temsim/makefile
@@ -23,7 +25,8 @@ multislice/data_2D
 
 
 **.ipynb_checkpoints/
-
+notebooks/Untitled.ipynb
+notebooks/tests/
 
 ## Python
 **/__pycache__

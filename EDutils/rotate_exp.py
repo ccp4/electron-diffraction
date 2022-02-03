@@ -100,7 +100,7 @@ class Rocking:
 
     def get_rocking(self,iZs:Optional[slice]=-1,
         zs:Optional[Iterable[float]]=None,
-        refl:Sequence[tuple]=[],cond:str='',opts:str=''):
+        refl:Sequence[tuple]=[],cond:str='',opts:str='',n=0):
         """Get intensities at required beams and thicknesses
 
         Parameters
@@ -130,7 +130,8 @@ class Rocking:
         refl,nbs = self.get_beams(cond=cond,refl=refl,opts=opts)  #;print(refl)
         nts = self.ts.size
         I = {}
-        for h in refl : I[str(h)]=np.nan*np.ones((nts,nzs))
+        # for h in refl : I[str(h)]=np.nan*np.ones((nts,nzs))
+        for h in refl : I[str(h)]=np.zeros((nts,nzs))
 
         print("gathering the intensities")
         for i in range(nts):
@@ -142,6 +143,12 @@ class Rocking:
                 # hkl0 = [str(tuple(h)) for h in sim_obj.get_hkl()[idx]]
                 for idB,hkl_0 in zip(idx,hkl0):
                     I[hkl_0][i,:] = np.array(sim_obj.Iz[idB,iZs])
+        if n and nbs>n:
+            print('keeping only %d strongest beams' %n)
+            df_Imax = pd.DataFrame.from_dict({h:Ib[:,0].max() for h,Ib in I.items()},orient='index',columns=['I'])
+            hkls = df_Imax.sort_values('I',ascending=False)[:n].index
+            I = {h:I[h] for h in hkls}
+
         z = self.load(0).z.copy()[iZs]
         return z,I
 
@@ -192,7 +199,7 @@ class Rocking:
 
 
     def plot_rocking(self,cmap='viridis',x:str='Sw',
-        cond='',refl=[],opts:str='',iZs=-1,zs=None,
+        cond='',refl=[],opts:str='',iZs=-1,zs=None,n:int=0,
         **kwargs):
         """plot rocking curve for set of selected beams at thickness zs
 
@@ -205,7 +212,7 @@ class Rocking:
         kwargs
             args to pass to dsp.stddisp
         """
-        z,I = self.get_rocking(cond=cond,refl=refl,opts=opts,zs=zs,iZs=iZs)
+        z,I = self.get_rocking(cond=cond,refl=refl,opts=opts,zs=zs,iZs=iZs,n=n)
         refl,plts = list(I.keys()),[]           #;print(refl)
         xlab = {'frame':'frame','Sw':r'$S_w(\AA^{-1})$','theta':r'$\theta(deg)$'}[x]
 
@@ -338,7 +345,7 @@ class Rocking:
             df.loc[i,cols] = vals.real
         return df
 
-    def get_beams(self,cond='',refl=[],opts=''):
+    def get_beams(self,cond='',refl=[],opts='',n=None):
         if cond:
             refl = []
             for i,name in enumerate(self.df.index):
@@ -352,6 +359,7 @@ class Rocking:
         if 'O' in opts:
             refl=np.hstack([refl,str((0,0,0))])
 
+        if n and len(refl)>n:refl=refl[:n]
         nbs = len(refl)#.size;print(nbs,refl)
         print('total number of beams:%d' %nbs)
 

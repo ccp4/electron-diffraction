@@ -209,6 +209,7 @@ def project_beams2D(K,qxy):
 ################################################################################
 import wallpp.lattice as lat        ;imp.reload(lat)
 import wallpp.plane_group as pg     ;imp.reload(pg)
+# from wallpp import wallpaper as pp  ;imp.reload(pp)
 def import_wallpp(file,**kwargs):
     ''' load file into a wallpp
     - file  : str -
@@ -216,7 +217,7 @@ def import_wallpp(file,**kwargs):
         - .txt
     '''
     if isinstance(file,dict):
-        pptype,ax,bz,angle,pattern = [file[k] for k in ['pp_type','a','b','angle','pattern']]
+        pp_args=file
     else:
         ext = file.split('.')[-1]
         with open(file,'r') as f:lines=f.readlines()
@@ -230,12 +231,15 @@ def import_wallpp(file,**kwargs):
             pptype = lines[0]
             ax,bz,angle = np.array(lines[1:4],dtype=float)
             pattern = np.array([np.array(l.split(' '),dtype=float) for l in lines[4:]])
-    wallpp = pg.Wallpaper(pptype,ax,bz,angle,pattern,ndeg=0,**kwargs)
-    wallpp.reciprocal_vectors = np.array(wallpp.get_reciprocal_lattice_2D())
-    wallpp.lattice_vectors = np.array(wallpp.lattice_vec)
-    wallpp.pattern=pattern #np.hstack([wallpp.Xa,wallpp.fa[:,None]])
-    a1,a2 = wallpp.lattice_vectors
-    wallpp.area=abs(np.cross(a1,a2))
+        pp_args=dict(zip(
+            ['pp_type','a','b','angle','pattern'],
+            [pptype,ax,bz,angle,pattern]))
+    wallpp = pg.Wallpaper(**pp_args,**kwargs)
+    # wallpp.reciprocal_vectors = np.array(wallpp.get_reciprocal_lattice_2D())
+    # wallpp.lattice_vectors = np.array(wallpp.lattice_vec)
+    # wallpp.pattern=pattern #np.hstack([wallpp.Xa,wallpp.fa[:,None]])
+    # a1,a2 = wallpp.lattice_vectors
+    # wallpp.area=abs(np.cross(a1,a2))
     return wallpp
 
 def gen_xyz2(file,xyz,lat_params,n=[0,0,1],theta=0, pad=0,fmt='%.4f',opts=''):

@@ -39,7 +39,7 @@ class NearBragg():
     def __init__(self,pattern,ax,bz,keV=200,lam=None,path='',
             Nx=1,Nz=1,eps=1,
             z0=1e10,npx=4096,tmax=5,qmax=None,q0s=None,
-            method='Greens',fjopt=1,iZv=5):
+            method='D',fjopt=1,iZv=5):
         if keV : lam = cst.keV2lam(keV)
         self.pattern = pattern
         self.lam  = dtype(lam)
@@ -233,6 +233,26 @@ class NearBragg():
     #################################################################
     #### Multiple scattering routines
     #################################################################
+    # def _Greens2n(self,iZv=5):
+    #     '''2-level dynamical scattering ignoring backward scattering'''
+    #     print(colors.green+'... Running nearBragg Greens2 ...'+colors.black)
+    #
+    #     ## Primary scattering
+    #     ##atoms x pixels
+    #     xjp,zjp = self.x0s-self.x[:,None]),self.z0-self.z[:,None]
+    #     tjp = np.arctan2(xjp,zjp)
+    #     Rjp = np.sqrt(xjp*2+zjp**2)
+    #     ej  = np.exp(2J*np.pi*k0*self.z)
+    #     Fj  = np.sum(ej*self.fj(tij,self.Za)*np.exp(2J*np.pi*k0*Rjp),axis=1)
+    #
+    #     ## Secondary scattering
+    #     # natoms x natoms
+    #     xij,zij,Zi = self.x[:,None]-self.x,self.z[:,None]-self.z,self.Za[:,None]
+    #     tij = np.arctan2(xij,zij)
+    #     tijp = tjp[:,None] - tij
+    #     Rij = np.sqrt(xij*2+zij**2)
+    #     Fij = self.fj(tij,self.Za)*self.fj(tijp,Zi)*np.exp(2J*np.pi*k0*Rjp[:,None])
+
     def _Greens2(self,iZv=5):
         '''2-level dynamical scattering ignoring backward scattering'''
         print(colors.green+'... Running nearBragg Greens2 ...'+colors.black)
@@ -263,11 +283,12 @@ class NearBragg():
                 #distance betwwen atoms
                 Rij = np.sqrt((self.x[j]-self.x[i])**2+(self.z[j]-self.z[i])**2)
                 #amplitude of radiation j at atom i (dimensionless)
-                fij = self.fj(tij,self.Za[j])*np.exp(2*np.pi*1J*Rij/self.lam)/Rij*dq
+                fij = self.fj(tij,self.Za[j])*np.exp(2*np.pi*1J*Rij/self.lam)#*dq
                 #scattering amplitude from atom i due to scattering from atom j
                 Adyn += fij*self.fj(ti0-tij,self.Za[i])
 
-            #increment slice
+            # increment slice
+            # print(abs(Adyn/Akin).max())
             if not (i+1)%self.Nx:
                 # I0 -= self.S[1,iz]/(self.ax*self.Nx) #;print(I0)
                 iz+=1

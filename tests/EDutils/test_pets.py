@@ -9,9 +9,9 @@ pets = pets_imp.Pets(pts_path,gen=False)#,lam=0.02508,aper=0.005340,omega=230,ge
 frame = 65
 
 pets.show_exp(frame,h=True)
-pets.show_uvw()
-pets.show_xyz()
-pets.show_hkl()
+# pets.show_uvw()
+# pets.show_xyz()
+# pets.show_hkl()
 
 
 # pets.show_sim()

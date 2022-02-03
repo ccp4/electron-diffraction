@@ -7,7 +7,7 @@ plt.close('all')
 pets = 'dat/pets/glycine.pts'
 
 pets = pt.Pets('dat/pets/glycine.pts')
-# v0 = mut.Viewer(pets=pets,init='cr',rot=203,Nmax=13,Smax=0.025,frame=14)
+v0 = mut.Viewer(pets=pets,init='cr',rot=203,Nmax=13,Smax=0.025,frame=14)
 # v = mut.Viewer(exp_path='dat/pets/tiff/processed',init='cr',rot=203,Nmax=13,Smax=0.025,frame=14)
 # v = vw.Viewer(config='dat/config.pkl')
 

@@ -5,7 +5,7 @@ import tifffile
 # plt.close('all')
 path = 'dat/bloch/'
 
-opt='ps'
+opt='p'
 opts='Z' #RI' #S(Solve) s(single)
 nframes = 200
 deg  = 0.01
@@ -14,32 +14,33 @@ omega = np.arange(nframes)*deg
 bloch_args = {'cif_file':'diamond','keV':200,
     'Nmax':8,'Smax':0.025,'solve':1,'opts':'sv'}
 
-
 # uvw = ut.get_uvw(u0=[0,0,1],u1=[0,1,0],omega=omega)
 # rock = bl.bloch_rock(tag='rx',uvw=uvw,
 #     omega=omega,bloch_args=bloch_args,
 #     thicks=(0,800,400),ts0=0,cond='(Sw<1e-3) &(Vga>1e-3)',
 #     #zs = np.arange(168,800,168), hkls=[[[0,4,0]]],
-#     path=path,opts='W',opt='p')
+#     path=path,opts='',opt='p')
 
-
-
-uvw = ut.get_uvw_from_theta_phi(theta=12,phi=19,omega=omega,plot=0)
 
 # cond = '(Sw<2e-3) & (I>2e-2) & (Vga>1e-6)'
 # cond = '(Sw<1e-4) & (I>1e-4) '
 fz = lambda x : -np.log10(np.maximum(x,1e-10))
+fz = lambda x:x
 cond = ''#'(Sw<1e-2) & (Vga>1e-6)'
 # hkls = [[-8,-2,2],[-5,1,1],[-1,7,-1],[3,7,-1],[-2,6,0]]
 hkls = [[-8,-2,2],[-5,1,1],[-1,-7,1],[3,7,-1],[-2,6,0],[7,-3,-1],[5,1,-1]]
-# rock = ut.load_pkl('dat/bloch/rock_diamond_r1.pkl')
+
+uvw = ut.get_uvw_from_theta_phi(theta=12,phi=19,omega=omega,plot=0)
+# rock = bl.bloch_rock(tag='diamond_r1',uvw=uvw,
+#     omega=omega,bloch_args=bloch_args,
+#     thicks=(0,800,400),cond=cond,#thick=250,#fz=fz
+#     # zs=np.arange(1,6)*50,hkls=hkls,ts0=2.0,
+#     path=path,opts='',opt=opt)
+
+rock = ut.load_pkl('dat/bloch/rock_diamond_r1.pkl')
 # rock.integrate_rocking(cond=cond,refl=hkls,lw=2)
-hkls = [[h] for h in hkls]
-rock = bl.bloch_rock(tag='diamond_r1',uvw=uvw,
-    omega=omega,bloch_args=bloch_args,
-    thicks=(0,800,400),ts0=2.0,cond=cond,fz=fz,thick=250,
-    zs=np.arange(1,6)*50,hkls=hkls,
-    path=path,opts=opts,opt=opt)
+rock.Sw_vs_theta(cond='',refl=hkls,thick=250,fz=fz,opts='Iw')
+# hkls = [[h] for h in hkls]
 
 
 # rock.set_tag('diamond_r1')

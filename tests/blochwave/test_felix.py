@@ -22,7 +22,8 @@ try:
     hkl_str = [str(tuple(h)) for h in hkl]
     b.solve(hkl=hkl,Smax=0,Nmax=10)#Smax=0.02,Nmax=7)
     # idx = b.get_beam(refl=hkl_str)
-except:
+except Exception as e:
+    print(e)
     pass
 
 

@@ -219,6 +219,10 @@ class Bloch:
     #### private
     ################################################################################
     def _solve_Felix(self,felix_cif,npx=20,nbeams=200,thicks=(10,250,10),show_log=False):
+        felix='%s/bin/felix' %os.path.dirname(__file__)
+        if not os.path.exists(felix):
+            print('Running with Felix not available. You need to install felix in %s :')
+            print(felix)
 
         inp = bloch_util.get_inp(npx,nbeams,self.u,self.keV,thicks)
         with open("%s/felix.inp" %self.path,'w') as f:f.write(inp)
@@ -235,8 +239,8 @@ class Bloch:
         print(colors.blue+"... running felix ..."+colors.black)
         cmd="""cd %s;
         cd felix;
-        %s/bin/felix > felix.log 2>&1;
-        """ %(self.path,os.path.dirname(__file__))
+        %s > felix.log 2>&1;
+        """ %(self.path,felix)#os.path.dirname(__file__))
         p=check_output(cmd,shell=True).decode() #;print(p)
 
         if show_log:

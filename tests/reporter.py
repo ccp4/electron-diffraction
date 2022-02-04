@@ -48,8 +48,8 @@ def run_tests():
         print(cmd)
         if run_opt:
             # oe=check_output(job, shell=1).decode().strip()
-            p=Popen(job, shell=1);p.wait()
-            print(p.communicate())
+            p=Popen(job, shell=1);p.wait();o,e=p.communicate()
+            if o  or e:print(o,e)
 
         #get summary
         lib_report=get_report_summary(report_file)

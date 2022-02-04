@@ -59,7 +59,7 @@ def run_tests():
 
     report_file=os.path.join(tests_dir,"report.md")
     with open(report_file,"w") as f: f.write(report)
-    print(colors.YELLOW+reports_lnk(report_file)+colors.RESET)
+    print(colors.YELLOW+reports_lnk("report.md")+colors.RESET)
 
 
 if __name__=="__main__":

@@ -64,5 +64,5 @@ def show_uvw():
 
 
 
-# test_sweep()
+test_sweep()
 # fig,ax=test_show_uvw();fig.show()

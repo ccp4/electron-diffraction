@@ -21,5 +21,5 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires=['numpy','scipy','matplotlib','colorama','pandas',
-    'cbf','crystals','TarikDrevonUtils','easygui','tifffile','pickle5'],
+    'cbf','crystals','TarikDrevonUtils','easygui','tifffile','pickle5','bs4'],
 )

@@ -1,5 +1,5 @@
 import importlib as imp
-import tifffile,os,glob,pickle5
+import tifffile,os,glob,pickle5,subprocess
 import numpy as np,pandas as pd
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from crystals import Crystal
@@ -35,6 +35,10 @@ def sweep_var(Simu:object,
         pd.DataFrame
             info about the set of simulations with params pkl
     """
+    if not os.path.exists(path):
+        print('creating directory:',path)
+        print(subprocess.check_output('mkdir -p %s' %path,shell=True).decode())
+        
     if isinstance(params,str):
         params=[params]
         vals=[[v] for v in vals]

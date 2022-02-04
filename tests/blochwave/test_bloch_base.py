@@ -5,9 +5,14 @@ from utils import pytest_util       ;imp.reload(pytest_util)
 from blochwave import bloch         ;imp.reload(bloch)
 plt.close('all')
 
-path = 'dat'
-b0 = bloch.Bloch('diamond',path=path,keV=200,u=[0,0,1],Nmax=8,Smax=0.05,
+out,ref,dir = pytest_util.get_path(__file__)
+b0 = bloch.Bloch('diamond',path=out,keV=200,u=[0,0,1],Nmax=8,Smax=0.05,
     opts='svt',thick=100)
+
+@pytest_util.cmp_ref(__file__)
+def test_solve_bloch():
+    g=b0.gammaj
+    return g
 
 @pytest_util.cmp_ref(__file__)
 def test_beam_thickness():
@@ -20,10 +25,11 @@ def test_show_beam_thickness():
         beam_args={'cond':'(Vga>1e-4) & (Sw<1e-2)'},cm='jet',
         opt='')
 
+# @pytest.mark.new
 @pytest_util.add_link(__file__)
 def test_convert2tiff():
     import tifffile
-    tiff_file=path+"/I.tiff"
+    tiff_file=out+"/I.tiff"
     v=b0.convert2tiff(tiff_file=tiff_file,
         show=False,cutoff=10,thick=200,Imax=1e7)
     im=tifffile.imread(tiff_file)
@@ -61,6 +67,7 @@ def test_show_Fhkl():
     b0.show_Fhkl(s='h=0',opts='l',xylims=7,ms=50,cmap='Greens',pOpt='im',caxis=[0,1.5],opt='')
 
 
+# g0 = test_solve_bloch()
 
 
 ################################################################################

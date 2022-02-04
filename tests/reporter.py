@@ -59,7 +59,11 @@ def run_tests():
 
     report_file=os.path.join(tests_dir,"report.md")
     with open(report_file,"w") as f: f.write(report)
-    print(colors.YELLOW+reports_lnk("report.md")+colors.RESET)
+
+    #convert to html
+    html_file=report_file.replace('.md','.html')
+    oe=check_output("pandoc %s > %s" %(report_file,html_file),shell=True).decode()
+    print(colors.YELLOW+reports_lnk(html_file)+colors.RESET)
 
 
 if __name__=="__main__":
@@ -67,7 +71,7 @@ if __name__=="__main__":
 
     tests_dir = os.path.realpath(os.path.dirname(__file__))#;print(tests_dir)
     hostname    = check_output('hostname -A', shell=1).decode().strip().split()[-1]
-    reports_lnk = lambda file:"http://%s:8010/%s" %(hostname,file)
+    reports_lnk = lambda file:"http://%s:8010/%s" %(hostname,file.split('tests/')[1])
     run_opt = True
     libs = ['blochwave','EDutils']#,'multislice']
     if len(sys.argv)>1:

@@ -1047,52 +1047,52 @@ def show_Ewald2D(K,lat,relrod=0,**kwargs):
 # ###########################################################################
 # #### misc :
 # ###########################################################################
-# def _get_cif_file(path,cif_file):
-#     if not cif_file:
-#         cif_file = _find_files(path,'cif')
-#     return cif_file
+def _get_cif_file(path,cif_file):
+    if not cif_file:
+        cif_file = _find_files(path,'cif')
+    return cif_file
+
+
+def _find_files(path,f_type):
+    files = glob.glob(path+'/*.%s' %f_type)
+    if len(files)==1:
+        file=files[0]
+        return file
+    else:
+        msg ='''
+    only 1 %s file should be found in path folder :
+     %s
+    but %d were found :
+     %s''' %(f_type,os.path.realpath(path),len(files),str(files))
+        raise Exception(msg)
+
+# def load_tif(fig):
+#     return tifffile.imread(fig)
 #
-#
-# def _find_files(path,f_type):
-#     files = glob.glob(path+'/*.%s' %f_type)
-#     if len(files)==1:
-#         file=files[0]
-#         return file
-#     else:
-#         msg ='''
-#     only 1 %s file should be found in path folder :
-#      %s
-#     but %d were found :
-#      %s''' %(f_type,os.path.realpath(path),len(files),str(files))
-#         raise Exception(msg)
-#
-# # def load_tif(fig):
-# #     return tifffile.imread(fig)
-# #
-# # def load_cbf(fig):
-# #     try:
-# #         content = cbf.read(fig)
-# #         numpy_array_with_data = content.data
-# #         header_metadata = content.metadata
-# #         return numpy_array_with_data
-# #     except:#UnicodeDecodeError
-# #         self.i=self.i+self.mode
-# #         print(colors.red+'error reading file'+colors.black)
-#
-# def find_format(exp_path,v=1):
-#     d_fmt = {'cbf':load_cbf,'tiff':load_tif,'tif':load_tif}
-#     supported_fmts = d_fmt.keys()
-#
-#     fmts = np.unique([f.split('.')[-1] for f in os.listdir(exp_path)])
-#     fmts = [fmt for fmt in fmts if fmt in supported_fmts]
-#     if not len(fmts):
-#         raise Exception('no supported format found in %s. Supported formats :' %(exp_path),supported_fmts)
-#     fmt = fmts[0]
-#     if len(fmts)>1:
-#         print('warning multiple formats found',fmts)
-#         print('using %s' %fmt)
-#     if v:print('%s format detected' %fmt)
-#     return fmt,d_fmt[fmt]
+# def load_cbf(fig):
+#     try:
+#         content = cbf.read(fig)
+#         numpy_array_with_data = content.data
+#         header_metadata = content.metadata
+#         return numpy_array_with_data
+#     except:#UnicodeDecodeError
+#         self.i=self.i+self.mode
+#         print(colors.red+'error reading file'+colors.black)
+
+def find_format(exp_path,v=1):
+    d_fmt = {'cbf':load_cbf,'tiff':load_tif,'tif':load_tif}
+    supported_fmts = d_fmt.keys()
+
+    fmts = np.unique([f.split('.')[-1] for f in os.listdir(exp_path)])
+    fmts = [fmt for fmt in fmts if fmt in supported_fmts]
+    if not len(fmts):
+        raise Exception('no supported format found in %s. Supported formats :' %(exp_path),supported_fmts)
+    fmt = fmts[0]
+    if len(fmts)>1:
+        print('warning multiple formats found',fmts)
+        print('using %s' %fmt)
+    if v:print('%s format detected' %fmt)
+    return fmt,d_fmt[fmt]
 #
 #
 # def import_crys(file):

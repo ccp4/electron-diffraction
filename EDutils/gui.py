@@ -7,12 +7,12 @@ from utils import glob_colors as colors
 # from multislice.pets import Pets
 # from multislice.multislice import Multislice
 # print('...bloch,multi...')
-from blochwave.bloch import load_Bloch #Bloch
+from blochwave.util import load_Bloch #Bloch
 from multislice import mupy_utils as mut    #;imp.reload(mut)
 from multislice import postprocess as pp    #;imp.reload(pp)
 from multislice import multislice as ms     #;imp.reload(ms)
 from blochwave import bloch as bl           ;imp.reload(bl)
-from multislice import pets as pt           ;imp.reload(pt)
+from . import pets as pt                    ;imp.reload(pt)
 from . import __version__
 from . import display as EDdisp             ;imp.reload(EDdisp)
 from . import gui_config as cfg             ;imp.reload(cfg)
@@ -30,11 +30,12 @@ if plt.rcParams['keymap.save']:
 
 
 class Gui:
-    def __init__(self,config=None,help=False,**kwargs):
+    def __init__(self,config=None,help=True,pargs={},**kwargs):
         '''Dynamic beam viewer :
-        - config : str - saved configuration
-        - help : bool - show help at startup
-        - kwargs : see init_args'''
+            - config : str - saved configuration
+            - help : bool - show help at startup
+            - kwargs : see init_args
+        '''
         self.__version__=__version__
         # print('...setting up keys...')
         # self.set_keys()
@@ -75,7 +76,8 @@ class Gui:
         # print('...Complete initialization...')
 
         #print('... init figure ...')
-        self.fig,self.ax = dsp.stddisp()
+        self.pargs=pargs
+        self.fig,self.ax = dsp.stddisp(**pargs )
         cid = self.fig.canvas.mpl_connect('key_press_event', self)
         self.call = self.call_update
 
@@ -407,7 +409,7 @@ class Gui:
         self.bloch._set_Vg()
         self.bloch._set_kinematic()
         if fsolve:
-            self.bloch._solve_Bloch(opts='0v')
+            self.bloch._solve_Bloch()#opts='0v')
             self.bloch.set_thickness(thick=self.thick)
             if self.save_bloch:
                 if self.mode=='frames':
@@ -475,7 +477,7 @@ class Gui:
         EDdisp.show_frame(opts=self.pets_opts,mag=self.mag,rot=self.rot,
             df_pets=self.rpl,im_multi=self.im,df_bloch=df,hkl_idx=hkl_idx,
             ax=self.ax,title=title,xylims=self.xylims,single_mode=not self.hold_mode,
-            cmap=self.cmap,cutoff=self.cutoff,sargs=sargs,cs=cs)
+            cmap=self.cmap,cutoff=self.cutoff,sargs=sargs,cs=cs,**self.pargs)
 
     def show(self):
         self.show_vals()

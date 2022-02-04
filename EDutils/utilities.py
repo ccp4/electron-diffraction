@@ -206,7 +206,7 @@ def get_uvw_CBED(u0:Sequence,deg:float,npts:int,
     if show:show_uvw(uvw,eij=dict(zip(['e_0','e_1','e_2'],eij)),**kwargs)
     return uvw
 
-def show_uvw(uvw:Iterable[Sequence],
+def show_uvw(uvw:Iterable[Sequence],ax=None,
         eij:dict={'e_z':[0,0,1]},h3d:bool=False,**kwargs
     ):
     """show orientation vectors

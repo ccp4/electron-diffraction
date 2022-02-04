@@ -1,14 +1,21 @@
-from utils import*                      ;imp.reload(dsp)
-from EDutils import pets as pets_imp  ;imp.reload(pets_imp)
-# import multislice.mupy_utils as mut     ;imp.reload(mut)
+from utils import*                   ;imp.reload(dsp)
+from EDutils import pets as pets_imp ;imp.reload(pets_imp)
+from utils import pytest_util        ;imp.reload(pytest_util)
 plt.close('all')
-pts_path = 'glycine/glycine.pts'
+pts_path = 'pets/glycine.pts'
+#make sure pets folder exists in dat
 
+def test_import_pets():
+    pets = pets_imp.Pets(pts_path,gen=True)#,lam=0.02508,aper=0.005340,omega=230,gen=1)
 
-pets = pets_imp.Pets(pts_path,gen=False)#,lam=0.02508,aper=0.005340,omega=230,gen=1)
-frame = 65
+@pytest_util.add_link(__file__)
+def test_show_exp():
+    pets = pets_imp.Pets(pts_path)
+    vw=pets.show_exp(frame=65,h=True,pargs={'opt':''})
+    return vw.fig,vw.ax
 
-pets.show_exp(frame,h=True)
+# test_import_pets()
+# test_show_exp()
 # pets.show_uvw()
 # pets.show_xyz()
 # pets.show_hkl()

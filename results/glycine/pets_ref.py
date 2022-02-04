@@ -1,13 +1,13 @@
 import pandas as pd,numpy as np,crystals
 from utils import*
-from multislice import pets as pt          ;imp.reload(pt)
+from EDutils import pets as pt          ;imp.reload(pt)
 from multislice import mupy_utils as mut   #;imp.reload(mut)
 # I(integrate I over frames and compare with hkl.I)
 # i(integrate on frame manually) c(Fo vs Fc_dyngo), o(check Fo=sqrt(Io) ok)
 opts='c'
 file = 'dat/pets/refinements/out.txt'
 FoFc = 'dat/pets/refinements/FoFc.txt'
-pets = pt.Pets('dat/pets/glycine.pts',dyn=0)
+pets = pt.Pets('dat/pets/glycine.pts',gen=True,dyn=0)
 
 
 #### sum/mean I over frames and compare with hkl.I

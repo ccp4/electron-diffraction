@@ -8,7 +8,6 @@ from utils import displayStandards as dsp   #;imp.reload(dsp)
 from multislice  import mupy_utils as mut   #;imp.reload(mut)
 from EDutils import viewers as vw           #;imp.reload(vw)
 from EDutils import utilities as ut         #;imp.reload(ut)
-# from EDutils.viewers import Pets_Viewer
 from multislice.rotating_crystal import get_crystal_rotation
 
 class Pets:
@@ -31,9 +30,10 @@ class Pets:
         self.path  = os.path.dirname(pts_file)
         self.out   = self.path+'/dat/'
 
+
         self.cif_file   = ut.find_cif_file(self.path,cif_file)
         self.crys       = ut.import_crys(self.cif_file)
-        self.lat_vec    = y(self.crys.lattice_vectors)
+        self.lat_vec    = np.array(self.crys.lattice_vectors)
         self.lat_vec1   = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
         self.lat_params = self.crys.lattice_parameters
 
@@ -45,10 +45,9 @@ class Pets:
 
 
     def _convert_pets(self):
-
         cmd = "%s/convert_pets.sh %s %s" %(os.path.dirname(__file__),self.path,self.name)
         p = Popen(cmd,shell=True,stdout=PIPE,stderr=PIPE);p.wait();o,e=p.communicate()
-        print(o.decode()) #; print(e.decode())
+        print(o.decode(),e.decode())
 
         A = np.loadtxt(self.out+'UB.txt')
         np.save(self.out+'UB.npy',np.reshape(A,(3,3)))
@@ -352,7 +351,7 @@ class Pets:
 
     def show_exp(self,frame=1,**kwargs):
         """show the experimental images"""
-        vw.Pets_Viewer(self,frame=frame,**kwargs)
+        return vw.Pets_Viewer(self,frame=frame,**kwargs)
 
     # def mp4_crystal_rotation(self,name,**kwargs):
     #     cif_file = self.cif_file

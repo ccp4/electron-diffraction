@@ -29,13 +29,25 @@ def test_sweep():
     print('df2[1 ] : ',ut.load_pkl(df2.iloc[1].pkl))
     print('df3[-1] : ',ut.load_pkl(df3.iloc[-1].pkl))
 
-def test_uvw():
-    u0 = [1,0,1]
-    args = {'show':True,'h3d':False,'xylims':1}
-    ut.get_uvw_cont(u0,u1=[1,1,1] ,nframes=100   ,title='cont'      ,**args)
-    ut.get_uvw_rock(e0=u0,e1=[1,0],npts=20,deg=1 ,title='rock_theta',**args)
-    ut.get_uvw_rock(e0=u0,e1=[0,1],npts=20,deg=1 ,title='rock_phi'  ,**args)
-    ut.get_uvw_CBED(u0=[1,1,1],cart=False ,npts=[10,20],deg=20  ,title='CBED'      ,**args)
+
+@pytest_util.cmp_ref(__file__)
+def test_get_uvw_cont():
+    return ut.get_uvw_cont(u0=[1,0,1],u1=[1,1,1] ,nframes=100,title='cont'      ,**args)
+@pytest_util.cmp_ref(__file__)
+def test_get_uvw_rock():
+    return ut.get_uvw_rock(e0=[1,0,1],e1=[1,0],npts=20,deg=1 ,title='rock_theta',**args)
+@pytest_util.cmp_ref(__file__)
+def test_get_uvw_CBED():
+    return ut.get_uvw_CBED(u0=[1,1,1],cart=False ,npts=[10,20],deg=20  ,title='CBED',**args)
+
+@pytest_util.add_link(__file__)
+def test_show_uvw():
+    args = {opt='p'}
+    uvw1=ut.get_uvw_rock(e0=[1,0,1],e1=[0,1],npts=20,deg=1 ,title='rock_phi')
+    uvw1=ut.get_uvw_rock(e0=[1,0,1],e1=[1,0],npts=20,deg=1 ,title='rock_phi')
+
+    return
+
 
 
 # test_sweep()

@@ -7,12 +7,12 @@ from crystals import Crystal
 from utils import displayStandards as dsp           #;imp.reload(dsp)
 from utils import physicsConstants as cst           #;imp.reload(cst)
 from utils import glob_colors as colors,handler3D as h3d
-from EDutils import display as EDdisp               #;imp.reload(EDdisp)
 from multislice import postprocess as pp            #;imp.reload(pp)
 from scattering import structure_factor as sf       #;imp.reload(sf)
 from scattering import scattering_factors as scatf  #;imp.reload(scatf)
 from EDutils import viewers                         #;imp.reload(viewers)
 from EDutils import utilities as ut                 #;imp.reload(ut)
+from EDutils import display as EDdisp               ;imp.reload(EDdisp)
 from . import util as bloch_util                    ;imp.reload(bloch_util)
 
 class Bloch:
@@ -330,23 +330,22 @@ class Bloch:
         self.solved = False
 
 
-    def _set_Vg(self,opt=0):
-        if opt:
-            q    = self.df_G['q']
-            hkl  = self.df_G[['h','k','l']].values
-            xi   = self.pattern[:,:3].T
-            Za   = np.array(self.pattern[:,-1],dtype=int)
-            fj   = scatf.get_fe(Za,q)
-            # fj   = 1 #testing exp factor alone
-            # Fhkl[nGs] = sum_{natoms} fj [nGs x natoms] * hkl[nGsx3].dot(xi[3,natoms])
-            Fhkl = np.sum(fj*np.exp(-2J*np.pi*hkl.dot(xi)),axis=1)
-            # Fhkl = np.sum(fj,axis=1)
-        else:
-            hkl  = self.df_G[['h','k','l']].values
-            Fhkl = self.Fhkl.copy()
-            V0_idx = np.array([2*self.Nmax]*3)
-            Fhkl[tuple(V0_idx)] = 0
-            Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
+    def _set_Vg(self):#,opt=0):
+        ##### opt was used for testing against FELIX
+        # if opt:
+        #     q    = self.df_G['q']
+        #     hkl  = self.df_G[['h','k','l']].values
+        #     xi   = self.pattern[:,:3].T
+        #     Za   = np.array(self.pattern[:,-1],dtype=int)
+        #     fj   = scatf.get_fe(Za,q) #;fj = 1 #testing exp factor alone
+        #     #### Fhkl[nGs] = sum_{natoms} fj [nGs x natoms] * hkl[nGsx3].dot(xi[3,natoms])
+        #     Fhkl = np.sum(fj*np.exp(-2J*np.pi*hkl.dot(xi)),axis=1)
+        # else:
+        hkl  = self.df_G[['h','k','l']].values
+        Fhkl = self.Fhkl.copy()
+        V0_idx = np.array([2*self.Nmax]*3)
+        Fhkl[tuple(V0_idx)] = 0
+        Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
 
         self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
         Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
@@ -459,7 +458,8 @@ class Bloch:
         refl:Iterable[tuple or str]=[],
         index:bool=True,
     ) -> Iterable[int]:
-        """ select reflections according to a condition or indices
+        """ select reflections according to a condition or indices.
+        Returns strong beams if nothing is specified
 
         Parameters
         ----------
@@ -483,9 +483,15 @@ class Bloch:
         if not isinstance(self.df_G.index[0],str):
             self.df_G.index = [str(tuple(h)) for h in self.df_G[['h','k','l']].values]
 
+        if not cond and not any(refl):cond={'tol':1e-3}
         if cond:
             if isinstance(cond,dict):
                 cond_args=cond.copy()
+                if not 'I' in self.df_G.columns:
+                    if not 'Iz' in self.__dict__:
+                        self._set_beams_vs_thickness(thicks=(0,1000,3))
+                    self.df_G.I=self.Iz[:,-1]
+
                 cond=lambda dfG:bloch_util.strong_beams(dfG,**cond_args)
             if isinstance(cond,str):
                 refl = list(self.df_G.loc[self.df_G.eval(cond)].index.values)
@@ -526,7 +532,8 @@ class Bloch:
             beams as function of thickness
         """
         if 'Iz' not in self.__dict__:
-            print('warning : thickness calc since Iz not an attribute')
+            self.thicks=(0,1000,1000)
+            print('warning : computing Iz for thickness ', self.thicks)
             self._set_beams_vs_thickness()
         Iz = self.Iz[idx,iZs].copy()
         if dict_opt:
@@ -542,51 +549,41 @@ class Bloch:
     def get_G(self):return self.df_G[['qx','qy','qz']].values
     def get_Xig(self,tol=1e4):
         self.df_G['Xi_g'] = self.k0/abs(self.df_G.Vg)
-        return self.df_G.loc[self.df_G.Xi_g<tol,['h','k','l','Sw','Vg','Xi_g']]
+        xig = self.df_G.loc[self.df_G.Xi_g<tol,['h','k','l','Sw','Vg','Xi_g']]
+        print(xig)
+        return xig
     def get_Sw(self,Smax=1e-2):
         Smax = min(Smax,self.Smax)
-        print(self.df_G[['h','k','l','Sw']].loc[self.df_G.Sw<=Smax])
+        Smax = self.df_G[['h','k','l','Sw']].loc[self.df_G.Sw<=Smax]
+        print(Smax)
+        return Smax
 
-    def get_Istrong(self,opts:str='p',
-        sort:str='I',cols:Iterable[str]=[],
-    ):
-        """Get strong beams
-
+    def is_hkl(self,h,k,l):
+        """ tests whether beam is part of the simulation
         Parameters
-        ----------
-        cols
-            columns to display in addition to I,Sw Vg
-        sort
-            sort along
-        opts
-            p(print values) o(return hkl index)
+        -----------
+            h,k,l
+                indices
 
-
-        .. note ::
-            condition used : '(Swl<2) & (I>10) & (Vga>0.1)'
+        Returns
+        ---------
+            True or False
         """
-        hkl = get_beam(cond='(Sw<1e-2) & (I>10) & (Vga>0.1)',index=False)
-
-        if 'p' in opts:
-            print(self.df_G[hkl].sort_values(sort,ascending=False)[['I','Sw','Vg']+cols])
-        if 'o' in opts:
-            return hkl
-
-    def is_hkl(self,Ghkl,v=1):
-        Gidx = np.where(np.linalg.norm(self.get_hkl() - Ghkl,axis=1)==0)[0]
-        if v:print(self.df_G.iloc[Gidx])
-        return Gidx[0]
+        return any(self.get_beam(refl=[str((h,k,l))]))
 
     ################################################################################
     #### display
     ################################################################################
-    def show_beams(self,opts='SVkr',cond='',refl=[],name='',**kwargs):
+    def show_beams(self,opts='BVSkr',cond='',refl=[],name='',**kwargs):
         """ display beams"""
         # cond = self.get_cond(cond)
-        idx = self.get_beam(cond=cond,refl=refl)#;print(idx)
+        hkl_idx = self.get_beam(cond=cond,refl=refl,index=False)#;print(idx)
+        # hkl_idx = self.df_G.index
+        # self.df_G.Ig=self.Iz[:,-1]
+        self.df_G.loc[str((0,0,0)),'I']=0
         if not name : name=os.path.join(self.path,self.name+'_setup.svg')
         EDdisp.show_frame(df_bloch=self.df_G,single_mode=False,
-            opts=opts,hkl_idx=idx,name=name,
+            opts=opts,hkl_idx=hkl_idx,name=name,
             **kwargs)
 
     def show_beams_vs_thickness(self,
@@ -633,7 +630,7 @@ class Bloch:
         return pp.plot_beam_thickness(beams,**kwargs)
 
 
-    def show_Idyn_vs_Ikin(self,thicks=None,iZs=10,cmap='Spectral',**kwargs):
+    def show_Idyn_vs_Ikin(self,thicks=None,iZs=100,cmap='Spectral',**kwargs):
         """Display correlation plot of dynamical vs kinematical intensities
 
         Parameters
@@ -643,18 +640,19 @@ class Bloch:
         hkl
             beams to include
         """
-        if thicks:self._set_beams_vs_thickness(thicks)
+        if thicks or not 'Iz' in self.__dict__:self._set_beams_vs_thickness(thicks)
         if isinstance(iZs,int):iZs=slice(0,None,iZs)
         # iB = self.get_Istrong(out=1)[0]#;print(iB,self.Iz[    iB,iZs],)
-        iB = np.argsort(np.sum(self.Iz,axis=1))[-2]
+        # iB = np.argsort(np.sum(self.Iz,axis=1))[-2]
         z      = self.z.copy()[       iZs]
-        Iz_dyn = self.Iz.copy()[    :,iZs]/self.Iz[    iB,iZs]
-        Iz_kin = self.Iz_kin.copy()[:,iZs]/self.Iz_kin[iB,iZs]#;print(Iz_dyn[Iz_dyn>1e-3])
+        Iz_dyn = self.Iz.copy()[    :,iZs]#/self.Iz[    iB,iZs]
+        Iz_kin = self.Iz_kin.copy()[:,iZs]#/self.Iz_kin[iB,iZs]#;print(Iz_dyn[Iz_dyn>1e-3])
         nzs = z.size
+        print(Iz_kin.shape,Iz_dyn.shape)
         cs = dsp.getCs(cmap,nzs) #; print(len(cs),Iz_dyn.shape,Iz_kin.shape)
         # scat=tuple( [[I_kin,I_dyn,cs[i]] for i,(I_dyn,I_kin) in enumerate(zip(self.Iz[:,::iZ],self.Iz_kin[:,::iZ]))])
-        plts=[[I_kin,I_dyn,[cs[i],'o'],'$z=%d\AA$' %z] for i,(z,I_dyn,I_kin) in enumerate(zip(z,Iz_dyn.T,Iz_kin.T))]
-        plts+=[ [[0,1],[0,1],[(0.5,)*3,'--'],''] ]
+        plts=[[np.log10(I_kin),np.log10(I_dyn),[cs[i],'o'],'$z=%d\AA$' %z] for i,(z,I_dyn,I_kin) in enumerate(zip(z,Iz_dyn.T,Iz_kin.T))]
+        # plts+=[ [[0,1],[0,1],[(0.5,)*3,'--'],''] ]
         dsp.stddisp(plts,labs=['$I_{kin}$','$I_{dyn}$'],sargs={'alpha':0.5},**kwargs)
 
     def show_Fhkl(self,s=None,opts='m',h3D=0,**kwargs):
@@ -800,9 +798,9 @@ class Bloch:
 
         Parameters
         ----------
-        opt:  S(solve) s(save)
+        opt:  S(solve) s(save) p(plot)
         """
-        solve,save = 'S' in opts,'s' in opts
+        solve,save,show = 'S' in opts,'s' in opts,'p' in opts
         Nmax,Smax=[a.flatten() for a in np.meshgrid(Nmax,Smax)]
         z=np.array(z)
         df=pd.DataFrame(columns=['Nmax','Smax','nbeams','Iz'])
@@ -814,138 +812,145 @@ class Bloch:
             for i,(Nm,Sm) in enumerate(zip(Nmax,Smax)):
                  self.solve(Nmax=Nm,Smax=Sm,thicks=z)
                  idx='(%d,%.3f)'%(Nm,Sm)
-                 idx_b = self.get_beam_index(refl=hkl0)
+                 idx_b = self.get_beam(refl=hkl0)
                  df.loc[idx,['Nmax','Smax','nbeams']]=[Nm,Sm,self.nbeams]
                  df.loc[idx,'Iz']=self.Iz[idx_b,:].copy()
             self.df=df
             if save:self.save(self.path+self.name+'_cv.pkl')
 
-            self.show_convergence(hkl)
-        else:
-            for i,(Nm,Sm) in enumerate(zip(Nmax,Smax)):
-                self.update_Nmax(Nm)
-                self._set_excitation_errors(Smax=Sm)
-                idx='(%d,%.3f)'%(Nm,Sm)
-                df.loc[idx,['Nmax','Smax','nbeams']]=[Nm,Sm,self.nbeams]
-            print(df)
+        if show:return self.show_convergence(hkl)
+        # else:
+        #     for i,(Nm,Sm) in enumerate(zip(Nmax,Smax)):
+        #         self.update_Nmax(Nm)
+        #         self._set_excitation_errors(Smax=Sm)
+        #         idx='(%d,%.3f)'%(Nm,Sm)
+        #         df.loc[idx,['Nmax','Smax','nbeams']]=[Nm,Sm,self.nbeams]
+        #     print(df)
 
-    def show_convergence(self,hkl):
+    def show_convergence(self,hkl,xlab='Smax'):
         #beam selection
         valid_hkl=0
-        if isinstance(hkl,list):valid_hkl=isinstance(hkl[0],str)
+        # if isinstance(hkl,list):valid_hkl=isinstance(hkl[0],str)
         self.update_Nmax(int(self.df.Nmax.min()))
         self._set_excitation_errors(Smax=self.df.Smax.min())
-        if not valid_hkl:
-            hkl = self.get_beam(cond='Sw<1e-2' ,opt=0)[0:2]
-            hkl += [self.get_beam(cond='Sw>=1e-2',opt=0)[0]]
-            print('default hkl : ',hkl)
-        Icols=hkl
-        idx_s = self.get_beam_index(refl=hkl)
-        self.df[Icols]=None
+        # if not valid_hkl:
+        #     hkl = self.get_beam(cond='Sw<1e-2' ,opt=0)[0:2]
+        #     hkl += [self.get_beam(cond='Sw>=1e-2',opt=0)[0]]
+        #     print('default hkl : ',hkl)
+        # Icols=hkl
+        # self.df[Icols]=None
+        x = self.df[xlab]
+        idx_s = self.get_beam(refl=hkl)
+        #Iz.shape:nbeams x nsimus
+        Iz = np.array([r.Iz[idx_s,-1] for i,r in self.df.iterrows()]).T
+        cs=dsp.getCs('Spectral',len(hkl))
         #plot
-        cs=dsp.getCs('RdYlGn',self.df.shape[0])
-        plts=[]
-        ms = dsp.markers[:len(hkl)]
-        for idx,m in zip(idx_s,ms):
-            plts+=[[self.z,r.Iz[idx],[c,m+'-' ],
-                 ] for c,(l,r) in zip(cs,self.df.iterrows())]
-        legElt={'$%s$' %h:'k-'+ms[i] for i,h in enumerate(hkl)}
-        legElt.update({'$%s$' %l:[c,'-'] for c,l in zip(cs,self.df.index)})
-        dsp.stddisp(plts,labs=['$z$','$I$'],legElt=legElt,lw=2)
+        plts=[ [x,I,[c,'-o'],h]  for i,h,c,I in zip(idx_s,hkl,cs,Iz)]
+
+        # ## thickness dependence
+        # cs=dsp.getCs('RdYlGn',self.df.shape[0])
+        # ms = dsp.markers[:len(hkl)]
+        # for idx,m in zip(idx_s,ms):
+        #     plts+=[[self.z,r.Iz[idx],[c,m+'-' ],
+        #          ] for c,(l,r) in zip(cs,self.df.iterrows())]
+        # legElt={'$%s$' %h:'k-'+ms[i] for i,h in enumerate(hkl)}
+        # legElt.update({'$%s$' %l:[c,'-'] for c,l in zip(cs,self.df.index)})
+        # return dsp.stddisp(plts,labs=['$z$','$I$'],legElt=legElt,lw=2)
+        return dsp.stddisp(plts,labs=['$%s$' %xlab,'$I$'],lw=2)
 
 
-from wallpp import wallpaper as wallpp  ;imp.reload(wallpp)
-from multislice import mupy_utils as mut;imp.reload(mut)
-class Bloch2D(Bloch):
-    def _set_structure(self,file):
-        '''wallpaper file (see import_wallpp)'''
-        self.file = file
-        if not crys:crys=file
-        self.crys = mut.import_wallpp(crys)
-        # self.crys = wallpp.Wallpaper(**crys)
-        self.lat_vec0 = self.crys.lattice_vectors
-        self.lat_vec  = self.crys.reciprocal_vectors#/(2*np.pi)
-        self.pattern  = self.crys.pattern_fract
-
-    def convert2tiff(self):
-        printf('not relevant in 2D')
-    def show_Fhk(self,opts='m',**kwargs):
-        """Displays structure factor over grid
-
-        Parameters
-        -----------
-        opts
-            see bloch_util:get_fz
-        """
-        fz,fz_str = bloch_util.get_fz(opts)
-        Fhk   = self.Fhk
-        nx,ny  = np.array((np.array(Fhk.shape)-1)/2,dtype=int)
-        i,j    = np.meshgrid(np.arange(-nx,nx+1),np.arange(-ny,ny+1))
-        return dsp.stddisp(scat=[i,j,fz(Fhk)],title=tle,**kwargs)
-
-    def update_Nmax(self,Nmax:int):
-        """
-        Update resolution/max order
-
-        Parameters
-        ----------
-        Nmax
-            maximum h,k order
-        """
-        if type(Nmax) in [int,np.int64] :
-            if not Nmax==self.Nmax:
-                self.Nmax=Nmax
-                (h,k),(qx,qz) = mut.get_lattice2D(self.lat_vec,self.Nmax)
-                self.lattice = [(h,k),(qx,qz)]
-                self.hkF,self.Fhk = sf.structure_factor2D(self.pattern, 2*np.pi*self.lat_vec,hkMax=2*self.Nmax,eps=self.eps)
-
-
-    def _get_central_beam():
-        return self.get_beam(refl=[str(0,0)],index=True)[0]
-    def _set_zones(self):return
-
-    def _set_excitation_errors(self,Smax=0.02):
-        ''' get excitation errors for Sg<Smax
-        - Smax : maximum excitation error to be included
-        '''
-        K,K0 = self.K,self.k0
-        (h,k),(qx,qy) = self.lattice
-
-        Kx,Ky = K
-        Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2) - K0)
-        if Smax:
-            idx = Sw<Smax
-            h,k = np.array([h[idx],k[idx]],dtype=int)
-            qx,qy,Sw = qx[idx],qy[idx],Sw[idx]
-        d = dict(zip(['h','k','qx','qy','Sw'],[h,k,qx,qy,Sw]))
-
-        self.Smax   = Smax
-        self.nbeams = Sw.size
-        self.df_G   = pd.DataFrame.from_dict(d)
-        self.solved = False
-
-    def _set_Vg(self):
-        #in 2D Fhk is just the Fourier transform of fv
-        vg = self.Fhk.copy()
-        #It needs to be converted into a scattering amplitude [A]
-        #Fg[no dim] = vg[kVA^2], sig=[1/kVA], k0[A-1]
-        Fg = vg*self.sig*self.k0/np.pi
-        # Vg[A^-2]
-        Vg_G =  Fg/self.crys.area
-
-        #self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
-        # Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
-        # px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
-        # self.e0x = e0x
-        # self.df_G['px'] = px
-        # self.df_G['py'] = py
-        self.set_beam_positions()
-        self.df_G['Vg'] = Vg_G
-        self.df_G['Vga'] = abs(Vg_G)
-        self.df_G['Swl'] = bloch_util.logM(self.df_G['Sw'])
-        self.df_G['L']  = np.ones(Vg_G.shape)
-        self._set_zones()
-        self.df_G.loc[str((0,0)),'Vg'] = 0
-
-    def set_beam_positions(self):
-        self.df_G['px'] = mut.project_beams2D(K=self.K,qxy=self.get_G())
+# from wallpp import wallpaper as wallpp  ;imp.reload(wallpp)
+# from multislice import mupy_utils as mut;imp.reload(mut)
+# class Bloch2D(Bloch):
+#     def _set_structure(self,file):
+#         '''wallpaper file (see import_wallpp)'''
+#         self.file = file
+#         if not crys:crys=file
+#         self.crys = mut.import_wallpp(crys)
+#         # self.crys = wallpp.Wallpaper(**crys)
+#         self.lat_vec0 = self.crys.lattice_vectors
+#         self.lat_vec  = self.crys.reciprocal_vectors#/(2*np.pi)
+#         self.pattern  = self.crys.pattern_fract
+#
+#     def convert2tiff(self):
+#         printf('not relevant in 2D')
+#     def show_Fhk(self,opts='m',**kwargs):
+#         """Displays structure factor over grid
+#
+#         Parameters
+#         -----------
+#         opts
+#             see bloch_util:get_fz
+#         """
+#         fz,fz_str = bloch_util.get_fz(opts)
+#         Fhk   = self.Fhk
+#         nx,ny  = np.array((np.array(Fhk.shape)-1)/2,dtype=int)
+#         i,j    = np.meshgrid(np.arange(-nx,nx+1),np.arange(-ny,ny+1))
+#         return dsp.stddisp(scat=[i,j,fz(Fhk)],title=tle,**kwargs)
+#
+#     def update_Nmax(self,Nmax:int):
+#         """
+#         Update resolution/max order
+#
+#         Parameters
+#         ----------
+#         Nmax
+#             maximum h,k order
+#         """
+#         if type(Nmax) in [int,np.int64] :
+#             if not Nmax==self.Nmax:
+#                 self.Nmax=Nmax
+#                 (h,k),(qx,qz) = mut.get_lattice2D(self.lat_vec,self.Nmax)
+#                 self.lattice = [(h,k),(qx,qz)]
+#                 self.hkF,self.Fhk = sf.structure_factor2D(self.pattern, 2*np.pi*self.lat_vec,hkMax=2*self.Nmax,eps=self.eps)
+#
+#
+#     def _get_central_beam():
+#         return self.get_beam(refl=[str(0,0)],index=True)[0]
+#     def _set_zones(self):return
+#
+#     def _set_excitation_errors(self,Smax=0.02):
+#         ''' get excitation errors for Sg<Smax
+#         - Smax : maximum excitation error to be included
+#         '''
+#         K,K0 = self.K,self.k0
+#         (h,k),(qx,qy) = self.lattice
+#
+#         Kx,Ky = K
+#         Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2) - K0)
+#         if Smax:
+#             idx = Sw<Smax
+#             h,k = np.array([h[idx],k[idx]],dtype=int)
+#             qx,qy,Sw = qx[idx],qy[idx],Sw[idx]
+#         d = dict(zip(['h','k','qx','qy','Sw'],[h,k,qx,qy,Sw]))
+#
+#         self.Smax   = Smax
+#         self.nbeams = Sw.size
+#         self.df_G   = pd.DataFrame.from_dict(d)
+#         self.solved = False
+#
+#     def _set_Vg(self):
+#         #in 2D Fhk is just the Fourier transform of fv
+#         vg = self.Fhk.copy()
+#         #It needs to be converted into a scattering amplitude [A]
+#         #Fg[no dim] = vg[kVA^2], sig=[1/kVA], k0[A-1]
+#         Fg = vg*self.sig*self.k0/np.pi
+#         # Vg[A^-2]
+#         Vg_G =  Fg/self.crys.area
+#
+#         #self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
+#         # Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
+#         # px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
+#         # self.e0x = e0x
+#         # self.df_G['px'] = px
+#         # self.df_G['py'] = py
+#         self.set_beam_positions()
+#         self.df_G['Vg'] = Vg_G
+#         self.df_G['Vga'] = abs(Vg_G)
+#         self.df_G['Swl'] = bloch_util.logM(self.df_G['Sw'])
+#         self.df_G['L']  = np.ones(Vg_G.shape)
+#         self._set_zones()
+#         self.df_G.loc[str((0,0)),'Vg'] = 0
+#
+#     def set_beam_positions(self):
+#         self.df_G['px'] = mut.project_beams2D(K=self.K,qxy=self.get_G())

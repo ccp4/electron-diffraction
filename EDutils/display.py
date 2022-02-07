@@ -53,7 +53,7 @@ def show_frame(opts='Pqr',mag=500,rot=0,hkl_idx=[],single_mode=False,
                 scat += ( [qx_b,qy_b,vals/vals.max()*mag,cs,C.marker,sargs],)
         bs = [c for c in dfb.index if c in opts]
         if 'k' in opts and bs and any(hkl_idx):
-            h,k,l,qx0,qy0 = df_bloch.iloc[hkl_idx][['h','k','l','px','py']].values.T
+            h,k,l,qx0,qy0 = df_bloch.loc[hkl_idx][['h','k','l','px','py']].values.T
             if rot:qx0,qy0 = ct*qx0-st*qy0,st*qx0+ct*qy0
             ctxt = dfb.loc[bs[0]].color
             txts += [[x,y+wm,'(%d,%d,%d)' %(h0,k0,l0),ctxt] for x,y,h0,k0,l0 in zip(qx0,qy0,h,k,l)] #,I_b) if I>Itol]
@@ -95,13 +95,13 @@ def get_fz(opts):
 
 abs2 = lambda F:np.abs(F)**2
 logF = lambda F:np.log10(np.maximum(np.abs(F),1e-6))+6
-logM = lambda F:-np.log10(np.maximum(F,1e-5))
+logM = lambda F:-np.log10(np.maximum(abs(F),1e-5))
 
 cmaps = {'P':'Greys','M':'Reds','B':'Blues','K':'Greens','V':'Purples','S':'Oranges','L':'Greys'}
 dfb = { 'B':['I' ,get_fz('m')[0],dsp.getCs(cmaps['B'],3)[1],'o','Intensity Bloch $I_{g}$'],
         'K':['Ig',get_fz('l')[0],dsp.getCs(cmaps['K'],3)[1],'o','Intensity kinematic $I_{g,kin}$'],
-        'V':['Vg',get_fz('l')[0],dsp.getCs(cmaps['V'],3)[1],'d','Potential $V_{g}$'],
-        'S':['Sw',get_fz('L')[0],dsp.getCs(cmaps['S'],3)[1],'o','Excitation error $\zeta_{g}$'],
+        'V':['Vg',get_fz('m')[0],dsp.getCs(cmaps['V'],3)[1],'d','Potential $V_{g}$'],
+        'S':['Sw',get_fz('L')[0],dsp.getCs(cmaps['S'],3)[1],'<','Excitation error $\zeta_{g}$'],
         'L':['L' ,get_fz('m')[0],dsp.getCs(cmaps['L'],3)[1],'s','Lattice']}
 dfb = pd.DataFrame.from_dict(dfb,orient='index',columns=['F','fz','color','marker','legend'])
 cp,mp = (0.5,)*3,'o'

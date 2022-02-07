@@ -1,5 +1,6 @@
 import numpy as np
-
+from utils import glob_colors as colors
+import os,glob,pickle5
 
 
 def strong_beams(dfG,
@@ -111,7 +112,7 @@ RExitCriteria            = 0.00001
 
     return inp
 
-def load_Bloch(path='',tag='',file='',v=1):
+def load_bloch(path='',tag='',file='',v=1):
     """load a saved Bloch object
     filename : pickle file (.pkl)  """
     files = [f for f in glob.glob(os.path.join(path,'*.pkl')) if tag in f]

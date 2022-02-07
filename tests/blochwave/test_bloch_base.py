@@ -3,6 +3,7 @@ from pytest_html import extras
 from utils import*                  ;imp.reload(dsp)
 from utils import pytest_util       ;imp.reload(pytest_util)
 from blochwave import bloch         ;imp.reload(bloch)
+from blochwave import util as bloch_util;imp.reload(bloch_util)
 plt.close('all')
 
 out,ref,dir = pytest_util.get_path(__file__)
@@ -79,41 +80,29 @@ def test_show_Fhkl():
     b0.show_Fhkl(s='h=0',opts='l',xylims=7,ms=50,cmap='Greens',pOpt='im',caxis=[0,1.5],opt='')
 
 # @pytest.mark.slow
+@pytest_util.add_link(__file__)
 def test_bloch_convergence():
-    # b0 = bloch.Bloch('diamond',path=out,keV=200,u=[2,3,1],Nmax=4,Smax=0.05,
-    #     opts='svt',thick=100)
-
-    # Nmaxs = np.arange(4,4*n+1,4)
     b=copy.copy(b0)
     refl=b.get_beam(cond={'tol':1e-10,'opt':''},index=False)#;print(idx)
-    # refl = [[0,0,0],[2,2,0],[4,0,0],[4,4,0]]
-    # convergence_test(Smax=(0.05,0.04),Nmax=(6))
     # Smax,Nmax=(0.05,0.1,0.2,0.5),(6)
     Smax,Nmax=(0.1),(6,8,10,12)
     b.convergence_test(Smax=Smax,Nmax=Nmax)#,hkl=refl)
-    return b.show_convergence(hkl=refl,xlab='Nmax')
-    # refl = [str(tuple(h))  for h in refl]
-    # nbs = len(refl)
-    # I,b = np.zeros((Nmaxs.size,nbs)),[]
-    # for i,Nmax in enumerate(Nmaxs):
-    #     b0 = bloch.Bloch('diamond',Smax=0.035,u=[0,0,1],Nmax=Nmax,thicks=(0,1000,10),thick=1000,opts='',path='dat/',name='diamond001_%d' %Nmax)
-    #     I[i,:]  = b0.df_G.loc[refl,'I'].values
-    #     b += [b0]
-    #
-    # cs = dsp.getCs('jet',nbs)
-    # plts = [[Nmaxs,I[:,iB],[cs[iB],'-o'],'%s' %h] for iB,h in enumerate(refl)]
-    # dsp.stddisp(plts,labs=['Nmax','I'],lw=2,opt='')
-    # return b
+    return b.show_convergence(hkl=refl,xlab='Nmax',opt='')
 
+def test_load_bloch():
+    b = bloch_util.load_bloch(file=out+'/diamond001_200keV_bloch.pkl')
+    bloch_util.load_bloch(path='.')
+    bloch_util.load_bloch(path=out)
+    bloch_util.load_bloch(path=out,tag='001')
 
-# test_bloch_convergence()
-
+# test_load_bloch()
 # print(b0.get_beam())
 # test_get_beam()
 # test_gets()
 # test_beam_thickness()
 # test_show_beams()
 # test_show_Idyn_vs_Ikin()
+# test_bloch_convergence()
 
 #test_beam_thickness()
 # b0 = test_bloch_solve()

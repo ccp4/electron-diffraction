@@ -810,13 +810,14 @@ class Bloch:
         hkl0 = self.df_G.index
         if solve:
             for i,(Nm,Sm) in enumerate(zip(Nmax,Smax)):
-                 self.solve(Nmax=Nm,Smax=Sm,thicks=z)
+                 self.solve(Nmax=Nm,Smax=Sm,thicks=z,opts='v0')
                  idx='(%d,%.3f)'%(Nm,Sm)
                  idx_b = self.get_beam(refl=hkl0)
                  df.loc[idx,['Nmax','Smax','nbeams']]=[Nm,Sm,self.nbeams]
                  df.loc[idx,'Iz']=self.Iz[idx_b,:].copy()
             self.df=df
-            if save:self.save(self.path+self.name+'_cv.pkl')
+            if save:
+                df.to_pickle(self.path+self.name+'_cv.pkl')
 
         if show:return self.show_convergence(hkl)
         # else:
@@ -827,7 +828,7 @@ class Bloch:
         #         df.loc[idx,['Nmax','Smax','nbeams']]=[Nm,Sm,self.nbeams]
         #     print(df)
 
-    def show_convergence(self,hkl,xlab='Smax'):
+    def show_convergence(self,hkl,xlab='Smax',**kwargs):
         #beam selection
         valid_hkl=0
         # if isinstance(hkl,list):valid_hkl=isinstance(hkl[0],str)
@@ -856,7 +857,7 @@ class Bloch:
         # legElt={'$%s$' %h:'k-'+ms[i] for i,h in enumerate(hkl)}
         # legElt.update({'$%s$' %l:[c,'-'] for c,l in zip(cs,self.df.index)})
         # return dsp.stddisp(plts,labs=['$z$','$I$'],legElt=legElt,lw=2)
-        return dsp.stddisp(plts,labs=['$%s$' %xlab,'$I$'],lw=2)
+        return dsp.stddisp(plts,labs=['$%s$' %xlab,'$I$'],lw=2,**kwargs)
 
 
 # from wallpp import wallpaper as wallpp  ;imp.reload(wallpp)

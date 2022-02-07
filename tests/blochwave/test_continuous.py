@@ -5,7 +5,7 @@ from utils import pytest_util
 import pytest,os
 plt.close('all')
 
-tag='big' #do not change as it messes up with the cmp_ref 
+tag='big' #do not change as it messes up with the cmp_ref
 npts={'big':50,'small':5}[tag]
 
 @pytest.mark.slow
@@ -24,6 +24,8 @@ except Exception as e:
     print(e)
     pass
 
+def test_load():
+    rock.load(0)
 
 @pytest.mark.lvl1
 @pytest_util.add_link(__file__)

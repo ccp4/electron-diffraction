@@ -38,13 +38,13 @@ def test_convert2tiff():
 
 @pytest_util.add_link(__file__)
 def test_show_beams():
-    b0.show_beams(cmap='viridis')#mag=1000,)
+    return b0.show_beams(cmap='viridis',opt='')#mag=1000,)
 
 @pytest_util.add_link(__file__)
 def test_show_Idyn_vs_Ikin():
     b0 = bloch.Bloch('diamond',path=out,keV=200,u=[2,4,1],Nmax=8,Smax=0.05,
         opts='svt',thick=100,thicks=(0,1000,1000))
-    b0.show_Idyn_vs_Ikin(iZs=[10,100,500,999])#slice(249,None,250))
+    return b0.show_Idyn_vs_Ikin(iZs=[10,100,500,999],opt='')#slice(249,None,250))
 
 
 # @pytest.mark.slow

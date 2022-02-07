@@ -1,4 +1,4 @@
-import blochwave,time,sys,pytest,os
+import blochwave,time,sys,pytest,os,copy
 from pytest_html import extras
 from utils import*                  ;imp.reload(dsp)
 from utils import pytest_util       ;imp.reload(pytest_util)
@@ -84,13 +84,14 @@ def test_bloch_convergence():
     #     opts='svt',thick=100)
 
     # Nmaxs = np.arange(4,4*n+1,4)
-    refl=b0.get_beam(cond={'tol':1e-10,'opt':''},index=False)#;print(idx)
+    b=copy.copy(b0)
+    refl=b.get_beam(cond={'tol':1e-10,'opt':''},index=False)#;print(idx)
     # refl = [[0,0,0],[2,2,0],[4,0,0],[4,4,0]]
     # convergence_test(Smax=(0.05,0.04),Nmax=(6))
     # Smax,Nmax=(0.05,0.1,0.2,0.5),(6)
     Smax,Nmax=(0.1),(6,8,10,12)
-    b0.convergence_test(Smax=Smax,Nmax=Nmax)#,hkl=refl)
-    return b0.show_convergence(hkl=refl,xlab='Nmax')
+    b.convergence_test(Smax=Smax,Nmax=Nmax)#,hkl=refl)
+    return b.show_convergence(hkl=refl,xlab='Nmax')
     # refl = [str(tuple(h))  for h in refl]
     # nbs = len(refl)
     # I,b = np.zeros((Nmaxs.size,nbs)),[]

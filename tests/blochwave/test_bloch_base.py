@@ -108,7 +108,7 @@ def test_show_Fhkl():
 # test_bloch_convergence()
 
 # print(b0.get_beam())
-test_get_beam()
+# test_get_beam()
 # test_gets()
 # test_beam_thickness()
 # test_show_beams()

@@ -75,7 +75,7 @@ def show_frame(opts='Pqr',mag=500,rot=0,hkl_idx=[],single_mode=False,
 
     if not 'fonts' in kwargs.keys():kwargs['fonts'] = {'text':15}
     if not 'xylims' in kwargs.keys():kwargs['xylims'] = qmax
-    dsp.stddisp(plts,scat=scat,im=im,texts=txts,bgcol=None,gridOn=0,
+    return dsp.stddisp(plts,scat=scat,im=im,texts=txts,bgcol=None,gridOn=0,
         labs=labs,cmap=cmap,caxis=caxis,legElt=legElt,**kwargs)
 
 ########################################################################

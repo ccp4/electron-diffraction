@@ -582,7 +582,7 @@ class Bloch:
         # self.df_G.Ig=self.Iz[:,-1]
         self.df_G.loc[str((0,0,0)),'I']=0
         if not name : name=os.path.join(self.path,self.name+'_setup.svg')
-        EDdisp.show_frame(df_bloch=self.df_G,single_mode=False,
+        return EDdisp.show_frame(df_bloch=self.df_G,single_mode=False,
             opts=opts,hkl_idx=hkl_idx,name=name,
             **kwargs)
 
@@ -653,7 +653,7 @@ class Bloch:
         # scat=tuple( [[I_kin,I_dyn,cs[i]] for i,(I_dyn,I_kin) in enumerate(zip(self.Iz[:,::iZ],self.Iz_kin[:,::iZ]))])
         plts=[[np.log10(I_kin),np.log10(I_dyn),[cs[i],'o'],'$z=%d\AA$' %z] for i,(z,I_dyn,I_kin) in enumerate(zip(z,Iz_dyn.T,Iz_kin.T))]
         # plts+=[ [[0,1],[0,1],[(0.5,)*3,'--'],''] ]
-        dsp.stddisp(plts,labs=['$I_{kin}$','$I_{dyn}$'],sargs={'alpha':0.5},**kwargs)
+        return dsp.stddisp(plts,labs=['$I_{kin}$','$I_{dyn}$'],sargs={'alpha':0.5},**kwargs)
 
     def show_Fhkl(self,s=None,opts='m',h3D=0,**kwargs):
         """Displays structure factor over grid

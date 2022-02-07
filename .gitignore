@@ -15,6 +15,7 @@
 **/tests/**/out
 **/tests/**/report
 **/tests/report.md
+**/tests/report.html
 **/tests/EDutils/pets/bloch
 
 tests/dials

@@ -1,6 +1,5 @@
-#!python3
 from bs4 import BeautifulSoup
-import os,sys #.path import path
+import os,sys,argparse #.path import path
 from subprocess import check_output,Popen,PIPE
 from colorama import Fore as colors
 
@@ -9,8 +8,9 @@ report.py [opt] [libs]
 
 OPTIONS
 -------
-    opt  : h(help) s(skip running tests) l(libs) f(file serv)
+    opt  : h(help) s(skip running tests) l(libs) f(file serv) p(python)
     libs : <lib1>,<lib2>,.. if 'l' in opts
+    python : python executable for subprocess
 '''
 
 
@@ -43,7 +43,7 @@ def run_tests():
 
         #run test
         args="--html=%s --self-contained-html --cov-report=html --cov=../../%s" %(report_file,lib)
-        cmd ='python3 -m pytest %s' %args
+        cmd ='%s -m pytest %s' %(python,args)
         job ='cd %s/%s; if [ ! -d report ];then mkdir report;fi; %s ' %(tests_dir,lib,cmd)
         print(cmd)
         if run_opt:
@@ -72,20 +72,34 @@ if __name__=="__main__":
     tests_dir = os.path.realpath(os.path.dirname(__file__))#;print(tests_dir)
     hostname    = check_output('hostname -A', shell=1).decode().strip().split()[-1]
     reports_lnk = lambda file:"http://%s:8010/%s" %(hostname,file.split('tests/')[1])
-    run_opt = True
-    libs = ['blochwave','EDutils']#,'multislice']
-    if len(sys.argv)>1:
-        opt = sys.argv[1]
-        if 'h' in opt:
-            print(usage )
-            sys.exit()
-        if 'f' in opt:
-            reports_lnk=lambda file:"file://"+os.path.realpath(file)
-        if 's' in opt:
-            run_opt=False
-        if 'l' in opt:
-            libs=sys.argv[2].split(',')
+    # libs = ['blochwave','EDutils']#,'multislice']
+    # if len(sys.argv)>1:
+    #     opt = sys.argv[1]
+    #     if 'h' in opt:
+    #         print(usage )
+    #         sys.exit()
+    #     if 'f' in opt:
+    #         reports_lnk=lambda file:"file://"+os.path.realpath(file)
+    #     if 's' in opt:
+    #         run_opt=False
+    #     if 'l' in opt:
+    #         libs=sys.argv[2].split(',')
+    #     if 'p' in opt:
+    #         python = sys.argv[3]
 
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--file' ,action='store_true')
+    parser.add_argument('-s', '--skip' ,action='store_true')
+    parser.add_argument('-l','--libs'  ,default='blochwave,EDutils')
+    parser.add_argument('-p','--python',default='python3')
+
+    args = parser.parse_args()
+    if args.file:reports_lnk=lambda file:"file://"+os.path.realpath(file)
+    run_opt=not args.skip
+    libs  = [ s.replace('/','') for s in args.libs.split(',')]
+    python=args.python
+
+    print(run_opt,libs,python)
     run_tests()
     # write_report()

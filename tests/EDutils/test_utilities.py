@@ -51,18 +51,61 @@ def test_show_uvw():
     return ut.show_uvw(uvw,opt='',view=[50,-110])
 
 
-################
-#### later
-def show_uvw():
-    fig,ax = dsp.create_fig(rc='3d',figsize='f')
-    ut.get_uvw_cont(u0=[1,0,1],u1=[1,1,1] ,nframes=100         )#title='cont'       ,**args)
-    ut.get_uvw_rock(e0=[1,0,1],e1=[0,1],npts=20,deg=1          )#title='rock_theta' ,**args)
-    ut.get_uvw_rock(e0=[1,0,1],e1=[1,0],npts=20,deg=1          )#title='rock_phi'   ,**args)
-    ut.get_uvw_CBED(u0=[1,1,1],cart=False ,npts=[10,20],deg=20 )#title='CBED'       ,**args)
-    plts = [[[0,u[0]],[0,u[1]],[0,u[2]],'b'] for u in uvw ]
+@pytest_util.add_link(__file__)
+def test_misc_orient():
+    u   =ut.u_from_theta_phi(30,62)
+    uvw =ut.get_uvw_from_theta_phi(30,64,nframes=6)
+    fig,ax = ut.uvw_add_points(uvw,npts=1,plot=1,opt='')
     return fig,ax
 
+@pytest_util.add_link(__file__)
+def test_convert2tiff():
+    import tifffile
+    out,ref,dir=pytest_util.get_path(__file__)
+    tiff_file = out+'convert.tiff'
+    n=512
+    x,y=np.meshgrid(range(-n,n),range(-n,n))
+    im0=np.exp(-1e-3*x**2-1e-4*y**2)
+    # dsp.stddisp(im=[im0],caxis=[0,1],pOpt='im')
+    Imax=1e3
+    ut.convert2tiff(tiff_file,im0,n0=n,rot=20,n=0.7*n,Imax=Imax)
+    im=tifffile.imread(tiff_file)
+    return dsp.stddisp(im=[im],caxis=[0,Imax],pOpt='im',opt='')
 
 
-test_sweep()
+
+def test_import_crys():
+    ut.import_crys('diamond')
+    ut.import_crys('pets/alpha_glycine.cif')
+    ut.import_crys()
+    try:
+        ut.import_crys('dummy')
+    except Exception as e:
+        print(colors.red,e,colors.black)
+
+
+def test_remove_friedel_pairs():
+    hkl = [[0,1,1],[0,1,-1],[0,-1,-1]]
+    refl = [str(tuple(h)) for h in hkl]
+    print(ut.remove_friedel_pairs(refl))
+
+
+
+################################################################################
+#### later
+################################################################################
+# def show_uvw():
+#     fig,ax = dsp.create_fig(rc='3d',figsize='f')
+#     ut.get_uvw_cont(u0=[1,0,1],u1=[1,1,1] ,nframes=100         )#title='cont'       ,**args)
+#     ut.get_uvw_rock(e0=[1,0,1],e1=[0,1],npts=20,deg=1          )#title='rock_theta' ,**args)
+#     ut.get_uvw_rock(e0=[1,0,1],e1=[1,0],npts=20,deg=1          )#title='rock_phi'   ,**args)
+#     ut.get_uvw_CBED(u0=[1,1,1],cart=False ,npts=[10,20],deg=20 )#title='CBED'       ,**args)
+#     plts = [[[0,u[0]],[0,u[1]],[0,u[2]],'b'] for u in uvw ]
+#     return fig,ax
+
+# test_remove_friedel_pairs()
+# fig,ax=test_convert2tiff();fig.show()
+# test_sweep()
 # fig,ax=test_show_uvw();fig.show()
+# fig,ax=test_misc_orient();fig.show()
+# test_import_crys()

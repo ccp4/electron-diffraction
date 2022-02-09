@@ -89,8 +89,8 @@ if __name__=="__main__":
 
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-f', '--file' ,action='store_true')
-    parser.add_argument('-s', '--skip' ,action='store_true')
+    parser.add_argument('-f','--file'  ,action='store_true')
+    parser.add_argument('-s','--skip'  ,action='store_true')
     parser.add_argument('-l','--libs'  ,default='blochwave,EDutils')
     parser.add_argument('-p','--python',default='python3')
 

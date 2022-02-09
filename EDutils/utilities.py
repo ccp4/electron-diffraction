@@ -38,7 +38,7 @@ def sweep_var(Simu:object,
     if not os.path.exists(path):
         print('creating directory:',path)
         print(subprocess.check_output('mkdir -p %s' %path,shell=True).decode())
-        
+
     if isinstance(params,str):
         params=[params]
         vals=[[v] for v in vals]
@@ -249,27 +249,30 @@ def theta_phi_from_u(u):
 def get_uvw_from_theta_phi(theta,phi,e1=[0,0,1],**kwargs):
     u0 = np.array(u_from_theta_phi(theta,phi))
     u1 = np.cross(e1,u0);u1/=np.linalg.norm(u1)
-    uvw = get_uvw(u0,u1,**kwargs)
+    uvw = get_uvw_cont(u0,u1,**kwargs)
     return uvw
 
-def uvw_add_points(uvw0,npts=1,plot=0,h3d=1):
+def uvw_add_points(uvw0,npts=1,plot=0,h3d=1,**kwargs):
     ntot = (uvw0.shape[0]-1)*(npts+1) + 1
     uvw = np.zeros((ntot,3))
     for i in range(uvw0.shape[0]-1):
-        e0,u1 = uvw0[i:i+2,:]
-        e1 = u1 - e0.dot(u1)*e0
-        e1/=np.linalg.norm(e1)
-        alpha = np.rad2deg(np.arccos(u1.dot(e0)))#;print(alpha)
-        uvw_i = get_uvw(e0,e1,omega=np.linspace(0,alpha,npts+2))
+        e0,e1 = uvw0[i:i+2,:]
+        # e0,u1 = uvw0[i:i+2,:]
+        # e1 = u1 - e0.dot(u1)*e0
+        # e1/=np.linalg.norm(e1)
+        # alpha = np.rad2deg(np.arccos(u1.dot(e0)))#;print(alpha)
+        uvw_i = get_uvw_cont(e0,e1,nframes=npts+2)#omega=np.linspace(0,alpha,npts+2))
         idx = i*(npts+1)
         uvw[idx:idx+npts+1,:] = uvw_i[:-1,:]
     uvw[-1,:] = uvw_i[-1,:]
 
     if plot:
         plts  = [[[0,u[0]],[0,u[1]],[0,u[2]],'r'] for u in uvw ]
-        plts += [[[0,u[0]],[0,u[1]],[0,u[2]],'b'] for u in uvw0 ]
-        fig,ax = dsp.stddisp(plots=plts,labs=['x','y','z'],rc='3d',lw=4)
-        if h3d:h3d = h3D.handler_3d(fig,persp=False,xm0=1)
+        fig,ax = dsp.stddisp(plots=plts,labs=['x','y','z'],rc='3d',lw=4,opt='')
+        plts = [[[0,u[0]],[0,u[1]],[0,u[2]],'b'] for u in uvw0 ]
+        dsp.stddisp(ax=ax,plots=plts,labs=['x','y','z'],rc='3d',lw=2,**kwargs)
+        # if h3d:h3d = h3D.handler_3d(fig,persp=False,xm0=1)
+        return fig,ax
     return uvw
 
 
@@ -319,9 +322,13 @@ def import_crys(file:str=''):
             print('available builtins:\n')
             print(builtins.__str__())
             return
+    print(colors.green+'imported file : '+colors.yellow+file+colors.black)
     return crys
 
-def convert2tiff(tiff_file,im0,n0,rot,n=256,Imax=5e4):
+def convert2tiff(tiff_file,im0,n0=0,rot=0,n=256,Imax=5e4):
+    '''
+    used to rotate a multislice image to a standard pets tiff file image
+    '''
     alpha = np.deg2rad(rot)
     ct,st = np.cos(alpha),np.sin(alpha)
     u_n   = np.arange(-n,n+1)
@@ -329,7 +336,6 @@ def convert2tiff(tiff_file,im0,n0,rot,n=256,Imax=5e4):
     Hi,Ki = ct*hi+st*ki,st*hi-ct*ki
     H,K = np.array(np.round(Hi)+n0,dtype=int),np.array(np.round(Ki)+n0,dtype=int)
     # dsp.stddisp(im=[I[H,K]],caxis=[0,50],pOpt='im',cmap='gray')
-
     I = np.array(im0*Imax,dtype='uint16')
     tifffile.imwrite(tiff_file,I[H,K]) #,np.flipud(I))
     print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)

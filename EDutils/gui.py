@@ -7,13 +7,13 @@ from utils import glob_colors as colors
 # from multislice.pets import Pets
 # from multislice.multislice import Multislice
 # print('...bloch,multi...')
-from blochwave.util import load_Bloch #Bloch
+from blochwave.util import load_bloch #Bloch
 from multislice import mupy_utils as mut    #;imp.reload(mut)
 from multislice import postprocess as pp    #;imp.reload(pp)
 from multislice import multislice as ms     #;imp.reload(ms)
 from blochwave import bloch as bl           ;imp.reload(bl)
-from . import pets as pt                    ;imp.reload(pt)
 from . import __version__
+from . import pets as pt                    ;imp.reload(pt)
 from . import display as EDdisp             ;imp.reload(EDdisp)
 from . import gui_config as cfg             ;imp.reload(cfg)
 from . import utilities as ut               ;imp.reload(ut)
@@ -243,7 +243,7 @@ class Gui:
 
     def init_bloch(self,bloch):
         if type(bloch)   == bl.Bloch:self.bloch = bloch
-        elif type(bloch) == str:self.bloch = load_Bloch(file=bloch)
+        elif type(bloch) == str:self.bloch = load_bloch(file=bloch)
         else:raise Exception('bloch args need be NoneType, str or Bloch object ')
         if not type(self.path)     == str : self.path = self.bloch.path
         if not type(self.cif_file) == str : self.cif_file = self.bloch.cif_file

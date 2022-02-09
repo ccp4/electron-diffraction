@@ -231,11 +231,15 @@ class Pets_Viewer(Base_Viewer):
         initial config to display : c(center), r(reflections), p(spot prediction), b(boxes)
     """
     def __init__(self,pets:str=None,
-        Smax=0.025,Nmax=13,rot=203,
+        Smax=0.025,Nmax=13,rot=203,sim=False,
         init:str='',**kwargs,
     ):
         if isinstance(pets,str):pets = pt.Pets(pets)
-        if isinstance(pets,pt.Pets):figpath = os.path.join(pets.path,'tiff')
+        if isinstance(pets,pt.Pets):
+            if sim:
+                figpath = os.path.join(pets.path,'tiff/simulation')
+            else:
+                figpath = os.path.join(pets.path,'tiff')
 
         self.pets = pets
         if self.pets:

@@ -228,10 +228,19 @@ class Pets:
         dsp.stddisp(plts,labs=['$q(A^{-1})$','$I_{avg}$'],lw=2,#name=name+'_Iavg.svg',
             **kwargs)
 
-    def show_Ihkl(self,**kwargs):
-        '''Show integrated intensity and average integrated intensity as function of resolution'''
+    def show_Ihkl(self,dyn:Iterable=None,**kwargs):
+        '''Show integrated intensity and average integrated intensity as
+         function of resolution
+
+         parameters
+         -----------
+         dyn
+            show dynamical refinement reflections
+        '''
+
         hkl = self.HKL_dyn.copy()
         rq = hkl['rq']
+        I  = hkl['I']
         hkl['q']  = np.round(rq*10)/10
         hkl['order'] = np.zeros(rq.shape)
         qs = np.unique(hkl['q'])
@@ -243,11 +252,20 @@ class Pets:
 
         cond = 'I>1'
         rq,order,I = hkl.loc[hkl.eval(cond),['rq','order','I']].values.T
-        scat = [rq,order,10*I**(0.2),np.log10(I)]
+        if type(dyn)==type(None):
+            cmap,c = 'jet',np.log10(I)
+        else:
+            hkl['color']=0
+            # h_dyn = [h for h in dyn if h in hkl.index]
+            hkl.loc[dyn,'color']=1
+            c = hkl.loc[hkl.eval(cond),'color'].values
+            cmap='RdYlGn'
+        # print(rq.shape,I.shape,c.shape,hkl.shape)
+        scat = [rq,order,10*I**(0.2),c]
 
         xylims = [0.1,2,-1,order.max()+1]
         fig,ax = dsp.stddisp(scat=scat,labs=['$q(A^{-1})$','beam order'],xyTicks=[qs,[]],xylims=xylims,
-            cs='S',sargs={'cmap':'jet'},imOpt='c',opt='')
+            cs='S',sargs={'cmap':cmap},imOpt='c',opt='')
 
         # res = np.round(100/qs)/100
         res = np.array([0.5,0.6,0.7,0.8,0.9,1,1.5,2,3,5])
@@ -257,6 +275,7 @@ class Pets:
             **kwargs)
 
         fig.canvas.mpl_connect('button_press_event', self._on_click)
+
     def _on_click(self,event):
         from matplotlib.backend_bases import MouseButton
         if event.button is MouseButton.RIGHT:
@@ -352,6 +371,9 @@ class Pets:
     def show_exp(self,frame=1,**kwargs):
         """show the experimental images"""
         return vw.Pets_Viewer(self,frame=frame,**kwargs)
+    def show_sim(self,frame=1,**kwargs):
+        """show the simulated images"""
+        return vw.Pets_Viewer(self,frame=frame,sim=True,**kwargs)
 
     # def mp4_crystal_rotation(self,name,**kwargs):
     #     cif_file = self.cif_file

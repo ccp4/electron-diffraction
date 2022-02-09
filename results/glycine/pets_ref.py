@@ -3,13 +3,19 @@ from utils import*
 from EDutils import pets as pt          ;imp.reload(pt)
 from multislice import mupy_utils as mut   #;imp.reload(mut)
 # I(integrate I over frames and compare with hkl.I)
-# i(integrate on frame manually) c(Fo vs Fc_dyngo), o(check Fo=sqrt(Io) ok)
-opts='c'
+# i(integrate on frame manually)
+# c(Fo vs Fc_dyngo)
+# o(check Fo=sqrt(Io) ok)
+# h (show Ihkl)
+# dyngo frames
+path='figures/glycine_'
+opts='h'
 file = 'dat/pets/refinements/out.txt'
 FoFc = 'dat/pets/refinements/FoFc.txt'
-pets = pt.Pets('dat/pets/glycine.pts',gen=True,dyn=0)
+pets = pt.Pets('dat/pets/glycine.pts',gen=False,dyn=1)
 
-
+pets_simu = pt.Pets('dat/pets_simu/glycine.pts',gen=False,dyn=1)
+pets=pets_simu
 #### sum/mean I over frames and compare with hkl.I
 if 'I' in opts:
     # refl = str(tuple([0,0,2]))
@@ -37,25 +43,37 @@ hkl = [str(tuple(h)) for h in df[['h','k','l']].values]
 hkl,idx,c = np.unique(hkl,return_index=True,return_counts=True)
 df = df.iloc[idx]
 df.index = hkl
+
+
 ## Fo vs Fc from dyngo dynamical refinement
 if 'c' in opts:
     plts=[]
     plts+=[[df.Fo,df.Fc,'bo']]
-    dsp.stddisp(plts,labs=['$F_o$','$F_c$'])
-    print('Rfactor:%.1f',abs(np.sum(df.Fo**2)-np.sum(df.Fc**2))/sum(df.Fo**2))
+    dsp.stddisp(plts,labs=['$F_o$','$F_c$'],name=path+'FoFc.svg',opt='sc')
+    print('Rfactor:%.1f%%' %(abs(np.sum(df.Fo**2)-np.sum(df.Fc**2))/sum(df.Fo**2)*100))
+
+
 
 ## checked that df.Fo=sqrt(hkl_dyn.Io)
-if 'o' in opts:
+if 'o' in opts or 'h' in opts:
     pets.HKL_dyn['hkl'] = [str(tuple(h)) for h in pets.HKL_dyn[['h','k','l']].values]
     idx = pets.HKL_dyn
     pets.HKL_dyn.index=pets.HKL_dyn['hkl']
-    I = np.array([pets.HKL_dyn.loc[[h],'I'][0] for h in df.index])
-    Fo  = np.sqrt(I)
-    print('Fo-sqrt(I)=',(abs(df['Fo']-Fo)/Fo).max())
+    if 'o'  in opts:
+        I = np.array([pets.HKL_dyn.loc[[h],'I'][0] for h in df.index])
+        Fo  = np.sqrt(I)
+        print('Fo-sqrt(I)=',(abs(df['Fo']-Fo)/Fo).max())
+    if 'h' in opts:
+        pets.show_Ihkl(name=path+'dyngo_beams.svg',opt='sc',dyn=df.index)
     # plts=[[df['Fo'],Fo,'rs']]
     # dsp.stddisp(plts,labs=['$F_o$','$F_c$'])
 
 
+
+
+if 'd' in opts:
+    v1=pets.show_sim()
+    v2=pets.show_exp()
 
 
 

@@ -7,8 +7,8 @@ from EDutils import utilities as ut #;imp.reload(ut)
 path = 'dat/bloch/'
 
 frames = np.arange(10,30)
-opts='B' #P(Pets) B(Bloch)c(convergence check)
-opt='ps'
+opts='P' #P(Pets) B(Bloch)c(convergence check)
+opt='p'
 
 pets = pt.Pets('dat/pets/glycine.pts')
 

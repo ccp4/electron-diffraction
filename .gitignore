@@ -38,3 +38,5 @@ notebooks/tests/
 *.egg-info
 **/.coverage
 **/htmlcov
+**/build
+**/dist

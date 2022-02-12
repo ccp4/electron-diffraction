@@ -4,8 +4,8 @@ import setuptools
 #    long_description = fh.read()
 
 setuptools.setup(
-    name="ED",
-    version="1.0.7",
+    name="tarikED",
+    version="1.0.7b",
     author="Tarik Ronan Drevon",
     author_email="ronandrevon@gmail.com",
     description="Electron diffraction utilities",

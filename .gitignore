@@ -25,6 +25,8 @@ tests/*/dat
 multislice/temsim/makefile
 multislice/data_2D
 #blochwave/
+**/tiffs
+results/glycine/pets
 
 
 **.ipynb_checkpoints/

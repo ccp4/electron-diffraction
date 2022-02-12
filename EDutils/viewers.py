@@ -117,10 +117,11 @@ class Base_Viewer:
             self.inc=1                          ;print('increment rate : %d' %self.inc)
 
         #brightness
+        dc=25
         if event.key=='pageup':
-            self.cutoff=min(self.cutoff+5,500)  ;print('cutoff : %d' %self.cutoff)
+            self.cutoff=min(self.cutoff+dc,10000)  ;print('cutoff : %d' %self.cutoff)
         elif event.key=='pagedown':
-            self.cutoff=max(1,self.cutoff-5)    ;print('cutoff : %d' %self.cutoff)
+            self.cutoff=max(1,self.cutoff-dc)    ;print('cutoff : %d' %self.cutoff)
         elif event.key=='r':
             self.cutoff=50                      ;print('cutoff : %d' %self.cutoff)
 
@@ -156,10 +157,12 @@ class Base_Viewer:
     def update_im(self):
         fig = self.figs[self.i]
         im = self.load(fig)
-        self.im.set_data(im)
-        dsp.stddisp(ax=self.ax,title='image %d' %self.i,
+        # self.im.set_data(im)
+        self.ax.cla()
+        dsp.stddisp(im=[im],ax=self.ax,title='image %d' %self.i,
             cmap='gray',caxis=[0,self.cutoff],pOpt='t',
             name=self.get_figname(),**self.pargs)
+        # print(self.cutoff)
         self.fig.canvas.draw()
 
         # figname=os.path.basename(fig)
@@ -177,6 +180,7 @@ class Base_Viewer:
     ###################################
     def show_im(self,im,**kwargs):
         """The function used to display the frames"""
+        print(self.cutoff)
         dsp.stddisp(im=[im],ax=self.ax,title='image %d' %self.i,
             cmap='gray',caxis=[0,self.cutoff],pOpt='tX',xylims=[0,516,0,516],
             name=self.get_figname(),**kwargs)
@@ -273,7 +277,7 @@ class Pets_Viewer(Base_Viewer):
 
     def show_im(self,im,**kwargs):
         tle = "frame %d, thickness=%d $\AA$" %(self.frame,self.thick)
-
+        print('ok')
         plts,scat,pp = [],[],[]
         sargs = {'facecolor':'none','edgecolor':(0.7,0.7,0.15),'s':50,'marker':'o'}
         if self.pets:
@@ -294,6 +298,7 @@ class Pets_Viewer(Base_Viewer):
             if self.show_opt['boxes']:
                 npx = 15
                 pp = [dsp.Rectangle((px0-npx/2,py0-npx/2),npx,npx,facecolor='none',edgecolor='r') for px0,py0 in zip(px,py)]
+        print('cutoff',self.cutoff)
         dsp.stddisp(plts,ax=self.ax,patches=pp,scat=scat,im=[im],ms=20,sargs=sargs,
             xylims=[0,516,516,0],
             cmap='gray',caxis=[0,self.cutoff],title=tle,pOpt='tX',**kwargs)

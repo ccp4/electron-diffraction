@@ -5,7 +5,7 @@ import setuptools
 
 setuptools.setup(
     name="tarikED",
-    version="1.0.7b",
+    version="1.0.7rc0",
     author="Tarik Ronan Drevon",
     author_email="ronandrevon@gmail.com",
     description="Electron diffraction utilities",
@@ -14,6 +14,8 @@ setuptools.setup(
     url="",
     # packages=['multislice','scattering','wallpp'],
     packages=setuptools.find_packages(),
+    include_package_data=True,
+    package_data={'multislice/data':['splines.npy']},
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License ",

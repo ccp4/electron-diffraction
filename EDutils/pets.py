@@ -6,7 +6,7 @@ from crystals import Crystal,Lattice
 from utils import handler3D as h3D          #;imp.reload(h3D)
 from utils import displayStandards as dsp   #;imp.reload(dsp)
 from multislice  import mupy_utils as mut   #;imp.reload(mut)
-from EDutils import viewers as vw           #;imp.reload(vw)
+from EDutils import viewers as vw           ;imp.reload(vw)
 from EDutils import utilities as ut         #;imp.reload(ut)
 from multislice.rotating_crystal import get_crystal_rotation
 

@@ -60,7 +60,10 @@ def sweep_var(Simu:object,
         kwargs.update(dict(zip(params,val)))
         name = '%s_%s%s' %('-'.join(params),tag,str(i).zfill(pad))
         sim_obj = Simu(path=path,name=name,**kwargs)
-        df.loc[name,cols] = list(val)+[sim_obj._get_pkl()]
+        df.loc[name,cols] = ''
+        # df.loc[name,cols] = list(val)+[sim_obj._get_pkl()]
+        df.loc[name,params] = list(val)
+        df.loc[name,'pkl']  = sim_obj._get_pkl()
     df_file = os.path.join(path,'df_%s.pkl' %tag)
     df.to_pickle(df_file)
     print(colors.green+'Dataframe saved : '+colors.yellow+df_file+colors.black)
@@ -393,6 +396,7 @@ def get_ewald(K,nts=100,nps=200):
 def get_excitation_errors(K,lat_vec,Nmax=5,Smax=0.02):
     ''' get excitation errors for lattice lat_vec and beam K
     - K : reciprocal space beam vector
+    - lat_vec : reciprocal lattice vectors
     - Nmax : max order of reflections(resolution)
     - Smax : maximum excitation error to be included
     '''
@@ -401,13 +405,16 @@ def get_excitation_errors(K,lat_vec,Nmax=5,Smax=0.02):
 
     (h,k,l),(qx,qy,qz) = get_lattice(lat_vec,Nmax)
 
-    Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2+(Kz-qz)**2) - K0)
+    # Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2+(Kz-qz)**2) - K0)
+    Sw = np.abs(np.sqrt((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2) - K0)
     if Smax:
         idx = Sw<Smax
         h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
         qx,qy,qz,Sw = qx[idx],qy[idx],qz[idx],Sw[idx]
     d = dict(zip(['h','k','l','qx','qy','qz','Sw'],[h,k,l,qx,qy,qz,Sw]))
-    return pd.DataFrame.from_dict(d)
+    df = pd.DataFrame.from_dict(d)
+    df.index=[str(tuple(h)) for h in df[['h','k','l']].values]
+    return df
 
 def get_structure_factor(cif_file,dfout=0,**sf_args):
     '''computes structure factor 3D
@@ -488,3 +495,9 @@ def remove_friedel_pairs(reflF):
             refl.append(h)
     print('removing Friedel pairs')
     return refl
+
+def show_tiff(file,cutoff=100):
+    import tifffile
+    im=tifffile.imread(file)
+    dsp.stddisp(im=[im],title=file,
+        cmap='gray',caxis=[0,cutoff],pOpt='tX')

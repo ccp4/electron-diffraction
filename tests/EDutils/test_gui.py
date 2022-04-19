@@ -7,7 +7,8 @@ plt.close('all')
 out,ref,dir=pytest_util.get_path(__file__)
 
 # v=vw.Gui(cif_file='pets/alpha_glycine.cif',pets_opts='BKVr',xylims=1)
-v=vw.Gui(cif_file='diamond',path=out,pets_opts='BKVr',xylims=1,help=0)
+# v=vw.Gui(cif_file='diamond',path=out,pets_opts='Bkr',xylims=1,help=0)
+v=vw.Gui(cif_file='diamond',path=out,config=out+'/config.pkl')#pets_opts='Bkr',xylims=1,help=0)
 
 # tests = range(10,12)#[]
 # tests = [0]

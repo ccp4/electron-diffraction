@@ -82,7 +82,7 @@ class Pets:
         self.cif = [self.kin,self.dyn][dyn]
         uvw   = self.cif[['u','v','w']].values
         beams = self.lat.T.dot(uvw.T).T
-        self.uvw   = uvw/np.linalg.norm(uvw,axis=1)[:,None]
+        self.uvw   = uvw #/np.linalg.norm(uvw,axis=1)[:,None]
         self.uvw0  = beams/np.linalg.norm(beams,axis=1)[:,None]
         self.beams = self.K0*self.uvw0 #/np.linalg.norm(beams,axis=1)
         self.XYZ   = self.xyz[['x','y','z']].values.T
@@ -608,7 +608,8 @@ f_gauss2D = lambda X,amp,x0,y0,sx,sy,noise:gauss2D(X,amp, x0, y0, sx,sy,noise).r
 
 
 def make_pets(pts_file:str,
-    aperpixel:float,deg:float=0.0652,
+    aperpixel:float,alphas:Sequence[float]=None,
+    deg:float=None,
     ref_cell:Sequence[float]=None,
     tag:Optional[str]=''):
     """creates a .pts file from info to process a simulated experiment with pets
@@ -626,7 +627,8 @@ def make_pets(pts_file:str,
     tag
         tag for the tiff images if there is one
     """
-    center,pixel_size='AUTO',0.01,
+    center,pixel_size='AUTO',0.01
+    if not deg:deg=alphas[1]-alphas[0]
     phi,omega= deg/2 ,0
     ax,by,cz,alpha,beta,gamma = ref_cell
     # ax,by,cz,alpha,beta,gamma = 8.1218, 9.977, 17.725, 90.0, 90.0, 90.0
@@ -658,7 +660,9 @@ imagelist
 '''%(omega,phi,aperpixel,  ax,by,cz,alpha,beta,gamma)
     out = os.path.dirname(pts_file)
     tif_files = np.sort(glob.glob(out+'/tiff/%s*.tiff' %tag))
-    alphas = np.arange(tif_files.size)*deg
+    if type(alphas)==type(None):
+        alphas = np.arange(tif_files.size)*deg
+
     for i,tif_file in enumerate(tif_files):
         tif_file = os.path.basename(tif_file)
         pts+='%s %.4f 0.0 0.0 1.0 0 0 0  1\n' %('tiff\\'+tif_file,alphas[i])

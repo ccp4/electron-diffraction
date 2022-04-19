@@ -164,9 +164,12 @@ class Bloch:
         ----------
         thick : thickness in A
         """
+        # print(type(thick))
         if type(thick) in [int,float] :self.thick=thick
         self._set_kinematic()
-        if self.solved:self._set_intensities()
+        if self.solved:
+            self._set_intensities()
+            print('updated intensities')
 
 
     def solve(self,
@@ -210,7 +213,7 @@ class Bloch:
         ##### postprocess
         if thick or 't' in opts:
             self.set_thickness(thick)
-        if not type(thicks)==type(None) or 'z' in opts:
+        if not type(thicks)==type(None) and 'z' in opts:
             self._set_beams_vs_thickness(thicks)#;print('thicks solved')
         if 's' in opts:
             self.save()
@@ -305,6 +308,7 @@ class Bloch:
         - Smax : maximum excitation error to be included
         - hkl : list of tuple or nbeams x 3 ndarray - beams to be included (for comparison with other programs)
         """
+        # print(colors.blue+'... setting excitation error ... '+colors.black)
         K,K0 = self.K,self.k0
         if isinstance(hkl,list) or isinstance(hkl,np.ndarray):
             hkl = np.array(hkl)
@@ -314,12 +318,18 @@ class Bloch:
             (h,k,l),(qx,qy,qz) = self.lattice
 
         Kx,Ky,Kz = K
-        Sw = K0-np.sqrt((Kx-qx)**2+(Ky-qy)**2+(Kz-qz)**2)
-        Swa = (K0**2-((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2))/(2*K0)
+        # Sw = K0-np.sqrt((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2)
+        Sw_full = (K0**2-((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2))/(2*K0)
+        Sw = Sw_full #;print(Sw)
+        # Gz  = -( qx*Kx+qy*Ky+qz*Kz)/K0
+        # GzG = Gz -(qx**2+qy**2+qz**2)/(2*K0)
+        # print(Sw.shape,Gz.shape,GzG.shape)
+        # print('ok')
         if Smax:
             idx = abs(Sw)<Smax
             h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
-            qx,qy,qz,Sw,Swa = qx[idx],qy[idx],qz[idx],Sw[idx],Swa[idx]
+            qx,qy,qz,Sw = qx[idx],qy[idx],qz[idx],Sw[idx]#,Swa[idx]
+            # Gz,GzG = Gz[idx],GzG[idx]
         q = np.linalg.norm(np.array([qx,qy,qz]).T,axis=1)
         d = dict(zip(['h','k','l','qx','qy','qz','q','Sw','Swa'],[h,k,l,qx,qy,qz,q,Sw,abs(Sw)]))
 
@@ -328,6 +338,9 @@ class Bloch:
         self.df_G = pd.DataFrame.from_dict(d)
         self.df_G.index = [str(tuple(h)) for h in self.df_G[['h','k','l']].values]
         self.solved = False
+        self.df_G['I'] = 0
+        self.df_G.loc[str((0,0,0)),'I'] = 1
+        # print(self.df_G['I'].shape)
 
 
     def _set_Vg(self):#,opt=0):
@@ -697,11 +710,16 @@ class Bloch:
     def convert2tiff(self,tiff_file:str=None,
         Imax:int=3e4,
         Nmax:int=512,aperpixel:Optional[float]=None,
+        fbroad=None,
         gs3:float=0.1,
+        nX:int=1,
         rmax:int=0,
         thick:float=None,
         iz:int=None,
-        show:bool=False,**kwargs,
+        rot:int=0,
+        show:bool=False,
+        tif_writer_args:dict={},
+        **kwargs,
     ):
         """Write intensities to a tiff file
 
@@ -715,8 +733,12 @@ class Bloch:
             image resolution in pixel
         aperpixel
             reciprocal size for each pixel (aperture per pixel)
+        fbroad
+            broadening function f(r2) (default np.exp(-r2/(gs3/3)**2))
         gs3
-            Gaussian broadening for each reflections
+            Gaussian broadening factor for each reflections
+        nX
+            width factor of the Gaussian window
         rmax
             radius for the noise to be added
         show
@@ -735,6 +757,10 @@ class Bloch:
         thick = self.thick
         if thick:self.set_thickness(thick)
         px,py,I = self.df_G[['px','py','I']].values.T
+        if rot:
+            ct,st = np.cos(np.deg2rad(rot)),np.sin(np.deg2rad(rot))
+            px,py = ct*px-st*py,st*px+ct*py
+
         if isinstance(iz,int):
             idb=self.get_beam(refl=self.df_G.index)
             I = self.Iz[idb,iz]
@@ -744,14 +770,21 @@ class Bloch:
             print('aperpixel set to %.1E A^-1' %aperpixel)
         dqx,dqy = [aperpixel]*2
 
+
         #convert to pixel locations
-        nx,ny = int(np.floor(gs3/dqx)),int(np.floor(gs3/dqy)) ;
+        if not fbroad:
+            fbroad=lambda r2:np.exp(-r2/(gs3/3)**2)
+            nx,ny = np.array(np.floor(gs3/np.array([dqx,dqy])),dtype=int)
+        else:
+            nx,ny=nX,nX
         ix,iy = np.meshgrid(range(-nx,nx+1),range(-ny,ny+1))
         x,y = ix*dqx,iy*dqy
         i,j = np.array([np.round(px/dqx),np.round(py/dqy)],dtype=int)+Nmax
 
         #### Gaussian broadening
-        Pb = np.exp(-(x**2+y**2)/(gs3/3)**2)#;dsp.stddisp(im=[x,y,Pb],pOpt='im')
+        r2 = (x**2+y**2)
+        Pb = fbroad(r2)
+        # dsp.stddisp(im=[x,y,Pb],pOpt='im')
         im0 = np.zeros((2*Nmax,)*2)
         for i0,j0,I0 in zip(i,j,I):
             i0x,j0y = i0+ix,j0+iy
@@ -773,12 +806,12 @@ class Bloch:
         # dsp.stddisp(im=[ix,iy,I],plots=[j,i,'bo'],xylims=[0,512,0,512],
         #     cmap='gray',caxis=[0,10],imOpt='tX',pargs={'fillstyle':'none'})
 
-        tifffile.imwrite(tiff_file,I)#np.flipud(I))
+        tifffile.imwrite(tiff_file,I.T,**tif_writer_args)
         print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
         if show:
-            v=viewers.Base_Viewer(self.path,frame=1,thick=self.thick,**kwargs)
-            # dsp.stddisp(im=[I],cmap='')
-            return v
+            # v=viewers.Base_Viewer(self.path,frame=1,thick=self.thick,**kwargs)
+            return ut.show_tiff(tiff_file,**kwargs)
+            # return v
         else:
             return tiff_file
 

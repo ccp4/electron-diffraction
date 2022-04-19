@@ -5,7 +5,7 @@ import setuptools
 
 setuptools.setup(
     name="tarikED",
-    version="1.0.7rc0",
+    version="1.0.8",
     author="Tarik Ronan Drevon",
     author_email="ronandrevon@gmail.com",
     description="Electron diffraction utilities",

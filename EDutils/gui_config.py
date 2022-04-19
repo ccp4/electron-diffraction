@@ -122,7 +122,8 @@ def save_keys(name):
     #modes
     modes = ['frames_mode','rotate_mode']
     # modes_keys = ['ctrl+alt+'+c for c in '12']
-    modes_keys = ['ctrl+shift+'+c for c in '12']
+    # modes_keys = ['ctrl+shift+'+c for c in '12']
+    modes_keys = ['!','"']
     dict_k.update(dict(zip(modes,modes_keys)))
 
     #orientation

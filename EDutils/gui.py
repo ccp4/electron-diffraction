@@ -12,6 +12,7 @@ from multislice import mupy_utils as mut    #;imp.reload(mut)
 from multislice import postprocess as pp    #;imp.reload(pp)
 from multislice import multislice as ms     #;imp.reload(ms)
 from blochwave import bloch as bl           ;imp.reload(bl)
+from blochwave import util as bl_ut         ;imp.reload(bl_ut)
 from . import __version__
 from . import pets as pt                    ;imp.reload(pt)
 from . import display as EDdisp             ;imp.reload(EDdisp)
@@ -409,6 +410,7 @@ class Gui:
         self.bloch._set_excitation_errors(Smax=self.Smax)   #;print(self.Smax)
         self.bloch._set_Vg()
         self.bloch._set_kinematic()
+        self.bloch.df_G['I']=0
         if fsolve:
             self.bloch._solve_Bloch()#opts='0v')
             self.bloch.set_thickness(thick=self.thick)
@@ -472,11 +474,15 @@ class Gui:
         if any([c in self.pets_opts for c in 'MKB']):
             title += 'thickness=%.1f$\AA$, ' %self.thick
 
-        hkl_idx = self.bloch.get_beam(cond=self.cond)#;print(hkl_idx)
+        # sefl.refl = self.bloch.get_beam(cond=self.cond)#;print(hkl_idx)
+        self.n,self.tol=5,1e-3
+        self.refl = self.bloch.get_beam(cond=lambda dfG:bl_ut.strong_beams(dfG,tol=self.tol,n=self.n),index=False)
+        # hkl_idx = self.refl
+        print(self.refl)
         df = self.bloch.df_G
         df = df.drop(str((0,0,0)))
         EDdisp.show_frame(opts=self.pets_opts,mag=self.mag,rot=self.rot,
-            df_pets=self.rpl,im_multi=self.im,df_bloch=df,hkl_idx=hkl_idx,
+            df_pets=self.rpl,im_multi=self.im,df_bloch=df,hkl_idx=self.refl,
             ax=self.ax,title=title,xylims=self.xylims,single_mode=not self.hold_mode,
             cmap=self.cmap,cutoff=self.cutoff,sargs=sargs,cs=cs,**self.pargs)
 
@@ -749,7 +755,10 @@ class Gui:
         elif key == dict_k['show_z']   : self.show_z   = not self.show_z  ;print('%sshowing zones'     %['not ',''][self.show_z])
         elif key == dict_k['show_beams_vs_thickness']:
             if not self.bloch.solved : self.update(fsolve=1)
-            self.bloch.show_beams_vs_thickness(self.thicks,cm=self.cmap_beams,cond=self.cond)
+            # refl = self.bloch.get_beam(cond=lambda dfG:bl_rock.strong_beams(dfG,tol=0.01,n=5),index=False)
+            # self.refl = self.bloch.get_beam(cond=lambda dfG:bl_ut.strong_beams(dfG,tol=0.01,n=10),index=False)
+
+            self.bloch.show_beams_vs_thickness(self.thicks,cm=self.cmap_beams,refl=self.refl)
         elif key== dict_k['show_Exp'] and self.tifpath:
             self.pets.show_exp(frame=self.frame)
         # Display

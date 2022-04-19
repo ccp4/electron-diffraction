@@ -3,11 +3,12 @@ import importlib as imp
 import os,numpy as np
 from subprocess import Popen
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
-from utils import displayStandards as dsp;imp.reload(dsp)
+from utils import displayStandards as dsp#;imp.reload(dsp)
+from utils import glob_colors as colors#;imp.reload(dsp)
 from EDutils import display as EDdisp #;imp.reload(EDdisp)
 from EDutils import rotate_exp        ;imp.reload(rotate_exp)
 from EDutils import utilities as ut   #;imp.reload(ut)
-from EDutils import viewers as vw     ;imp.reload(vw)
+from EDutils import viewers as vw     #;imp.reload(vw)
 from . import bloch                   ;imp.reload(bloch)
 
 class Bloch_cont(rotate_exp.Rocking):
@@ -30,12 +31,41 @@ class Bloch_cont(rotate_exp.Rocking):
         self.do('_set_beams_vs_thickness',thicks=thicks,v=v)
         self.z = self.load(0).z
 
-    def convert2tiff(self,**kwargs):
-        thick=self.load(0)
-        for i in range(self.df.shape[0]):
-            b = self.load(i)
-            b.convert2tiff(tiff_file=self.figpath+'/%s.tiff' %b.name,**kwargs)
-            b.save()
+    def convert2tiff(self,n=0,nmax=0,**kwargs):
+        '''Convert to tiff
+        Parameters
+        ------------
+            n : sum n images at a time
+            nmax: max image to consider
+        '''
+        import tifffile
+        b0=self.load(0)
+        tiff_file=self.figpath+'/%s.tiff' %b0.name
+        im=tifffile.imread(tiff_file)
+        if not nmax:nmax=self.df.shape[0]
+        if n>1:
+            sum_path=os.path.join(self.figpath,'sum')
+            # self.sum_path=sum_path
+            pad_n = int(np.ceil(np.log10(np.ceil(self.df.shape[0]/n))))
+            if not os.path.exists(sum_path):
+                Popen('mkdir %s' %self.sum_path,shell=True)
+
+            for i in range(0,nmax,n):
+                im = np.zeros(im.shape)
+                new_tiff_file = os.path.join(sum_path,'%s.tiff' %(str(i//n).zfill(pad_n)))
+                # for j in range(n):
+                for j in range(max(0,i+n-5),min(nmax-1,i+n+5)):
+                    b = self.load(j)
+                    tiff_file=self.figpath+'/%s.tiff' %b.name
+                    im+=tifffile.imread(tiff_file)/n
+                tifffile.imwrite(new_tiff_file,im)
+                print(colors.yellow+new_tiff_file+colors.green+' saved'+colors.black)
+
+        else:
+            for i in range(nmax):
+                b = self.load(i)
+                b.convert2tiff(tiff_file=self.figpath+'/%s.tiff' %b.name,**kwargs)
+                b.save()
 
     def convert2png(self,cutoff=20,n=None,**kwargs):
         import tifffile
@@ -47,8 +77,12 @@ class Bloch_cont(rotate_exp.Rocking):
                 cmap='gray',caxis=[0,cutoff],axPos='F',pOpt='p',
                 opt='sc',name=tiff_file.replace('.tiff','.png'),figsize='im',**kwargs)
 
-    def show_tiff(self,**kwargs):
-        return vw.Base_Viewer(self.figpath,**kwargs)
+    def show_tiff(self,sum_opt=False,**kwargs):
+        # figpath=self.figpath
+        sum_path=os.path.join(self.figpath,'sum')
+        if sum_opt:figpath=sum_path
+        return vw.Base_Viewer(figpath,**kwargs)
+
     def plot_rocking(self,cond='',refl=[],**kwargs):
         if not any(refl) and not cond:cond=strong_beams
         return super().plot_rocking(cond=cond,refl=refl,**kwargs)

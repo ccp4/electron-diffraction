@@ -136,7 +136,9 @@ class Base_Viewer:
         keys = self.call(event)
 
         update_keys = keys+['enter','ctrl+t','ctrl+T','pageup','pagedown','r','left','right','down','up']
-        if event.key in update_keys:self.update_im()
+        if event.key in update_keys:
+            # self.update_im()
+            self.show()
 
     def settings(self):
         fieldValues = ['%d' %self.__dict__[f] for f in self.fieldNames]
@@ -151,8 +153,10 @@ class Base_Viewer:
 
     def show(self):
         im=self.load(self.figs[self.i])
+        self.ax.cla()
         self.show_im(im,**self.pargs)
-        self.im = self.ax.get_images()[0]
+        self.fig.canvas.draw()
+        # self.im = self.ax.get_images()[0]
 
     def update_im(self):
         fig = self.figs[self.i]
@@ -182,7 +186,8 @@ class Base_Viewer:
         """The function used to display the frames"""
         print(self.cutoff)
         dsp.stddisp(im=[im],ax=self.ax,title='image %d' %self.i,
-            cmap='gray',caxis=[0,self.cutoff],pOpt='tX',xylims=[0,516,0,516],
+            cmap='gray',caxis=[0,self.cutoff],pOpt='tX',
+            # xylims=[0,516,0,516],
             name=self.get_figname(),**kwargs)
 
     def get_fieldValues(self,fieldNames,fieldValues):return None
@@ -283,24 +288,28 @@ class Pets_Viewer(Base_Viewer):
         if self.pets:
             # df = self.rpl
             df = self.pets.rpl
+            txts = []
             frame = self.i+1
             if self.show_opt['refl']:
                 rpl = df.loc[df.F==frame]
                 plts+=[[rpl.rpx-0.5,rpl.rpy-0.5,'r+','']]
+                txts+=[[x,y,t,'r'] for x,y,t in rpl[['rpx','rpy','hkl']].values]
             if self.show_opt['center']  :
                 cen = self.pets.cen.iloc[self.i]
                 plts += [[ cen.px-0.5,cen.py-0.5,'b+','']]
-            if self.show_opt['pred'] or self.show_opt['boxes']:
-                px,py,I,hkl = self.pets.get_kin(frame,
-                    rot=self.rot,thick=self.thick,Smax=self.Smax,Nmax=self.Nmax,pixel=True)
-            if self.show_opt['pred']:
-                scat  = [px,py]
-            if self.show_opt['boxes']:
-                npx = 15
-                pp = [dsp.Rectangle((px0-npx/2,py0-npx/2),npx,npx,facecolor='none',edgecolor='r') for px0,py0 in zip(px,py)]
+            # if self.show_opt['pred'] or self.show_opt['boxes']:
+            #     px,py,I,hkl = self.pets.get_kin(frame,
+            #         rot=self.rot,thick=self.thick,Smax=self.Smax,Nmax=self.Nmax,pixel=True)
+            # if self.show_opt['pred']:
+            #     scat  = [px,py]
+            # if self.show_opt['boxes']:
+            #     npx = 15
+            #     pp = [dsp.Rectangle((px0-npx/2,py0-npx/2),npx,npx,facecolor='none',edgecolor='r') for px0,py0 in zip(px,py)]
         print('cutoff',self.cutoff)
         dsp.stddisp(plts,ax=self.ax,patches=pp,scat=scat,im=[im],ms=20,sargs=sargs,
             xylims=[0,516,516,0],
+            # xylims=[0,516,0,516],
+            texts=txts,
             cmap='gray',caxis=[0,self.cutoff],title=tle,pOpt='tX',**kwargs)
 
 

@@ -8,7 +8,7 @@ from utils import glob_colors as colors
 from utils.glob_colors import*
 from scattering import scattering_factors as scat
 # import get_elec_atomic_factors,wavelength
-from scattering.structure_factor import structure_factor3D
+# from scattering.structure_factor import structure_factor3D
 
 hosts = ['','brno','tarik-CCP4home']
 cpus  = dict(zip(hosts,['asus-$i_5^{(4cores)}$','brno-$i_7^{(8cores)}$','xps-$i_7^{(8cores)}$']))

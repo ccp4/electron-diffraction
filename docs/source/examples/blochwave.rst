@@ -19,3 +19,6 @@ Basic usage
 
    b0.show_beam_vs_thickness()
    b0.convert2tiff()
+
+
+.. image:: MX_t.png

@@ -4,14 +4,19 @@ import setuptools
 #    long_description = fh.read()
 
 setuptools.setup(
-    name="tarikED",
+    name="ccp4ED",
     version="1.0.8",
     author="Tarik Ronan Drevon",
     author_email="ronandrevon@gmail.com",
     description="Electron diffraction utilities",
     long_description='', #long_description,
     long_description_content_type="",
-    url="",
+    url="https://pypi.org/project/pyScatSpheres",
+    project_urls={
+        'Documentation': 'https://debloch.readthedocs.io/en/latest/',
+        'Source':'https://github.com/ccp4/electron-diffraction',
+    },
+
     # packages=['multislice','scattering','wallpp'],
     packages=setuptools.find_packages(),
     include_package_data=True,

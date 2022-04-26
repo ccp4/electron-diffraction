@@ -388,7 +388,7 @@ class Bloch:
         """get beam intensities at thickness"""
         id0 = self._get_central_beam()
         gammaj,CjG = self.gammaj,self.CjG
-        S = CjG.dot(np.diag(np.exp(2J*np.pi*gammaj*self.thick))).dot(self.invCjG)
+        S = CjG.dot(np.diag(np.exp(1J*gammaj*self.thick))).dot(self.invCjG)
         # S = S[:,id0]
         S = S[id0,:]
         self.df_G['S'] = S

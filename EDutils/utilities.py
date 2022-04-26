@@ -1,5 +1,5 @@
 import importlib as imp
-import tifffile,os,glob,pickle5,subprocess
+import tifffile,os,glob,pickle5,subprocess,crystals
 import numpy as np,pandas as pd
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from crystals import Crystal
@@ -302,6 +302,22 @@ def find_cif_file(path,cif_file=None):
         cif_file = _find_files(path,'cif')
     return cif_file
 
+def pdb2npy(pdb,cif_file=''):
+    crys=crystals.Crystal.from_pdb(pdb)
+    Zxyz=np.array([
+        np.array([a.atomic_number,a.coords_fractional%1],dtype=object)
+            for a in crys],dtype=object)
+    if not cif_file: cif_file=pdb+'.npy'
+    np.save(cif_file,np.array([Zxyz ,crys.lattice_vectors],dtype=object))
+
+def import_npy(npy_file):
+    (Zxyz,lat) = np.load(npy_file,allow_pickle=True)
+    crys=crystals.Crystal(
+        crystals.AtomicStructure([
+            crystals.Atom(element=Z,coords=xyz) for Z,xyz in Zxyz]),
+        lat)
+    return crys
+
 def import_crys(file:str=''):
     """import a Crystal
 
@@ -314,6 +330,8 @@ def import_crys(file:str=''):
 
     if file.split('.')[-1]=='cif':
         crys = Crystal.from_cif(file)
+    elif file.split('.')[-1]=='npy':
+        crys = import_npy(file)
     elif sum(np.array(list(Crystal.builtins))==file):
         crys = Crystal.from_database(file)
     else:

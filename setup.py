@@ -1,6 +1,6 @@
 import setuptools
 
-with open("latex/README.md", "r") as fh:
+with open("README.md", "r") as fh:
    long_description = fh.read()
 
 setuptools.setup(
@@ -28,6 +28,7 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     install_requires=['numpy','scipy','matplotlib','colorama','pandas',
-    'cbf','crystals','TarikDrevonUtils','easygui','tifffile','pickle5','bs4',
+    'crystals','TarikDrevonUtils','easygui','tifffile','pickle5','bs4',
+    'cbf',
     ],
 )

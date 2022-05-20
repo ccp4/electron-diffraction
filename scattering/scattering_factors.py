@@ -54,7 +54,7 @@ def get_elec_atomic_factors(elts,q=None,qmax=2,npts=100):
         Z=elts
     if not isinstance(q,np.ndarray) : q = np.linspace(0,qmax,npts)
     #dummy case to disable form factor
-    if Z==[0]:return q,[np.ones(q.shape)]
+    # if Z==[0]:return q,[np.ones(q.shape)]
     q2,fq_e,nelts = q**2,[],len(Z)
 
     fparams = np.load(dat_path+'abcd.npy',allow_pickle=True)

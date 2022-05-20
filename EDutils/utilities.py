@@ -318,6 +318,45 @@ def import_npy(npy_file):
         lat)
     return crys
 
+def crys2felix(crys,opt='wr',out=None):
+    # crys = Crystal.from_cif(cif_file)
+    cif = """_chemical_formula_sum '%s'
+loop_
+_cell_length_a %.5f
+_cell_length_b %.5f
+_cell_length_c %.5f
+_cell_angle_alpha %.3f
+_cell_angle_beta %.3f
+_cell_angle_gamma %.3f
+_symmetry_Int_Tables_number %d
+_symmetry_space_group_name_Hall '%s'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+_atom_site_B_iso_or_equiv
+_atom_site_occupancy
+""" %(
+        crys.chemical_formula,*crys.lattice_parameters,
+        crys.international_number,crys.hall_symbol)
+    cif += '\n'.join([
+        "%s %s %.5f %.5f %.5f 0.1 1" %("%s%d" %(a.element,i), a.element,*a.coords_fractional)
+            for i,a in enumerate(crys.atoms) if all(a.coords_fractional<0.99)
+        ])
+
+    if not out:out='felix.cif'
+    if 'w' in opt:
+        with open(out,'w') as f : f.write(cif)
+        print(colors.yellow+out+colors.green+" successfully created."+colors.black)
+    if 'r' in opt:
+        if 'w' in opt:
+            print(colors.blue+"Content of "+ colors.yellow +out+colors.black)
+            with open(out,'r') as f : print(''.join(f.readlines()))
+        else:
+            print(cif)
+
 def import_crys(file:str=''):
     """import a Crystal
 

@@ -45,7 +45,7 @@ def remove_friedel_pairs(dfM):
     dfM=dfM.loc[refl]
     return dfM
 
-def get_inp(npx,nbeams,u,keV,thicks):
+def get_inp(npx,nbeams,u,keV,thicks,out=None):
     inp = """# Input file for Felix version :
 # ------------------------------------
 
@@ -110,7 +110,10 @@ RSimplexLengthScale      = 20.0
 RExitCriteria            = 0.00001
     """
 
-    return inp
+    if out:
+        with open(out,'w') as f:f.write(inp)
+    else:
+        return inp
 
 def load_bloch(path='',tag='',file='',v=1):
     """load a saved Bloch object

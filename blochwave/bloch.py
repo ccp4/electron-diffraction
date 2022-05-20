@@ -2,7 +2,7 @@
 import importlib as imp
 import numpy as np,pandas as pd,pickle5,os,glob,tifffile
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
-from subprocess import check_output#Popen,PIPE
+from subprocess import check_output,Popen,PIPE
 from crystals import Crystal
 from utils import displayStandards as dsp           #;imp.reload(dsp)
 from utils import physicsConstants as cst           #;imp.reload(cst)
@@ -14,6 +14,7 @@ from EDutils import viewers                         #;imp.reload(viewers)
 from EDutils import utilities as ut                 #;imp.reload(ut)
 from EDutils import display as EDdisp               ;imp.reload(EDdisp)
 from . import util as bloch_util                    ;imp.reload(bloch_util)
+felix='%s/bin/felix' %os.path.dirname(__file__)
 
 class Bloch:
     """
@@ -39,6 +40,10 @@ class Bloch:
         maximum excitation error (see :meth:`~Bloch.solve`)
     solve
         solve the system by diagonalizing the Bloch matrix
+    felix
+        Use felix solver
+    nbeams
+        Number of beams to use (using felix only)
     kwargs
         arguments to be passed to :meth:`~Bloch.solve`
     """
@@ -48,6 +53,7 @@ class Bloch:
         Nmax:int=1,
         Smax:float=0.2,
         solve:bool=True,
+        felix:bool=False,nbeams:int=200,
         eps:float=1,
         **kwargs,
     ):
@@ -58,16 +64,23 @@ class Bloch:
         self.eps=eps
 
         self._set_structure(cif_file)
-        self.update_Nmax(Nmax)
         beam_args={'keV':keV,'u':u}
         beam_args.update(beam)
         self.set_beam(**beam_args)
         self.set_name(name,path)
-        self._set_excitation_errors(Smax)
-        self._set_Vg()
+        self.nbeams=nbeams
 
-        if solve:
-            self.solve(Smax=Smax,**kwargs)
+        if solve :
+            self.solve(Smax=Smax,Nmax=Nmax,**kwargs)
+        else:
+            if not felix:
+                print(colors.blue+'...Nmax... '+colors.black)
+                self.update_Nmax(Nmax)
+                print(colors.blue+'...Excitation errors... '+colors.black)
+                self._set_excitation_errors(Smax)
+                print(colors.blue+'...Vg... '+colors.black)
+                self._set_Vg()
+
         # if show_thicks or 't' in opts:
         #     self.show_beams_vs_thickness(strong=['I'])
         # if 's' in opts:
@@ -97,7 +110,7 @@ class Bloch:
         self.path = path                #; print(self.path)
         self.name = name                #;print('name:',self.name)
 
-    def update_Nmax(self,Nmax:int):
+    def update_Nmax(self,Nmax:int,dmin:int=None):
         """
         Update resolution/max order (lattice and Fhkl)
 
@@ -105,12 +118,35 @@ class Bloch:
         ----------
         Nmax
             maximum h,k,l order
+        dmin
+            minimum resolution
         """
+
+        # if dmin:
+        #     gemmi='/home/tarik/Documents/git/github/gemmi/gemmi'
+        #     crys=''
+        #
+        #
+        #     gemmi_cmd="%s sfcalc -v --dmin=%.3f --wavelength=%3.f --for=mott-bethe %s | " %(gemmi,dmin,self.lam,crys)
+        #     print(gemmi_cmd)
+        #     sed_cmd = r"sed 's/^ //' | sed 's/ /,/g' >>sf.txt"
+        #     sf = check_output("%s | %s " %(gemmi_cmd,sed_cmd) ,shell=True).decode()
+        #     df = pd.DataFrame('sf.txt',delimiter='\t',index_col=0,names=['index','A','phi'])
+        #     sf = check_output("rm sf.txt",shell=True).decode()
+        #     df['F'] = df.A*np.exp(1J*np.deg2rad(df.phi))
+        #     df[['h','k','l']]=list(map(lambda s:list(eval(s)),df.index))
+        #     df[['qx','qy','qz']] = df[['h','k','l']].values.dot(self.lat_vec0)
+        #     df['q'] = np.linalg.norm(df[['qx','qy','qz']],axis=1)
+        #     df['res']=1/df.q
+
+        # else:
         if type(Nmax) in [int,np.int64] :
             if not Nmax==self.Nmax:
                 self.Nmax=Nmax
                 (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
                 self.lattice = [(h,k,l),(qx,qy,qz)]
+                idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
+                self.pattern=self.pattern[idx,:]
                 self.hklF,self.Fhkl = sf.structure_factor3D(self.pattern, 2*np.pi*self.lat_vec,hklMax=2*self.Nmax)
 
     def set_beam(self,
@@ -178,6 +214,8 @@ class Bloch:
         beam:Optional[dict]={},
         thick:float=None,thicks:Sequence[float]=None,
         opts:str='sv0',
+        felix:bool=False,
+        nbeams:int=None,
     ):
         """ Diagonalize the Blochwave matrix
 
@@ -198,18 +236,28 @@ class Bloch:
             range of thickness [z_min,z_max,z_step]
         opts
             s(save) t(show intensities) z(show beam vs thickness) 0(Vopt0) v(verbose) H(show H)
-
+        felix
+            use felix solver
+        nbeams
+            Number of beams when using felix solver
 
         .. note ::
 
             If hkl is specified, Smax is not taken into account
         """
-        if Nmax : self.update_Nmax(Nmax)
-        if beam : self.set_beam(**beam)
-        if Smax or isinstance(hkl,np.ndarray):
-            self._set_excitation_errors(Smax,hkl)
-            self._set_Vg()
-        self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts)
+        if felix:
+            self._prepare_Felix(nbeams=nbeams)
+            self._run_felix() #wait='w' in opts)
+            self._postprocess_felix(show_log='v' in opts)
+            self._set_excitation_errors(hkl=self.df_G[['h','k','l']].values,felix=True)
+            self._set_Vg(felix=True)
+        else:
+            if Nmax :self.update_Nmax(Nmax)
+            if beam : self.set_beam(**beam)
+            if Smax or isinstance(hkl,np.ndarray):
+                self._set_excitation_errors(Smax,hkl)
+                self._set_Vg()
+            self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts)
         ##### postprocess
         if thick or 't' in opts:
             self.set_thickness(thick)
@@ -221,41 +269,56 @@ class Bloch:
     ################################################################################
     #### private
     ################################################################################
-    def _solve_Felix(self,felix_cif,npx=20,nbeams=200,thicks=(10,250,10),show_log=False):
-        felix='%s/bin/felix' %os.path.dirname(__file__)
+    def _prepare_Felix(self,npx=20,nbeams=None,thicks=(0,0,20),show_log=False):
+        """"""
+        if not nbeams:nbeams=self.nbeams
         if not os.path.exists(felix):
             print('Running with Felix not available. You need to install felix in %s :')
             print(felix)
 
-        inp = bloch_util.get_inp(npx,nbeams,self.u,self.keV,thicks)
-        with open("%s/felix.inp" %self.path,'w') as f:f.write(inp)
-
         print(colors.blue+"preparing simulation"+colors.black)
         cmd="""cd %s;
         if [ ! -d felix ];then mkdir felix;fi;
-        cp %s felix/felix.cif;
-        mv felix.inp felix;
-        """ %(self.path,os.path.realpath(felix_cif))
+        """ %(self.path) #,os.path.realpath(felix_cif))
+        # cp %s felix/felix.cif;
+        # mv felix.inp felix;
         # p=Popen(cmd,shell=True)#;p.wait();o,e = p.communicate();if e:print(e)
         p=check_output(cmd,shell=True).decode();print(p)
+        bloch_util.get_inp(npx,nbeams,self.u,self.keV,thicks,out=os.path.join(self.path,'felix','felix.inp'))
+        ut.crys2felix(self.crys,opt='w',out=os.path.join(self.path,'felix','felix.cif'))
 
+    def _run_felix(self,wait=True):
         print(colors.blue+"... running felix ..."+colors.black)
         cmd="""cd %s;
         cd felix;
         %s > felix.log 2>&1;
         """ %(self.path,felix)#os.path.dirname(__file__))
-        p=check_output(cmd,shell=True).decode() #;print(p)
+        p=Popen(cmd,shell=True,stdout=PIPE,stderr=PIPE);
+        if wait:
+            p.wait();print(p.communicate())
+        else:
+            return p
 
+
+    def _postprocess_felix(self,show_log=False):
         if show_log:
             print(colors.blue+"felix output"+colors.black)
             with open('%s/felix/felix.log' %self.path,'r') as f:print('\n'.join(f.readlines()))
 
-        g = np.loadtxt(os.path.join(self.path,'felix/eigenvals.txt'))
+        eigvals = os.path.join(self.path,'felix/eigenvals.txt')
+        check_output("sed -i -E 's/ {1,}/,/g' %s;sed -i -E 's/^,//' %s" %(eigvals,eigvals) ,shell=True)
+        df = pd.read_csv(eigvals,names=['h','k','l','gr','gi'])
+        self.gammaj = (df.gr+1J*df.gi).values
+        # g = np.loadtxt(os.path.join(self.path,'felix/eigenvals.txt'))
+        # self.gammaj = g[:,3::2]+1J*g[:,4::2];g=g[:,0]
         C = np.loadtxt(os.path.join(self.path,'felix/eigenvec.txt'))
-        self.gammaj = g[:,3::2]+1J*g[:,4::2];g=g[:,0]
         self.CjG = C[:,3::2]+1J*C[:,4::2]
-        self.invCjG=np.conj(C.T)
+        self.invCjG=np.conj(self.CjG.T)
 
+        self.df_G = df[['h','k','l']]
+        self.df_G.index = [str(tuple(h)) for h in self.df_G.values]
+        self.solved=True
+        
     def _solve_Bloch(self,show_H=False,Vopt0=True,v=False):
         ''' Diagonalize the Hamiltonian'''
         # Ug is a (2*Nmax+1)^3 tensor :
@@ -303,7 +366,7 @@ class Bloch:
         self.lat_vec  = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
         self.pattern  = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in self.crys.atoms] )
 
-    def _set_excitation_errors(self,Smax=0.02,hkl=None):
+    def _set_excitation_errors(self,Smax=0.02,hkl=None,felix=False):
         """ get excitation errors for Sg<Smax
         - Smax : maximum excitation error to be included
         - hkl : list of tuple or nbeams x 3 ndarray - beams to be included (for comparison with other programs)
@@ -324,13 +387,19 @@ class Bloch:
         # Gz  = -( qx*Kx+qy*Ky+qz*Kz)/K0
         # GzG = Gz -(qx**2+qy**2+qz**2)/(2*K0)
         # print(Sw.shape,Gz.shape,GzG.shape)
+        q = np.linalg.norm(np.array([qx,qy,qz]).T,axis=1)
+        if felix:
+            self.df_G[['qx','qy','qz','q','Sw','Swa']] = np.array([qx,qy,qz,q,Sw,abs(Sw)]).T
+            self.df_G['I'] = 0
+            self.df_G.loc[str((0,0,0)),'I'] = 1
+            return
+
         # print('ok')
         if Smax:
             idx = abs(Sw)<Smax
             h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
-            qx,qy,qz,Sw = qx[idx],qy[idx],qz[idx],Sw[idx]#,Swa[idx]
+            qx,qy,qz,q,Sw = qx[idx],qy[idx],qz[idx],q[idx],Sw[idx]#,Swa[idx]
             # Gz,GzG = Gz[idx],GzG[idx]
-        q = np.linalg.norm(np.array([qx,qy,qz]).T,axis=1)
         d = dict(zip(['h','k','l','qx','qy','qz','q','Sw','Swa'],[h,k,l,qx,qy,qz,q,Sw,abs(Sw)]))
 
         self.Smax = Smax
@@ -343,25 +412,29 @@ class Bloch:
         # print(self.df_G['I'].shape)
 
 
-    def _set_Vg(self):#,opt=0):
+    def _set_Vg(self,felix=0):
         ##### opt was used for testing against FELIX
-        # if opt:
-        #     q    = self.df_G['q']
-        #     hkl  = self.df_G[['h','k','l']].values
-        #     xi   = self.pattern[:,:3].T
-        #     Za   = np.array(self.pattern[:,-1],dtype=int)
-        #     fj   = scatf.get_fe(Za,q) #;fj = 1 #testing exp factor alone
-        #     #### Fhkl[nGs] = sum_{natoms} fj [nGs x natoms] * hkl[nGsx3].dot(xi[3,natoms])
-        #     Fhkl = np.sum(fj*np.exp(-2J*np.pi*hkl.dot(xi)),axis=1)
-        # else:
-        hkl  = self.df_G[['h','k','l']].values
-        Fhkl = self.Fhkl.copy()
-        V0_idx = np.array([2*self.Nmax]*3)
-        Fhkl[tuple(V0_idx)] = 0
-        Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
+        if felix:
+            q    = self.df_G['q']
+            hkl  = self.df_G[['h','k','l']].values
+            idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
+            xi   = self.pattern[idx,:3].T
+            # print(xi)
+            Za   = np.array(self.pattern[idx,-1],dtype=int)
+            fj   = scatf.get_fe(Za,q) #;fj = 1 #testing exp factor alone
+            #### Fhkl[nGs] = sum_{natoms} fj [nGs x natoms] * hkl[nGsx3].dot(xi[3,natoms])
+            Fhkl = np.sum(fj*np.exp(-2J*np.pi*hkl.dot(xi)),axis=1)
+            # print(self.crys,xi)
+        else:
+            hkl  = self.df_G[['h','k','l']].values
+            Fhkl = self.Fhkl.copy()
+            V0_idx = np.array([2*self.Nmax]*3)
+            Fhkl[tuple(V0_idx)] = 0
+            Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
 
         self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
         Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
+        Vg_G = Fhkl
         px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
         self.e0x = e0x
         self.df_G['px'] = px

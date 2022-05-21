@@ -110,6 +110,8 @@ class Bloch:
         if not path:path=os.path.dirname(basefile)
         self.path = path                #; print(self.path)
         self.name = name                #;print('name:',self.name)
+        if self.pdb_file:
+            check_output('mv %s %s' %(self.cif_file,self.path),shell=True)
 
     def update_Nmax(self,Nmax:int,dmin:int=None):
         """
@@ -123,7 +125,7 @@ class Bloch:
             minimum resolution
         """
 
-        if dmin and self.cif_file[-3:]=='npy':
+        if dmin and self.pdb_file:
             self.hklF,self.Fhkl = ut.gemmi_sf(self.pdb_file,dmin)
             self.Nmax=np.array(self.Fhkl.shape[0])//4#.min()
             print('Nmax:',self.Nmax)
@@ -376,6 +378,7 @@ class Bloch:
         if cif_file[-3:]=='pdb':
             pdb_file=cif_file
             cif_file = ut.pdb2npy(os.path.basename(cif_file[:-4]))
+
         self.cif_file = cif_file
         self.pdb_file = pdb_file
         self.crys     = ut.import_crys(self.cif_file)

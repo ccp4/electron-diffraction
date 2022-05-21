@@ -7,6 +7,7 @@ from utils import displayStandards as dsp   #;imp.reload(dsp)
 from utils import glob_colors as colors     #;imp.reload(colors)
 # from utils import handler3D as h3D          #;imp.reload(h3D)
 # from . import rotate_exp as exp ;imp.reload(exp)
+import gemmi
 
 def sweep_var(Simu:object,
         params:Sequence[str],vals:Sequence[Sequence],
@@ -302,13 +303,15 @@ def find_cif_file(path,cif_file=None):
         cif_file = _find_files(path,'cif')
     return cif_file
 
-def pdb2npy(pdb,cif_file=''):
+def pdb2npy(pdb,npy_file=''):
     crys=crystals.Crystal.from_pdb(pdb)
     Zxyz=np.array([
         np.array([a.atomic_number,a.coords_fractional%1],dtype=object)
             for a in crys],dtype=object)
-    if not cif_file: cif_file=pdb+'.npy'
-    np.save(cif_file,np.array([Zxyz ,crys.lattice_vectors],dtype=object))
+    if not npy_file: npy_file=pdb+'.npy'
+    np.save(npy_file,np.array([Zxyz ,crys.lattice_vectors],dtype=object))
+    print(colors.green+'file saved : '+colors.yellow+npy_file+colors.black)
+    return npy_file
 
 def import_npy(npy_file):
     (Zxyz,lat) = np.load(npy_file,allow_pickle=True)
@@ -356,6 +359,31 @@ _atom_site_occupancy
             with open(out,'r') as f : print(''.join(f.readlines()))
         else:
             print(cif)
+
+def gemmi_sf(pdb_file:str='',dmin=2):
+    st = gemmi.read_structure(pdb_file)
+    dc = gemmi.DensityCalculatorX()
+    dc.d_min = dmin
+    dc.addends.subtract_z()
+    dc.set_grid_cell_and_spacegroup(st)
+    dc.set_refmac_compatible_blur(st[0])
+    dc.put_model_density_on_grid(st[0])
+    grid = gemmi.transform_map_to_f_phi(dc.grid); print('sf : ',grid.shape)
+    Nmax = (np.array(grid.shape)//2-1).min()
+    Fhkl = np.zeros((2*Nmax+1,)*3,dtype=complex)
+    hklF = np.meshgrid(*[np.arange(-Nmax,Nmax+1)]*3)
+    hkls = np.array([i.flatten() for i in hklF]).T
+    idxs = np.array([i.flatten() for i in np.meshgrid(*[np.arange(2*Nmax+1)]*3)]).T
+    #TODO : multiple size grid
+    # nu2,nv2,nw2 = np.array(grid.shape)//2-1
+    # Fhkl = np.zeros((2*nu2+1,2*nv2+1,2*nw2+1),dtype=complex)
+    # hkls=np.array([i.flatten() for i in np.meshgrid(range(-nu2,nu2+1),range(-nv2,nv2+1),range(-nw2,nw2+1))]).T
+    # idxs=np.array([i.flatten() for i in np.meshgrid(range(2*nu2+1),range(2*nv2+1),range(2*nw2+1))]).T
+    # hkls = pd.DataFrame()
+    print(colors.blue+'...filling...'+colors.black)
+    for idx,hkl in zip(idxs,hkls):
+        Fhkl[tuple(idx)] = dc.mott_bethe_factor(hkl) * grid.get_value(*hkl)
+    return hklF,Fhkl
 
 def import_crys(file:str=''):
     """import a Crystal

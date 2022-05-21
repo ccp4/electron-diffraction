@@ -50,7 +50,7 @@ class Bloch:
     def __init__(self,
         cif_file:str,name:str='',path:str='',
         beam:Optional[dict]={},keV:float=200,u:Sequence[float]=[0,0,1],
-        Nmax:int=1,
+        Nmax:int=1,dmin:int=None,
         Smax:float=0.2,
         solve:bool=True,
         felix:bool=False,nbeams:int=200,
@@ -71,15 +71,16 @@ class Bloch:
         self.nbeams=nbeams
 
         if solve :
-            self.solve(Smax=Smax,Nmax=Nmax,**kwargs)
+            self.solve(Smax=Smax,Nmax=Nmax,dmin=dmin,**kwargs)
         else:
             if not felix:
                 print(colors.blue+'...Nmax... '+colors.black)
-                self.update_Nmax(Nmax)
+                self.update_Nmax(Nmax,dmin)
                 print(colors.blue+'...Excitation errors... '+colors.black)
                 self._set_excitation_errors(Smax)
                 print(colors.blue+'...Vg... '+colors.black)
                 self._set_Vg()
+        self.save()
 
         # if show_thicks or 't' in opts:
         #     self.show_beams_vs_thickness(strong=['I'])
@@ -122,32 +123,32 @@ class Bloch:
             minimum resolution
         """
 
-        # if dmin:
-        #     gemmi='/home/tarik/Documents/git/github/gemmi/gemmi'
-        #     crys=''
-        #
-        #
-        #     gemmi_cmd="%s sfcalc -v --dmin=%.3f --wavelength=%3.f --for=mott-bethe %s | " %(gemmi,dmin,self.lam,crys)
-        #     print(gemmi_cmd)
-        #     sed_cmd = r"sed 's/^ //' | sed 's/ /,/g' >>sf.txt"
-        #     sf = check_output("%s | %s " %(gemmi_cmd,sed_cmd) ,shell=True).decode()
-        #     df = pd.DataFrame('sf.txt',delimiter='\t',index_col=0,names=['index','A','phi'])
-        #     sf = check_output("rm sf.txt",shell=True).decode()
-        #     df['F'] = df.A*np.exp(1J*np.deg2rad(df.phi))
-        #     df[['h','k','l']]=list(map(lambda s:list(eval(s)),df.index))
-        #     df[['qx','qy','qz']] = df[['h','k','l']].values.dot(self.lat_vec0)
-        #     df['q'] = np.linalg.norm(df[['qx','qy','qz']],axis=1)
-        #     df['res']=1/df.q
+        if dmin and self.cif_file[-3:]=='npy':
+            self.hklF,self.Fhkl = ut.gemmi_sf(self.pdb_file,dmin)
+            self.Nmax=np.array(self.Fhkl.shape[0])//4#.min()
+            print('Nmax:',self.Nmax)
+            # gemmi='/home/tarik/Documents/git/github/gemmi/gemmi'
+            # gemmi_cmd="%s sfcalc -v --dmin=%.3f --wavelength=%3.f --for=mott-bethe %s | " %(gemmi,dmin,self.lam,crys)
+            # print(gemmi_cmd)
+            # sed_cmd = r"sed 's/^ //' | sed 's/ /,/g' >>sf.txt"
+            # sf = check_output("%s | %s " %(gemmi_cmd,sed_cmd) ,shell=True).decode()
+            # df = pd.DataFrame('sf.txt',delimiter='\t',index_col=0,names=['index','A','phi'])
+            # sf = check_output("rm sf.txt",shell=True).decode()
+            # df['F'] = df.A*np.exp(1J*np.deg2rad(df.phi))
+            # df[['h','k','l']]=list(map(lambda s:list(eval(s)),df.index))
+            # df[['qx','qy','qz']] = df[['h','k','l']].values.dot(self.lat_vec0)
+            # df['q'] = np.linalg.norm(df[['qx','qy','qz']],axis=1)
+            # df['res']=1/df.q
 
-        # else:
-        if type(Nmax) in [int,np.int64] :
-            if not Nmax==self.Nmax:
-                self.Nmax=Nmax
-                (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
-                self.lattice = [(h,k,l),(qx,qy,qz)]
-                idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
-                self.pattern=self.pattern[idx,:]
-                self.hklF,self.Fhkl = sf.structure_factor3D(self.pattern, 2*np.pi*self.lat_vec,hklMax=2*self.Nmax)
+        else:
+            if type(Nmax) in [int,np.int64] :
+                if not Nmax==self.Nmax:
+                    self.Nmax=Nmax
+                    idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
+                    self.pattern=self.pattern[idx,:]
+                    self.hklF,self.Fhkl = sf.structure_factor3D(self.pattern, 2*np.pi*self.lat_vec,hklMax=2*self.Nmax)
+        (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
+        self.lattice = [(h,k,l),(qx,qy,qz)]
 
     def set_beam(self,
         keV:float=200,
@@ -210,7 +211,7 @@ class Bloch:
 
     def solve(self,
         Smax:Optional[float]=None,hkl:Optional[Iterable[int]]=None,
-        Nmax:Optional[int]=None,
+        Nmax:Optional[int]=None,dmin:Optional[int]=None,
         beam:Optional[dict]={},
         thick:float=None,thicks:Sequence[float]=None,
         opts:str='sv0',
@@ -252,7 +253,7 @@ class Bloch:
             self._set_excitation_errors(hkl=self.df_G[['h','k','l']].values,felix=True)
             self._set_Vg(felix=True)
         else:
-            if Nmax :self.update_Nmax(Nmax)
+            if Nmax or dmin :self.update_Nmax(Nmax,dmin)
             if beam : self.set_beam(**beam)
             if Smax or isinstance(hkl,np.ndarray):
                 self._set_excitation_errors(Smax,hkl)
@@ -266,16 +267,22 @@ class Bloch:
         if 's' in opts:
             self.save()
 
+    def update(self,keV=None,u=None,Smax=None,Nmax=None,dmin=None,
+            gemmi=False,hkl=None,**kwargs):
+        if not gemmi:dmin=None
+        self.set_beam(keV=keV,u=u)
+        if Nmax or dmin :self.update_Nmax(Nmax,dmin)
+        if Smax or isinstance(hkl,np.ndarray):
+            self._set_excitation_errors(Smax,hkl)
+            self._set_Vg()
+        self.save()
+
     ################################################################################
     #### private
     ################################################################################
     def _prepare_Felix(self,npx=20,nbeams=None,thicks=(0,0,20),show_log=False):
         """"""
         if not nbeams:nbeams=self.nbeams
-        if not os.path.exists(felix):
-            print('Running with Felix not available. You need to install felix in %s :')
-            print(felix)
-
         print(colors.blue+"preparing simulation"+colors.black)
         cmd="""cd %s;
         if [ ! -d felix ];then mkdir felix;fi;
@@ -288,6 +295,11 @@ class Bloch:
         ut.crys2felix(self.crys,opt='w',out=os.path.join(self.path,'felix','felix.cif'))
 
     def _run_felix(self,wait=True):
+        if not os.path.exists(felix):
+            print('Error : Running with Felix not available. You need to install felix in %s :' )
+            print(felix)
+            return
+
         print(colors.blue+"... running felix ..."+colors.black)
         cmd="""cd %s;
         cd felix;
@@ -318,7 +330,7 @@ class Bloch:
         self.df_G = df[['h','k','l']]
         self.df_G.index = [str(tuple(h)) for h in self.df_G.values]
         self.solved=True
-        
+
     def _solve_Bloch(self,show_H=False,Vopt0=True,v=False):
         ''' Diagonalize the Hamiltonian'''
         # Ug is a (2*Nmax+1)^3 tensor :
@@ -360,8 +372,13 @@ class Bloch:
         self.solved = True
 
     def _set_structure(self,cif_file):
+        pdb_file = ''
+        if cif_file[-3:]=='pdb':
+            pdb_file=cif_file
+            cif_file = ut.pdb2npy(os.path.basename(cif_file[:-4]))
         self.cif_file = cif_file
-        self.crys     = ut.import_crys(cif_file)
+        self.pdb_file = pdb_file
+        self.crys     = ut.import_crys(self.cif_file)
         self.lat_vec0 = np.array(self.crys.lattice_vectors)
         self.lat_vec  = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
         self.pattern  = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in self.crys.atoms] )
@@ -428,6 +445,7 @@ class Bloch:
         else:
             hkl  = self.df_G[['h','k','l']].values
             Fhkl = self.Fhkl.copy()
+            print(self.Nmax,hkl.max())
             V0_idx = np.array([2*self.Nmax]*3)
             Fhkl[tuple(V0_idx)] = 0
             Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
@@ -734,7 +752,7 @@ class Bloch:
         Iz_dyn = self.Iz.copy()[    :,iZs]#/self.Iz[    iB,iZs]
         Iz_kin = self.Iz_kin.copy()[:,iZs]#/self.Iz_kin[iB,iZs]#;print(Iz_dyn[Iz_dyn>1e-3])
         nzs = z.size
-        print(Iz_kin.shape,Iz_dyn.shape)
+        # print(Iz_kin.shape,Iz_dyn.shape)
         cs = dsp.getCs(cmap,nzs) #; print(len(cs),Iz_dyn.shape,Iz_kin.shape)
         # scat=tuple( [[I_kin,I_dyn,cs[i]] for i,(I_dyn,I_kin) in enumerate(zip(self.Iz[:,::iZ],self.Iz_kin[:,::iZ]))])
         plts=[[np.log10(I_kin),np.log10(I_dyn),[cs[i],'o'],'$z=%d\AA$' %z] for i,(z,I_dyn,I_kin) in enumerate(zip(z,Iz_dyn.T,Iz_kin.T))]

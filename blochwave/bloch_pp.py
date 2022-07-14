@@ -31,24 +31,31 @@ class Bloch_cont(rotate_exp.Rocking):
         self.do('_set_beams_vs_thickness',thicks=thicks,v=v)
         self.z = self.load(0).z
 
-    def convert2tiff(self,n=0,nmax=0,**kwargs):
-        '''Convert to tiff
+    def convert2tiff(self,figpath=None,n=0,nmax=0,**kwargs):
+        ''' Generate tiff files
         Parameters
         ------------
-            n : sum n images at a time
-            nmax: max image to consider
+            figpath
+                final name will be figpath+'/%s.tiff' %b.name
+            kwargs
+                passed to Bloch.convert2tiff
+            n
+                if n> 1 sum n images at a time
+            nmax
+                number of frames to consider
         '''
         import tifffile
-        b0=self.load(0)
-        tiff_file=self.figpath+'/%s.tiff' %b0.name
-        im=tifffile.imread(tiff_file)
+        if not figpath:figpath=self.figpath
         if not nmax:nmax=self.df.shape[0]
         if n>1:
-            sum_path=os.path.join(self.figpath,'sum')
+            b0=self.load(0)
+            tiff_file=figpath+'/%s.tiff' %b0.name
+            im=tifffile.imread(tiff_file)
+            sum_path=os.path.join(figpath,'sum')
             # self.sum_path=sum_path
             pad_n = int(np.ceil(np.log10(np.ceil(self.df.shape[0]/n))))
             if not os.path.exists(sum_path):
-                Popen('mkdir %s' %self.sum_path,shell=True)
+                Popen('mkdir %s' %sum_path,shell=True)
 
             for i in range(0,nmax,n):
                 im = np.zeros(im.shape)
@@ -56,7 +63,7 @@ class Bloch_cont(rotate_exp.Rocking):
                 # for j in range(n):
                 for j in range(max(0,i+n-5),min(nmax-1,i+n+5)):
                     b = self.load(j)
-                    tiff_file=self.figpath+'/%s.tiff' %b.name
+                    tiff_file=figpath+'/%s.tiff' %b.name
                     im+=tifffile.imread(tiff_file)/n
                 tifffile.imwrite(new_tiff_file,im)
                 print(colors.yellow+new_tiff_file+colors.green+' saved'+colors.black)
@@ -64,7 +71,7 @@ class Bloch_cont(rotate_exp.Rocking):
         else:
             for i in range(nmax):
                 b = self.load(i)
-                b.convert2tiff(tiff_file=self.figpath+'/%s.tiff' %b.name,**kwargs)
+                b.convert2tiff(tiff_file=figpath+'/%s.tiff' %b.name,**kwargs)
                 b.save()
 
     def convert2png(self,cutoff=20,n=None,**kwargs):

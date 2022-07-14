@@ -81,6 +81,8 @@ def save(obj,file=None,path='',name='unkown.pkl'):
     with open(file,'wb') as out :
         pickle5.dump(obj, out, pickle5.HIGHEST_PROTOCOL)
     print(colors.green+"object saved\n"+colors.yellow+file+colors.black)
+def save_pkl(obj,file):
+    save(obj,file=file)
 
 def load_pkl(file):
     """load an object"""

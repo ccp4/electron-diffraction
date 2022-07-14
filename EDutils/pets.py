@@ -9,6 +9,49 @@ from multislice  import mupy_utils as mut   #;imp.reload(mut)
 from EDutils import viewers as vw           ;imp.reload(vw)
 from EDutils import utilities as ut         #;imp.reload(ut)
 from multislice.rotating_crystal import get_crystal_rotation
+from gemmi import cif
+
+
+def load_dyn_intensities(file_dyn):
+    doc = cif.read_file(file_dyn )
+    block = doc.sole_block()
+    u = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_u'))])
+    v = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_v'))])
+    w = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_w'))])
+
+
+    loop_
+    _refln_index_h
+    _refln_index_k
+    _refln_index_l
+    _refln_intensity_meas
+    _refln_intensity_sigma
+    _refln_zone_axis_id
+
+def load_dyn(file_dyn):
+    #  Now use dyn.cif_pets to set up the felix simulation input files
+    doc = cif.read_file(file_dyn )
+    block = doc.sole_block()
+
+    # Extract data:
+    # first the frames and their orientation for the felix.inp file
+    # frame number fn
+    fn = np.array([int(i) for i in list(block.find_loop('_diffrn_zone_axis_id'))])
+    n_frames = len(fn)  # no. of frames
+    # incident beam orientation u,v,w
+    u = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_u'))])
+    v = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_v'))])
+    w = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_w'))])
+
+    # Frame angles
+    frame_alpha = np.array([float(i) for i in
+                            list(block.find_loop('_diffrn_zone_axis_alpha'))])
+    # Unit cell
+    cell_a = float(block.find_value('_cell_length_a'))
+    cell_b = float(block.find_value('_cell_length_b'))
+    cell_c = float(block.find_value('_cell_length_c'))
+    cell=[cell_a,cell_b,cell_c]
+    return dict(u=u,v=v,w=w,n_frames=n_frames,alpha=frame_alpha,cell=cell)
 
 class Pets:
     def __init__(self,pts_file:str,
@@ -18,7 +61,7 @@ class Pets:
         parameters
         ----------
             pts_file
-                full path to .pts file
+                full path to .pts file or .cif_pets
             cif_file
                 full path to .cif file (automatically found if None)
             gen
@@ -26,9 +69,9 @@ class Pets:
             dyn
                 load dyn_cif into .cif if True
         """
-        self.name  = os.path.basename(pts_file).split('.pts')[0] #;print(self.name)
-        self.path  = os.path.dirname(pts_file)
-        self.out   = self.path+'/dat/'
+        self.name = os.path.basename(pts_file).split('.pts')[0] #;print(self.name)
+        self.path = os.path.dirname(pts_file)
+        self.out  = self.path+'/dat/'
 
 
         self.cif_file   = ut.find_cif_file(self.path,cif_file)

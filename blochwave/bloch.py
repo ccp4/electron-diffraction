@@ -448,7 +448,6 @@ class Bloch:
         else:
             hkl  = self.df_G[['h','k','l']].values
             Fhkl = self.Fhkl.copy()
-            print(self.Nmax,hkl.max())
             V0_idx = np.array([2*self.Nmax]*3)
             Fhkl[tuple(V0_idx)] = 0
             Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
@@ -821,6 +820,8 @@ class Bloch:
         -----------
         tiff_file
             name of the file (default name if not provided)
+        thick
+            Thickness of the simu
         Imax
             max value for the intensities
         Nmax

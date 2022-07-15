@@ -1,7 +1,7 @@
 import importlib as imp
 import os,glob, numpy as np, pandas as pd, tifffile,scipy.optimize as opt
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
-from subprocess import Popen,PIPE
+from subprocess import Popen,PIPE,check_output
 from crystals import Crystal,Lattice
 from utils import handler3D as h3D          #;imp.reload(h3D)
 from utils import displayStandards as dsp   #;imp.reload(dsp)
@@ -12,21 +12,39 @@ from multislice.rotating_crystal import get_crystal_rotation
 from gemmi import cif
 
 
+def load_dials_reflections(refl_txt):
+    tmp = 'tmp.txt'
+    cmd = "tail --lines=+39 %s | "\
+        "sed -E 's/ +/ /g' | sed -E 's/^ //' | sed 's/,//g' "\
+        "> %s" %(refl_txt, tmp)
+
+    out = check_output(cmd,shell=True).decode()
+    if out:print(out)
+    df = pd.read_csv(tmp,
+        names=[
+            'h','k','l','id','i','panel','flag','I','sig',
+            'c_qx','c_qy','c_qz','c_px','c_py','c_pz',
+            'o_qx','o_qy','o_qz','vqx','vqy','vqz',
+            'o_px','o_py','o_pz','vpx','vpy','vpz',
+            's1x','s1y','s1z','Npix','rlpx','rlpy','rlpz'],
+        engine="python",sep=" ")
+
+    out=check_output("rm %s" %tmp ,shell=True).decode()
+    if out:print(out)
+    return df
+
 def load_dyn_intensities(file_dyn):
     doc = cif.read_file(file_dyn )
     block = doc.sole_block()
-    u = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_u'))])
-    v = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_v'))])
-    w = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_w'))])
+    h = np.array([float(i) for i in list(block.find_loop('_refln_index_h'))])
+    k = np.array([float(i) for i in list(block.find_loop('_refln_index_k'))])
+    l = np.array([float(i) for i in list(block.find_loop('_refln_index_l'))])
+    I = np.array([float(i) for i in list(block.find_loop('_refln_intensity_meas'))])
+    sig = np.array([float(i) for i in list(block.find_loop('_refln_intensity_sigma'))])
+    F = np.array([float(i) for i in list(block.find_loop('_refln_zone_axis_id'))])
 
-
-    loop_
-    _refln_index_h
-    _refln_index_k
-    _refln_index_l
-    _refln_intensity_meas
-    _refln_intensity_sigma
-    _refln_zone_axis_id
+    df = pd.DataFrame(columns=['h','k','l','I','sig','frame'])
+    return df
 
 def load_dyn(file_dyn):
     #  Now use dyn.cif_pets to set up the felix simulation input files
@@ -50,8 +68,40 @@ def load_dyn(file_dyn):
     cell_a = float(block.find_value('_cell_length_a'))
     cell_b = float(block.find_value('_cell_length_b'))
     cell_c = float(block.find_value('_cell_length_c'))
+    alpha = float(block.find_value('_cell_angle_alpha'))
+    beta  = float(block.find_value('_cell_angle_beta'))
+    gamma = float(block.find_value('_cell_angle_gamma'))
     cell=[cell_a,cell_b,cell_c]
-    return dict(u=u,v=v,w=w,n_frames=n_frames,alpha=frame_alpha,cell=cell)
+    lat_params = [cell_a,cell_b,cell_c,alpha,beta,gamma]
+    return dict(u=u,v=v,w=w,n_frames=n_frames,alpha=frame_alpha,cell=cell,lat_params=lat_params)
+
+class Dials:
+    def __init__(self,path:str):
+        self.path = path
+        df = load_dials_reflections(
+            os.path.join(self.path,'reflections.txt'))
+        self.rpl = df[['h','k','l','I']].copy()
+        self.rpl['hkl'] = [str((h,k,l)) for h,k,l in self.rpl[['h','k','l']].values]
+        self.rpl[['qx','qy']] = df[['s1x','s1y']]
+        # self.rpl[['qy']]*=-1
+        self.rpl['F'] = np.array(np.round(df['o_pz'])+1,dtype=int)
+        self.index = self.rpl.hkl
+
+
+        d = load_dyn(os.path.join(self.path,'dials_dyn.cif_pets'))
+        self.uvw = np.stack([d['u'],d['v'],d['w']]).T
+        self.lat_params = d['lat_params']
+        self.lat = np.array(Lattice.from_parameters(*self.lat_params).lattice_vectors)
+
+        for k in ['alpha','n_frames'] : self.__dict__[k] = d[k]
+        beams = self.lat.T.dot(self.uvw.T).T
+        beams/np.linalg.norm(beams,axis=1)[:,None]
+        self.uvw0 = beams
+
+        #pb dials duplicate first frame
+        self.n_frames-=1
+        self.alpha=self.alpha[1:]
+        self.uvw0=self.uvw0[1:]
 
 class Pets:
     def __init__(self,pts_file:str,
@@ -124,7 +174,9 @@ class Pets:
 
         self.cif = [self.kin,self.dyn][dyn]
         uvw   = self.cif[['u','v','w']].values
+
         beams = self.lat.T.dot(uvw.T).T
+
         self.uvw   = uvw #/np.linalg.norm(uvw,axis=1)[:,None]
         self.uvw0  = beams/np.linalg.norm(beams,axis=1)[:,None]
         self.beams = self.K0*self.uvw0 #/np.linalg.norm(beams,axis=1)

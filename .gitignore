@@ -20,6 +20,8 @@
 
 tests/dials
 tests/felix
+tests/blochwave/dyngo
+tests/blochwave/glycine
 tests/*/dat
 #multislice/examples/dat
 multislice/temsim/makefile

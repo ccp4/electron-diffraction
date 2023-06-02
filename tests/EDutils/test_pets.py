@@ -2,8 +2,17 @@ from utils import*                   ;imp.reload(dsp)
 from EDutils import pets as pets_imp ;imp.reload(pets_imp)
 from utils import pytest_util        ;imp.reload(pytest_util)
 plt.close('all')
-pts_path = 'pets/glycine.pts'
+pts_path = 'dat/pets/glycine/glycine.pts'
 #make sure pets folder exists in dat
+pt = pets_imp.Pets(pts_path,gen=False)
+F = 98
+df = pt.rpl.loc[pt.rpl.F==F][:5].copy()
+h = df['hkl'].tolist()
+df.index=h
+df_pxy = pt.hkl_to_pixels(h,F)
+print(df_pxy)
+print(df.loc[h, ["rpx", "rpy"]])
+
 
 def test_import_pets():
     pets = pets_imp.Pets(pts_path,gen=True)#,lam=0.02508,aper=0.005340,omega=230,gen=1)
@@ -14,6 +23,7 @@ def test_show_exp():
     vw=pets.show_exp(frame=65,h=True,pargs={'opt':''})
     return vw.fig,vw.ax
 
+# pets.compare_xyz_pxpy(frame=frame,opts='oab')
 # test_import_pets()
 # test_show_exp()
 # pets.show_uvw()

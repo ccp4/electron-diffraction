@@ -17,6 +17,8 @@
 **/tests/report.md
 **/tests/report.html
 **/tests/EDutils/pets/bloch
+tests/blochwave/dyngo
+tests/blochwave/glycine
 
 tests/dials
 tests/felix
@@ -29,6 +31,7 @@ blochwave/dyngo
 blochwave/felix
 **/tiffs
 results/glycine/pets
+results/biotin/felix/
 
 
 **.ipynb_checkpoints/

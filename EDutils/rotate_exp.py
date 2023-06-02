@@ -169,7 +169,7 @@ class Rocking:
         # self.save()
         return df_int
 
-    def _integrate_all(self,z):
+    def _integrate_all(self):
         b0 = self.load(0)
         thicks=['%.1fA' %z for z in b0.z ]
         self.z=b0.z

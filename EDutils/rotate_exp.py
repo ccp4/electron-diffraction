@@ -6,7 +6,7 @@ from utils import displayStandards as dsp   #;imp.reload(dsp)
 from utils import glob_colors as colors     #;imp.reload(colors)
 from utils import handler3D as h3D          #;imp.reload(h3D)
 from scipy.integrate import trapz
-from . import utilities as ut               ;imp.reload(ut)
+from . import utilities as ut               #;imp.reload(ut)
 
 class Rocking:
     def __init__(self,Simu:object,
@@ -152,7 +152,34 @@ class Rocking:
         z = self.load(0).z.copy()[iZs]
         return z,I
 
+    def integrate(self,thick=None):
+        if not thick:
+            return self._integrate_all()
+        else:
+            return self._integrate_thick(thick)
 
+    def _integrate_thick(self,thick):
+        b0 = self.load(0)
+        if not b0.thick==thick:
+            self.do('set_thickness',thick=thick)
+        df_int = pd.DataFrame(0,index=self.beams.index,columns=['I'])
+        for i in range(self.n_simus):
+            b0 = self.load(i)
+            df_int.loc[b0.df_G.index,'I'] += b0.df_G.I
+        # self.save()
+        return df_int
+
+    def _integrate_all(self,z):
+        b0 = self.load(0)
+        thicks=['%.1fA' %z for z in b0.z ]
+        self.z=b0.z
+        self.df_int = pd.DataFrame(0,index=self.beams.index,columns=thicks)
+
+        for i in range(self.n_simus):
+            b0 = self.load(i)
+            self.df_int.loc[b0.df_G.index] += b0.Iz
+        self.save()
+        # print(self.z.shape,self.df_int.values.shape)
     ###########################################################################
     #### Display
     ###########################################################################
@@ -433,6 +460,7 @@ class Rocking:
         """
         i,ts = self._get_ts(i,ts)
         file = self.df.iloc[i].pkl
+        # file = os.path.join(self.path,os.path.basename(self.df.iloc[i].pkl))
         sim_obj = ut.load_pkl(file)
         return sim_obj
 

@@ -6,6 +6,7 @@ from utils import displayStandards as dsp
 from utils import plt
 from . import dyn_utils as dyn
 from . import utilities as ut;imp.reload(ut)
+from . import pets as pt;imp.reload(pt)
 
 def load_felix(path):
     return ut.load_pkl(os.path.join(path,'felix.pkl'))
@@ -57,8 +58,8 @@ class Felix():
 
     def load_dyn(self):
         #  Now use dyn.cif_pets to set up the felix simulation input files
-        dyn = load_dyn(self.file_dyn)
-        print(dyn)
+        dyn = pt.load_dyn(self.file_dyn)
+        # print(dyn)
         self.__dict__.update(dyn)
         # self.u,self.v,self.w,self.n_frames,self.frame_alpha,self.cell =
 

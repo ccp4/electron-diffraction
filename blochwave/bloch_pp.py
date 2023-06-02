@@ -1,7 +1,7 @@
 """Bloch contiuous rotation experiment"""
 import importlib as imp
-import os,numpy as np
-from subprocess import Popen
+import os,glob,numpy as np
+from subprocess import Popen,check_output
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from utils import displayStandards as dsp#;imp.reload(dsp)
 from utils import glob_colors as colors#;imp.reload(dsp)
@@ -10,6 +10,9 @@ from EDutils import rotate_exp        ;imp.reload(rotate_exp)
 from EDutils import utilities as ut   #;imp.reload(ut)
 from EDutils import viewers as vw     #;imp.reload(vw)
 from . import bloch                   ;imp.reload(bloch)
+from . import util as bu              ;imp.reload(bu)
+
+
 
 class Bloch_cont(rotate_exp.Rocking):
     def __init__(self,**kwargs):
@@ -30,6 +33,75 @@ class Bloch_cont(rotate_exp.Rocking):
     def set_beams_vs_thickness(self,thicks,v=1):
         self.do('_set_beams_vs_thickness',thicks=thicks,v=v)
         self.z = self.load(0).z
+
+    def sum_images(self,n,fmt='',figpath=None,frames=()):
+        ''' Sums images found in figpath by chuncks of n images
+        and puts them into directory "figpath/sum"
+
+        Parameters
+        ----------
+        n
+            number of images to sum (each side of the central image will be n/2 images)
+        figpath
+            Where the images are located
+        frames
+            The range of frames consider in (f_init,f_end)
+        '''
+        #handle output style
+        if not fmt:fmt = glob.glob(os.path.join(figpath,'*'))[0].split('.')[-1]
+        sum_path=os.path.join(figpath,'sum')
+        pad_n = int(np.ceil(np.log10(np.ceil(self.df.shape[0]/n))))
+        if not os.path.exists(sum_path):
+            Popen('mkdir %s' %sum_path,shell=True)
+
+        # handles min and max frames
+        nmax = self.df.shape[0]
+        n_max = int(np.ceil(nmax/n))
+        if not len(frames)==2:frames=(0,n_max+1)
+        n_init,n_end = frames
+        n_init,n_end=max(0,n_init),min(n_end,n_max)
+        n2 = n//2 #int(np.ceil(n/2))
+
+        ## check images exists
+        nbounds=lambda n0:max(0,min(nmax-1,n0))
+        ni,nf = nbounds(n*n_init-n2),nbounds(n*n_end+n2+1)
+        filenames = np.array([figpath+'/%s.%s' %(self.load(i).name,fmt)
+            for i in [ni,nf]])
+        miss = [not os.path.exists(f) for f in filenames]
+        if any(miss):
+            print(colors.red+'Missing images : \n'+colors.black)
+            print('\n'.join(filenames[miss]))
+            return
+        #get the size of the images
+        nxy = bu.imread(filenames[0]).shape
+        for i in np.arange(n_init,n_end+1):
+            im = np.zeros(nxy)
+            subframes = np.arange(max(0,i*n-n2),min(nmax,i*n+n2+1))
+            print(colors.red,i,subframes,colors.black)
+            for j in subframes:
+                b = self.load(j)
+                img_file=os.path.join(figpath,'%s.%s' %(b.name,fmt))
+                im+=bu.imread(img_file)/n
+            frame_str = str(i).zfill(pad_n)
+            new_file = os.path.join(sum_path,'%s.%s' %(frame_str,fmt))
+            out = check_output("cp %s %s" %(filenames[0],new_file),shell=True).decode()
+            if out:print(out)
+            bu.imwrite(new_file,im.T)#np.fliplr(np.flipud(im)))
+            # print(colors.yellow+new_file+colors.green+' saved'+colors.black)
+
+    def make_img(self,template=None,figpath=None,fmt='',frames=None,**kwargs):
+        if not figpath:figpath=self.figpath
+        nmax=self.df.shape[0]
+        if template and not fmt:fmt=template.split('.')[-1]
+        if type(frames)==type(None):frames=np.arange(nmax)
+        if not os.path.exists(figpath):
+            out=check_output('mkdir -p %s' %figpath,shell=True).decode()
+            if out:print(out)
+        for i in frames:
+            b0 = self.load(i)
+            filename=figpath+'/%s.%s' %(b0.name,fmt)
+            b0.convert2img(filename,template,**kwargs)
+
 
     def convert2tiff(self,figpath=None,n=0,nmax=0,**kwargs):
         ''' Generate tiff files

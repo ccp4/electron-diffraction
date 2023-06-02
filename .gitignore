@@ -25,6 +25,8 @@ tests/*/dat
 multislice/temsim/makefile
 multislice/data_2D
 #blochwave/
+blochwave/dyngo
+blochwave/felix
 **/tiffs
 results/glycine/pets
 
@@ -40,3 +42,4 @@ notebooks/tests/
 **/htmlcov
 **/build
 **/dist
+TorchBloch*

@@ -1,6 +1,6 @@
 """Bloch wave solver"""
 import importlib as imp
-import numpy as np,pandas as pd,pickle5,os,glob,tifffile
+import numpy as np,pandas as pd,pickle5,os,glob,tifffile,mrcfile
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from subprocess import check_output,Popen,PIPE
 from crystals import Crystal
@@ -12,6 +12,7 @@ from scattering import structure_factor as sf       #;imp.reload(sf)
 from scattering import scattering_factors as scatf  #;imp.reload(scatf)
 from EDutils import viewers                         #;imp.reload(viewers)
 from EDutils import utilities as ut                 #;imp.reload(ut)
+from EDutils import pets as pt                      ;imp.reload(pt)
 from EDutils import display as EDdisp               ;imp.reload(EDdisp)
 from . import util as bloch_util                    ;imp.reload(bloch_util)
 felix='%s/bin/felix' %os.path.dirname(__file__)
@@ -148,7 +149,8 @@ class Bloch:
                     self.Nmax=Nmax
                     idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
                     self.pattern=self.pattern[idx,:]
-                    self.hklF,self.Fhkl = sf.structure_factor3D(self.pattern, 2*np.pi*self.lat_vec,hklMax=2*self.Nmax)
+                    self.hklF,self.Fhkl = sf.structure_factor3D(self.pattern,
+                        2*np.pi*self.lat_vec,hklMax=2*self.Nmax)
         (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
         self.lattice = [(h,k,l),(qx,qy,qz)]
 
@@ -214,7 +216,7 @@ class Bloch:
     def solve(self,
         Smax:Optional[float]=None,hkl:Optional[Iterable[int]]=None,
         Nmax:Optional[int]=None,dmin:Optional[int]=None,
-        beam:Optional[dict]={},
+        beam:Optional[dict]={},dyngo_args:Optional[dict]={},
         thick:float=None,thicks:Sequence[float]=None,
         opts:str='sv0',
         felix:bool=False,
@@ -232,7 +234,8 @@ class Bloch:
             max order of reflections/resolution (see :meth:`~Bloch.update_Nmax` )
         beam
             dictionary passed to :meth:`~Bloch.set_beam`
-
+        dyngo_args
+            dict contain dyngo type informations. If not empty, it solves  with Dyngo formulation which is slightly different.
         thick
             thickness of crystal (can be modified without resolving)
         thicks
@@ -260,7 +263,8 @@ class Bloch:
             if Smax or isinstance(hkl,np.ndarray):
                 self._set_excitation_errors(Smax,hkl)
                 self._set_Vg()
-            self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts)
+            self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts,
+                dyngo_args=dyngo_args)
         ##### postprocess
         if thick or 't' in opts:
             self.set_thickness(thick)
@@ -333,17 +337,27 @@ class Bloch:
         self.df_G.index = [str(tuple(h)) for h in self.df_G.values]
         self.solved=True
 
-    def _solve_Bloch(self,show_H=False,Vopt0=True,v=False):
+    def _solve_Bloch(self,show_H=False,Vopt0=True,dyngo_args={},v=False):
         ''' Diagonalize the Hamiltonian'''
         # Ug is a (2*Nmax+1)^3 tensor :
         # Ug[l] = [U(-N,-N,l) .. U(-N,0,l) .. U(-N,N,l)
         #          U( 0,-N,l) .. U( 0,0,l) .. U( 0,N,l)
         #          U(-N,-N,l) .. U( N,0,l) .. U( N,N,l)]
+        self.dyngo = any(dyngo_args)
 
         hkl = self.df_G[['h','k','l']].values
         Sg  = self.df_G.Sw.values
-        pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
+        if self.dyngo:
+            Rmat=dyngo_args['Rmat']
+            self.scale=dyngo_args['scale']
+            surf_norm = Rmat.dot([0,0,1])
+            gn = Rmat.dot(self.df_G[['qx','qy','qz']].T).T.dot(surf_norm)
+            Knorm = self.k0*surf_norm[-1]
+            self.Knorm=Knorm
+            sqrtkg=np.sqrt(1+gn/Knorm)  #dyngo implementation
+            Sg*=2*self.k0/sqrtkg
 
+        pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
         Ug = pre*self.Fhkl/(self.crys.volume*np.pi)*self.eps #/3
 
         #####################
@@ -355,6 +369,7 @@ class Bloch:
         Ug[tuple(U0_idx)] = 0
         # if Vopt0 :Ug[tuple(U0_idx)] = 0   #setting average potential to 0
 
+        print(Ug.shape)
         if v:print(colors.blue+'...assembling %dx%d matrix...' %((Sg.shape[0],)*2)+colors.black)
         H = np.diag(Sg+0J)
         for iG,hkl_G in enumerate(hkl) :
@@ -363,9 +378,19 @@ class Bloch:
             # print('U_G:',Ug[tuple(U0_idx+hkl_G)])
             # print('idx iG:',[tuple(hkl_J+U0_idx) for hkl_J in hkl_G-hkl])
             # print(U_iG)
-            H[iG,:] += U_iG/(2*self.k0)  #off diagonal terms as potential
+            if self.dyngo:
+                # qh = np.linalg.norm(self.lat_vec.T.dot((hkl_G-hkl).T),axis=0)
+                qh = Rmat.dot((hkl_G-hkl).T).T.dot(surf_norm)
+                sqrtkh = np.sqrt(1+qh/Knorm)
+                H[iG,:] += U_iG/(sqrtkg[iG]*sqrtkh)  #so dyngo implementation
+            else:
+                H[iG,:] += U_iG/(2*self.k0)  #off diagonal terms as potential
 
-        self.H = H*2*np.pi #to get same as felix
+        if self.dyngo:
+            H/=(2*self.k0)
+
+        H *= 2*np.pi #to get same as felix
+        self.H=H
         if show_H:self.show_H()
 
         if v:print(colors.blue+'...diagonalization...'+colors.black)
@@ -481,11 +506,16 @@ class Bloch:
         """get beam intensities at thickness"""
         id0 = self._get_central_beam()
         gammaj,CjG = self.gammaj,self.CjG
-        S = CjG.dot(np.diag(np.exp(1J*gammaj*self.thick))).dot(self.invCjG)
+        if self.dyngo:
+            S = CjG.dot(np.diag(np.exp(1J*gammaj*self.thick*self.k0/self.Knorm))).dot(self.invCjG)
+        else:
+            S = CjG.dot(np.diag(np.exp(1J*gammaj*self.thick))).dot(self.invCjG)
         # S = S[:,id0]
         S = S[id0,:]
         self.df_G['S'] = S
         self.df_G['I'] = np.abs(S)**2
+        if self.dyngo:
+            self.df_G['I']*=self.scale**2
 
     def _set_I(self,iZ=-1):
         idx=self.get_beam(refl=self.df_G.index)
@@ -800,6 +830,132 @@ class Bloch:
             pickle5.dump(self, out, pickle5.HIGHEST_PROTOCOL)
         if v:print(colors.green+"object saved\n"+colors.yellow+file+colors.black)
 
+    def _make_img(self,
+            exp:str=None,
+            pred:bool=False,
+            Imax:int=1,
+            Nmax:int=512,
+            rot:int=0,
+            aperpixel:Optional[float]=None,
+            fbroad=None,
+            gs3:float=0.1,
+            nX:int=1,
+            rmax:int=0,
+            thick:float=None,
+            iz:int=None,
+        ):
+        '''Make image
+
+        Parameters
+        -----------
+        exp
+            path to dials or Dials (overrides Nmax,aperpixel)
+        Imax
+            max value for the intensities
+        Nmax
+            image resolution in pixel
+        aperpixel
+            reciprocal size for each pixel (aperture per pixel)
+        rot
+            in plane rotation of the image
+        pred
+            True to use dials predict (ignores rot)
+        fbroad
+            broadening function f(r2) (default np.exp(-r2/(gs3/3)**2))
+        gs3
+            Gaussian broadening factor for each reflections
+        nX
+            width factor of the Gaussian window (in pixels)
+        rmax
+            radius for the noise to be added
+        show
+            Show produced image
+        kwargs
+            args to be passed to the tiff viewer
+        '''
+        thick = self.thick
+        if thick:self.set_thickness(thick)
+        #dials info
+        if isinstance(exp,str):exp = pt.Dials(exp)
+        if exp:
+            aperpixel=exp.aper
+            Nmax=exp.nxy
+            if not Imax>0 or Imax==1 :
+                Imax=exp.Imax*5000
+                print(colors.red+'setting Imax to %.1E '% Imax+colors.black)
+
+        hkl = self.df_G.index
+        pred = pred and exp
+        if pred :
+            hkl = [h for h in hkl if h in exp.df_pred.index]
+            hkl_lost = np.setdiff1d(self.df_G.index,hkl)
+            if any(hkl_lost):
+                print(colors.red+"warning : reflections ignored "+colors.black)
+                print(self.df_G.loc[hkl_lost].sort_values('I')['I'][-10:])
+            pxy = exp.df_pred.loc[hkl,['px','py']]
+
+        # get intensity
+        px,py,I = self.df_G.loc[hkl,['px','py','I']].values.T
+        Nmax=Nmax//2
+        if isinstance(iz,int):
+            idb=self.get_beam(refl=hkl)
+            I = self.Iz[idb,iz]
+            thick = self.z[iz]
+
+        # pixel locations
+        if not aperpixel:
+            aperpixel = 1.1*max(px.max(),py.max())/Nmax
+            print('aperpixel set to %.1E A^-1 ' %(aperpixel))
+        dqx,dqy = [aperpixel]*2
+        if pred:
+            i,j = np.array(pxy[['px','py']].values,dtype=int).T
+        else:
+            if rot:
+                ct,st = np.cos(np.deg2rad(rot)),np.sin(np.deg2rad(rot))
+                px,py = ct*px-st*py,st*px+ct*py
+            i,j = np.array([np.round(px/dqx),np.round(py/dqy)],dtype=int)+Nmax
+
+
+        #### kernel (converted to pixel locations)
+        if not fbroad:
+            fbroad=lambda r2:np.exp(-r2/(gs3/3)**2)
+            nx,ny = np.array(np.floor(gs3/np.array([dqx,dqy])),dtype=int)
+        else:
+            nx,ny=nX,nX
+        ix,iy = np.meshgrid(range(-nx,nx+1),range(-ny,ny+1))
+        x,y = ix*dqx,iy*dqy
+        ## Gaussian broadening
+        r2 = (x**2+y**2)
+        Pb = fbroad(r2)#;dsp.stddisp(im=[x,y,Pb],pOpt='im')
+        im0 = np.zeros((2*Nmax,)*2)
+        for i0,j0,I0 in zip(i,j,I):
+            i0x,j0y = i0+ix,j0+iy
+            idx     = (i0x>=0) & (j0y>=0)  & (i0x<2*Nmax) & (j0y<2*Nmax)
+            i0x,j0y = i0+ix[idx],j0+iy[idx]
+            im0[i0x,j0y] += Pb[idx]/Pb[idx].sum()*I0
+            # im0[i0,j0]=I0
+
+        #### noise
+        if rmax:
+            h,k = np.meshgrid(range(-Nmax,Nmax),range(-Nmax,Nmax))
+            r = np.sqrt(h**2+k**2);r[r==0]=1
+            im0 += rmax*np.random.rand(*im0.shape)#/(rmax*r)
+
+        return im0*Imax
+
+    def convert2img(self,filename,template=None,**kwargs):
+        im0 = self._make_img(**kwargs)#Nmax,fbroad,gs3,nX,rmax,thick,iz,rot)
+        # print(im0.mean())
+        fmt = template.split('.')[-1]
+        if not filename:
+            filename = os.path.join(self.figpath,self.name+'_%dA.%s' %(self.thick,fmt))
+        if template:
+            out = check_output("cp %s %s" %(template,filename),shell=True).decode()
+            if out:print(out)
+        bloch_util.imwrite(filename,im0)
+
+
+
     def convert2tiff(self,tiff_file:str=None,
         Imax:int=3e4,
         Nmax:int=512,aperpixel:Optional[float]=None,
@@ -848,56 +1004,13 @@ class Bloch:
             If aperpixel is not specified, it is automatically so it contains the image
             will contain all reflections.
         """
-        Nmax=Nmax//2
-        thick = self.thick
-        if thick:self.set_thickness(thick)
-        px,py,I = self.df_G[['px','py','I']].values.T
-        if rot:
-            ct,st = np.cos(np.deg2rad(rot)),np.sin(np.deg2rad(rot))
-            px,py = ct*px-st*py,st*px+ct*py
-
-        if isinstance(iz,int):
-            idb=self.get_beam(refl=self.df_G.index)
-            I = self.Iz[idb,iz]
-            thick = self.z[iz]
-        if not aperpixel:
-            aperpixel = 1.1*max(px.max(),py.max())/Nmax
-            print('aperpixel set to %.1E A^-1' %aperpixel)
-        dqx,dqy = [aperpixel]*2
-
-
-        #convert to pixel locations
-        if not fbroad:
-            fbroad=lambda r2:np.exp(-r2/(gs3/3)**2)
-            nx,ny = np.array(np.floor(gs3/np.array([dqx,dqy])),dtype=int)
-        else:
-            nx,ny=nX,nX
-        ix,iy = np.meshgrid(range(-nx,nx+1),range(-ny,ny+1))
-        x,y = ix*dqx,iy*dqy
-        i,j = np.array([np.round(px/dqx),np.round(py/dqy)],dtype=int)+Nmax
-
-        #### Gaussian broadening
-        r2 = (x**2+y**2)
-        Pb = fbroad(r2)
-        # dsp.stddisp(im=[x,y,Pb],pOpt='im')
-        im0 = np.zeros((2*Nmax,)*2)
-        for i0,j0,I0 in zip(i,j,I):
-            i0x,j0y = i0+ix,j0+iy
-            idx     = (i0x>=0) & (j0y>=0)  & (i0x<2*Nmax) & (j0y<2*Nmax)
-            i0x,j0y = i0+ix[idx],j0+iy[idx]
-            im0[i0x,j0y] += Pb[idx]/Pb[idx].sum()*I0
-            # im0[i0,j0]=I0
-        if rmax:
-            h,k = np.meshgrid(range(-Nmax,Nmax),range(-Nmax,Nmax))
-            r = np.sqrt(h**2+k**2);r[r==0]=1
-            im0 += rmax*np.random.rand(*im0.shape)#/(rmax*r)
-
+        im0 = _make_img(Nmax,fbroad,gs3,nX,rmax,thick,iz,rot)
 
         if not tiff_file:
             tiff_file = os.path.join(self.path,self.name+'_%dA' %thick+'.tiff')
         I = np.array(im0*Imax,dtype='uint16')
 
-        ix,iy = np.meshgrid(range(2*Nmax),range(2*Nmax))
+        # ix,iy = np.meshgrid(range(2*Nmax),range(2*Nmax))
         # dsp.stddisp(im=[ix,iy,I],plots=[j,i,'bo'],xylims=[0,512,0,512],
         #     cmap='gray',caxis=[0,10],imOpt='tX',pargs={'fillstyle':'none'})
 

@@ -1,6 +1,52 @@
 import numpy as np
+import mrcfile,tifffile
 from utils import glob_colors as colors
 import os,glob,pickle5
+
+def mrc2tiff(mrc_file,outpath):
+    tiff_file = os.path.basename(mrc_file).replace('.mrc','.tiff')
+    im = imread(mrc_file).copy()
+    im -= im.min()
+    im*=50/im.mean()
+    # im*=1e4/im.max()
+    # im = np.array(im,dtype=np.uint16)
+    imwrite(os.path.join(outpath,tiff_file),im)
+
+#### writer
+def mrc_writer(filename,im0):
+    mrc = mrcfile.open(filename,'r+')
+    mrc.set_data(np.array(im0,dtype=type(mrc.data[0,0])))
+    mrc.flush()
+    mrc.close()
+
+def tiff_writer(tiff_file,im):
+    tifffile.imwrite(tiff_file,im)
+img_writers = {
+    'mrc' : mrc_writer,
+    'tiff': tiff_writer,
+}
+def imwrite(filename,im):
+    fmt=filename.split('.')[-1]
+    img_writers[fmt](filename,im)
+    print(colors.yellow+filename+colors.green+' saved'+colors.black)
+
+
+#### reader
+def tiff_reader(tiff_file)  :
+    with open(tiff_file,'rb') as f:
+        I =tifffile.imread(f)
+    return I
+def mrc_reader(mrc_file):
+    with mrcfile.open(mrc_file) as mrc:
+        return mrc.data
+img_readers = {
+    'mrc' : mrc_reader,
+    'tiff': tiff_reader,
+}
+fmts = list(img_readers.keys())#['mrc','tiff']
+def imread(filename):
+    fmt=filename.split('.')[-1]
+    return img_readers[fmt](filename)
 
 
 def strong_beams(dfG,
@@ -115,11 +161,20 @@ RExitCriteria            = 0.00001
     else:
         return inp
 
-def load_bloch(path='',tag='',file='',v=1):
-    """load a saved Bloch object
-    filename : pickle file (.pkl)  """
-    files = [f for f in glob.glob(os.path.join(path,'*.pkl')) if tag in f]
-    if tag:
+def load_bloch(path='',tag=None,file='',v=1):
+    """load a saved Bloch object from
+    path : path to simulation folder
+    tag : identifier for a bloch simu in case there are several possibilities
+        OR
+    filename : directly provide the pickle file (.pkl)
+    """
+    # first tr toget a simu from the tag
+    files = [f for f in glob.glob(os.path.join(path,'*.pkl'))]
+    if not isinstance(tag,type(None)):
+        if isinstance(tag,int):
+            file = files[tag]
+        else:
+            files = [f for f in glob.glob(os.path.join(path,'*.pkl')) if tag in f]
         if len(files)==1:
             file = files[0]
     if file:

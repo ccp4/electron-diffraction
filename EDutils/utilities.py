@@ -89,7 +89,23 @@ def load_pkl(file):
     with open(file,'rb') as f : obj = pickle5.load(f)
     return obj
 
+def rot(a,axis='x',deg=True):
+    if deg:a = np.deg2rad(a)
+    c,s = np.cos(a),np.sin(a)
+    if   axis=='x':R = np.array([[1,0,0],[0,c,s],[0,-s,c]])
+    elif axis=='y':R = np.array([[c,0,s],[0,1,0],[-s,0,c]])
+    elif axis=='z':R = np.array([[c,s,0],[-s,c,0],[0,0,1]])
+    return R
 
+def rotation_matrix(k,a,deg=True):
+    '''Rotation matrix from a vector'''
+    #https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
+    if deg:a = np.deg2rad(a)
+    kx,ky,kz = k
+    K = np.array([[0,-kz,ky],[kz,0,-kx],[-ky,kx,0]])
+    R = np.eye(3) + np.sin(a)*K + (1-np.cos(a))*K.dot(K)
+
+    return R
 #############################################################################
 #### orientation vectors
 #############################################################################
@@ -556,6 +572,14 @@ def get_kinematic_intensities(cif_file,K,thick,Nmax=5,Smax=None):
     return df_Sw
 
 def project_beams(K,qxyz,e0=[1,0,0],v=0):
+    '''pass from reciprocal cartesian coordinates to panel coordinates
+    then uses the `aper` parameter to get values in pixels
+    e0:rotation axis in the panel frame
+    Note:
+        In the images frame, the beam in perpendicular to the images(z axis)
+        and the rotation axis is usually along the x axis of the images
+    '''
+    #build the frames basis
     e3 = K/np.linalg.norm(K)
     e0 = e0/np.linalg.norm(e0)
     e2 = np.cross(e3,e0)
@@ -588,3 +612,19 @@ def show_tiff(file,cutoff=100):
     im=tifffile.imread(file)
     dsp.stddisp(im=[im],title=file,
         cmap='gray',caxis=[0,cutoff],pOpt='tX')
+
+
+def to_shelx(hkl,file):
+    '''converts to a.hkl file ready to use by shelx
+    hkl: dataframe containing h,k,l,I,sig
+    '''
+    formats = {
+        'h':'{:>4}', 'k':'{:>4}', 'l':'{:>4}',
+        'I':'{:>8.2f}', 'sig':'{:>8}',
+        }
+    formatters = {k: v.format for k, v in formats.items()}
+    content=hkl.to_string(formatters=formatters, index=False, header=False)
+    with open(file, 'w') as f:
+        f.write(content)
+
+    print(colors.green+'file saved : \n'+colors.yellow,file,colors.black)

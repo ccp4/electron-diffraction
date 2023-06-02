@@ -1,109 +1,22 @@
 import importlib as imp
-import os,glob, numpy as np, pandas as pd, tifffile,scipy.optimize as opt
+import os,glob, numpy as np, pandas as pd, tifffile,mrcfile,scipy.optimize as opt
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from subprocess import Popen,PIPE,check_output
 from crystals import Crystal,Lattice
 from utils import handler3D as h3D          #;imp.reload(h3D)
 from utils import displayStandards as dsp   #;imp.reload(dsp)
+from utils import glob_colors as colors
 from multislice  import mupy_utils as mut   #;imp.reload(mut)
-from EDutils import viewers as vw           ;imp.reload(vw)
+from EDutils import viewers as vw           #;imp.reload(vw)
 from EDutils import utilities as ut         #;imp.reload(ut)
 from multislice.rotating_crystal import get_crystal_rotation
 from gemmi import cif
+from utils import physicsConstants as cst
+from blochwave import bloch                 #;imp.reload(bloch)
+# from . import import_ED as ED               ;imp.reload(ED)
 
 
-def load_dials_reflections(refl_txt):
-    tmp = 'tmp.txt'
-    cmd = "tail --lines=+39 %s | "\
-        "sed -E 's/ +/ /g' | sed -E 's/^ //' | sed 's/,//g' "\
-        "> %s" %(refl_txt, tmp)
-
-    out = check_output(cmd,shell=True).decode()
-    if out:print(out)
-    df = pd.read_csv(tmp,
-        names=[
-            'h','k','l','id','i','panel','flag','I','sig',
-            'c_qx','c_qy','c_qz','c_px','c_py','c_pz',
-            'o_qx','o_qy','o_qz','vqx','vqy','vqz',
-            'o_px','o_py','o_pz','vpx','vpy','vpz',
-            's1x','s1y','s1z','Npix','rlpx','rlpy','rlpz'],
-        engine="python",sep=" ")
-
-    out=check_output("rm %s" %tmp ,shell=True).decode()
-    if out:print(out)
-    return df
-
-def load_dyn_intensities(file_dyn):
-    doc = cif.read_file(file_dyn )
-    block = doc.sole_block()
-    h = np.array([float(i) for i in list(block.find_loop('_refln_index_h'))])
-    k = np.array([float(i) for i in list(block.find_loop('_refln_index_k'))])
-    l = np.array([float(i) for i in list(block.find_loop('_refln_index_l'))])
-    I = np.array([float(i) for i in list(block.find_loop('_refln_intensity_meas'))])
-    sig = np.array([float(i) for i in list(block.find_loop('_refln_intensity_sigma'))])
-    F = np.array([float(i) for i in list(block.find_loop('_refln_zone_axis_id'))])
-
-    df = pd.DataFrame(columns=['h','k','l','I','sig','frame'])
-    return df
-
-def load_dyn(file_dyn):
-    #  Now use dyn.cif_pets to set up the felix simulation input files
-    doc = cif.read_file(file_dyn )
-    block = doc.sole_block()
-
-    # Extract data:
-    # first the frames and their orientation for the felix.inp file
-    # frame number fn
-    fn = np.array([int(i) for i in list(block.find_loop('_diffrn_zone_axis_id'))])
-    n_frames = len(fn)  # no. of frames
-    # incident beam orientation u,v,w
-    u = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_u'))])
-    v = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_v'))])
-    w = np.array([float(i) for i in list(block.find_loop('_diffrn_zone_axis_w'))])
-
-    # Frame angles
-    frame_alpha = np.array([float(i) for i in
-                            list(block.find_loop('_diffrn_zone_axis_alpha'))])
-    # Unit cell
-    cell_a = float(block.find_value('_cell_length_a'))
-    cell_b = float(block.find_value('_cell_length_b'))
-    cell_c = float(block.find_value('_cell_length_c'))
-    alpha = float(block.find_value('_cell_angle_alpha'))
-    beta  = float(block.find_value('_cell_angle_beta'))
-    gamma = float(block.find_value('_cell_angle_gamma'))
-    cell=[cell_a,cell_b,cell_c]
-    lat_params = [cell_a,cell_b,cell_c,alpha,beta,gamma]
-    return dict(u=u,v=v,w=w,n_frames=n_frames,alpha=frame_alpha,cell=cell,lat_params=lat_params)
-
-class Dials:
-    def __init__(self,path:str):
-        self.path = path
-        df = load_dials_reflections(
-            os.path.join(self.path,'reflections.txt'))
-        self.rpl = df[['h','k','l','I']].copy()
-        self.rpl['hkl'] = [str((h,k,l)) for h,k,l in self.rpl[['h','k','l']].values]
-        self.rpl[['qx','qy']] = df[['s1x','s1y']]
-        # self.rpl[['qy']]*=-1
-        self.rpl['F'] = np.array(np.round(df['o_pz'])+1,dtype=int)
-        self.index = self.rpl.hkl
-
-
-        d = load_dyn(os.path.join(self.path,'dials_dyn.cif_pets'))
-        self.uvw = np.stack([d['u'],d['v'],d['w']]).T
-        self.lat_params = d['lat_params']
-        self.lat = np.array(Lattice.from_parameters(*self.lat_params).lattice_vectors)
-
-        for k in ['alpha','n_frames'] : self.__dict__[k] = d[k]
-        beams = self.lat.T.dot(self.uvw.T).T
-        beams/np.linalg.norm(beams,axis=1)[:,None]
-        self.uvw0 = beams
-
-        #pb dials duplicate first frame
-        self.n_frames-=1
-        self.alpha=self.alpha[1:]
-        self.uvw0=self.uvw0[1:]
-
-class Pets:
+class Pets():
     def __init__(self,pts_file:str,
         cif_file:Optional[str]=None,gen:bool=False,dyn:bool=False):
         """ Pets importer
@@ -136,6 +49,41 @@ class Pets:
         self._load_all(dyn)
         self.nFrames = self.uvw.shape[0]
 
+        tiffs = glob.glob(os.path.join(self.path,'tiff','*.tiff'))
+        if len(tiffs):
+            self.nxy = tifffile.imread(tiffs[0]).shape
+
+    def hkl_to_pixels(self,h,frame):
+        hkl = np.array([eval(hkl) for hkl in h])
+        #spot locations in reciprocal crystal frame (with shape 3 x n_refl)
+        rxyz = self.UB.dot(hkl.T).T
+        # print(rxyz)
+        alpha,beta,gamma = self.cif.iloc[frame-1][['alpha','beta','omega']]
+        # print(alpha,beta,gamma)
+        alpha_r,beta_r,gamma_r = -np.deg2rad([alpha,beta,gamma])
+        ctx,stx = np.cos(alpha_r),np.sin(alpha_r)
+        cty,sty = np.cos(beta_r) ,np.sin(beta_r)
+        ctz,stz = np.cos(gamma_r),np.sin(gamma_r)
+
+        Rx = np.array([[1,0,0],[0,ctx,stx],[0,-stx,ctx]])
+        Ry = np.array([[cty,0,sty],[0,1,0],[-sty,0,cty]])
+        Rz = np.array([[ctz,stz,0],[-stz,ctz,0],[0,0,1]])
+        # R = Ry.dot(Rx.dot(Rz))
+        R = Rz.dot(Ry.dot(Rx))
+        qxyz = R.dot(rxyz.T)
+        # print(qxyz)
+        qx,qy = qxyz[:2,:]
+
+        ### convert to pixels
+        df_pxy=pd.DataFrame()
+        cx,cy = self.cen.loc[frame-1, ['px','py']]
+        df_pxy['px'] = qx/self.aper + cx
+        df_pxy['py'] = -qy/self.aper + cy
+        df_pxy.index=h
+        return df_pxy
+
+    def save(self):
+        ut.save_pkl(self, os.path.join(self.path,'pets.pkl'))
 
     def _convert_pets(self):
         cmd = "%s/convert_pets.sh %s %s" %(os.path.dirname(__file__),self.path,self.name)
@@ -156,6 +104,7 @@ class Pets:
         self.aper  = aper
         self.lam   = lam
         self.K0    = 1/self.lam
+        self.keV = cst.lam2keV(self.lam)
 
         self.frames = pd.read_csv(self.out+'iml.txt',sep=',',names=['name','alpha','beta','domega','scale','calibration','ellipA','ellipP','used'])
         self.rpl = pd.read_csv(self.out+'rpl.txt',sep=',',names=['x','y','z','I','i','px','py','rpx','rpy','alpha','Im','F'])
@@ -168,6 +117,7 @@ class Pets:
         self.HKL = pd.read_csv(self.out+'HKL.txt',sep=',',names=['h','k','l','I','sig','F'])
         self.HKL_dyn = pd.read_csv(self.out+'HKL_dyn.txt',sep=',',names=['h','k','l','I','sig','F'])
         self.A   = np.load(self.out+'UB.npy')
+        self.UB  = self.A
         self.lat_params = np.loadtxt(self.out+'cell.txt')[:-1]
         self.lat = np.array(Lattice.from_parameters(*self.lat_params).lattice_vectors)
         self.invA = np.linalg.inv(self.A)
@@ -178,7 +128,7 @@ class Pets:
         beams = self.lat.T.dot(uvw.T).T
 
         self.uvw   = uvw #/np.linalg.norm(uvw,axis=1)[:,None]
-        self.uvw0  = beams/np.linalg.norm(beams,axis=1)[:,None]
+        self.uvw0  = -beams/np.linalg.norm(beams,axis=1)[:,None]
         self.beams = self.K0*self.uvw0 #/np.linalg.norm(beams,axis=1)
         self.XYZ   = self.xyz[['x','y','z']].values.T
 
@@ -203,6 +153,9 @@ class Pets:
         # if not len(hkl)==idx.shape[0]:print('warning reflection not unique : ',hkl0[cc>1])
         # self.xyz.index=hkl
 
+        # beams = self.lat.T.dot(dyn.uvw.T).T
+        # self.dyn[['u0','v0','w0']] = beams/np.linalg.norm(beams,axis=1)[:,None]
+
         if dyn:
             hkl,idx=np.unique([str(tuple(h)) for h in self.HKL_dyn[['h','k','l']].values],return_index=True)
             self.HKL_dyn=self.HKL_dyn.iloc[idx]
@@ -210,6 +163,197 @@ class Pets:
             hkl = self.HKL_dyn[['h','k','l']].values
             self.HKL_dyn['rq'] = np.linalg.norm(hkl.dot(self.lat_vec1),axis=1)
 
+
+    def load_b0(self):
+        return ut.load_pkl(self.b0_path)
+
+    def run_blochwave(self,F,**bargs):
+        Nmax = self.HKL_dyn[['h','k','l']].max().max()
+        self.dyn.set_index('id')
+        u = self.dyn.loc[F,['u','v','w']].values
+
+        u0 = self.lat_vec.T.dot(u)
+        u0 /= np.linalg.norm(u0)
+
+        b_args=dict(Nmax=Nmax,Smax=0.05,path=self.dyngo_path,
+            opts='',name='b_F%d' %F,solve=True)
+        b_args.update(bargs)
+        b0 = bloch.Bloch(self.cif_file,keV=200,
+            u=-u0,**b_args)
+        self.b0_path=b0._get_pkl()
+        return b0
+
+    def make_eldyn(self,
+            sgmax=1,sslim=0.01, outputsgmax=0.1,
+            outputprecfrac=0.6,phisteps=50,F=1,
+            thickness=920.9828,F0=0,bargs={},
+            thr=8,path=None,
+            v=0):
+        ''' Produces a <structure>.eldyn file
+        '''
+
+        UB        = self.A
+        lam       = self.lam
+        pets_dat  = self.dyn.loc[F]
+        hklz      = pets_dat[['u','v','w']].values
+        alpha,beta,omega,scale=pets_dat[['alpha','beta','omega','scale']]
+        phi       = self.dyn.loc[F+1,'alpha']-alpha
+        xnorm, ynorm, keys = 0,0,1000
+
+        #### reflections
+        self.HKL_dyn.index = [str(tuple(h)) for h in self.HKL_dyn[['h','k','l']].values]
+        # hkls = self.HKL_dyn[['h','k','l','I','sig']].copy()
+        # Nmax = self.HKL_dyn[['h','k','l']].max().max()
+
+        structure = os.path.dirname(self.cif_file)[:-4]
+        if not isinstance(path,str):
+            path = os.path.join(self.path,'dyngo')
+        if not os.path.exists(path):os.mkdir(path)
+        eldyn_file=os.path.join(path,'%s.eldyn' %structure)
+        self.dyngo_path=path
+        ###
+        if v:print('...getting structure factor from bloch module...')
+        b0=self.run_blochwave(F,**bargs)
+        # b_args=dict(Nmax=Nmax,Smax=0.05,path=path,opts='',
+        #     name='b_F%d' %F,solve=True)
+        # b_args.update(bargs)
+        # b0 = bloch.Bloch(self.cif_file,keV=200,
+        #     u=-hklz,**b_args)
+        # self.b0_path=b0._get_pkl()
+
+        # Fhkl = b0.Fhkl
+        # V0_idx = np.array([2*Nmax]*3)
+        # Fhkl[tuple(V0_idx)] = 0
+        print('...getting all hkls...')
+        hkls = pd.DataFrame(columns=['h','k','l','A','B','F','I','sig'],
+            index=[ str(tuple(hkl)) for hkl in np.vstack([ i.flatten() for i in b0.hklF]).T],
+            )
+
+        Fhkl = b0.Fhkl.flatten()
+        # Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)]
+        #     for hkl_G in hkls[['h','k','l']].values ])
+        hkls[['h','k','l']] = np.vstack([ i.flatten() for i in b0.hklF]).T
+        hkls['A'] = np.array(Fhkl.real,dtype=float)
+        hkls['B'] = np.array(Fhkl.imag,dtype=float)
+        hkls['F'] = 6
+        hkls['I']   = 0
+        hkls['sig'] = 0
+        # get the reflections to compute the intensities
+        hkl_dyn = self.HKL_dyn[self.HKL_dyn.F==F]
+        idx = hkl_dyn.sort_values('I')[-4:].index ##debug
+        hkls.loc[idx,'F']         = 5
+        hkls.loc[idx,['I','sig']] = hkl_dyn.loc[idx,['I','sig']].values
+        # hkls.drop(str((0,0,0)))
+        hkls = hkls.drop(str((0,0,0)))
+        # print(hkls.loc[str((0,0,0))])
+        print(hkls.loc[idx,'I'])
+
+        fmt0 = lambda x,s,n:(('%'+str(s)+'f') %x).rjust(n)
+        fmt  = lambda x:fmt0(x,6,12)
+
+        # hkls=[
+        #     [1,-2,-1, 0.1,0.2,0.3,0.4, 3,0.1],
+        #     [-3,4,-2, 0.1,0.4,0.5,0.1, 2,0.1],
+        #     ]
+        # df_hkl = pd.DataFrame(hkls,columns=['h','k','l','I1','sig','re','im','d','e'])
+
+
+        header="""int iedt thr %d
+
+Zone# %d
+Noncentrosymmetric         0
+Refinement I
+"""%(thr,F)
+
+        ub='\n'.join(['%s%s%s' %(
+            ('%.6f' %v[0]).rjust(12),
+            ('%.6f' %v[1]).rjust(12),
+            ('%.6f' %v[2]).rjust(12),
+                )
+            for v in UB])
+
+        params = ''.join(fmt(s) for s in
+            [lam,F0,omega,sgmax,sslim, outputsgmax,
+            outputprecfrac]
+            ) + ' %d' %phisteps
+
+        fmt9 = lambda x:fmt0(x,6,9)
+        geo = ''.join([fmt9(s) for s in hklz.tolist()+[alpha,beta,phi]])
+        # '%s %s %s' %(
+        #     ''.join(['%.6f' %x for x in hklz]),
+        #     ''.join(['%.6f' %x for x in [alpha,beta] ]),
+        #     '%.6f' %gamma,
+        #     )
+
+        thick =' '+' '.join([('%1.6f' %x)[:8] for x in [ scale, thickness,xnorm, ynorm]]) + ' '*24 + '%-4d' %keys
+        cor = ' 0.000000 0.000000                                          00'
+
+        msg=''
+        msg+= header
+        msg+= ub        +'\n'
+        msg+= params    +'\n'
+        msg+= geo       +'\n'
+        msg+= thick     +'\n'
+        msg+= cor       +'\n'
+        # msg+=df_hkl.to_csv(float_format='%15.5E',sep='\t',index=False,header=False,line_terminator="\n\n\n")
+        for i,hkl in hkls.iterrows():
+            str_refl = '%s%s%s\n\n\n' %(
+                ''.join(['%4d'    %x for x in hkl[['h','k','l']]]),
+                ''.join(['%15.5E' %x for x in hkl[['I','sig','A','B']]]),
+                ('%d' %hkl['F']).rjust(5) )
+            msg+=str_refl
+        with open(eldyn_file,'w') as f:f.write(msg)
+        if v:
+            print(colors.yellow+eldyn_file+colors.green+" saved"+colors.black)
+            with open(eldyn_file,'r') as f:print(f.read())
+        self.eldyn_file=eldyn_file
+        return eldyn_file
+
+    def run_dyngo(self,bin='dyngo/dyn'):
+        print(check_output('%s %s' %(bin,self.eldyn_file),
+            shell=True).decode())
+
+    def get_edout(self,F=1,opts='a',v=0):
+        #reformat output properly into a file
+        edout = self.eldyn_file.replace('eldyn','edout')
+        out = edout.replace('edout','out')
+        cmd = '''\
+    tail --lines=+2  %s | \
+    sed -E "s/ {1,}/ /g" | sed 's/^ //' | \
+    awk '{getline b; getline c;printf("%%s %%s %%s\\n",$0,b,c)}' |\
+    sed "s/ /,/g" | sed "s/,$//" > %s''' %(edout,out)
+        # print(cmd)
+        print(check_output(cmd,shell=True).decode())
+
+        #import data
+        df = pd.read_csv(out,sep=',',names=['h','k','l','I'] + ['I_%d' %i for i in range(6)],
+            index_col=None)
+
+        print(check_output('rm %s' %out,shell=True).decode())
+        # df[['h','k','l']]=np.array(df[['h','k','l']].values,dtype=int)
+        df.index=[str(tuple(h)) for h in df[['h','k','l']].values]
+
+        if 'a' in opts:
+            df_allint=self.read_allint(F)
+            df['Sw']=np.nan
+            df.loc[df_allint.index,'Sw']=df_allint.Sw
+
+        self.HKL_dyn.loc[df.index,'Icalc'] = df.I
+        if v:
+            print(self.HKL_dyn.loc[df.index,['I','Icalc']])
+        self.save()
+        return df
+
+    def read_allint(self,F,opt=''):
+        '''excitation errors from dyngo'''
+        all_int =self.eldyn_file.replace('.eldyn','_%s.allint' %str(F).zfill(3))
+        if os.path.exists(all_int) :
+            ##the ones that made it to the int>deps
+            df_allint = pd.read_csv(all_int,sep=' +',
+                names=['h','k','l','I','S1','S2','Sw','F'],engine='python')
+            df_allint.index=[str(tuple(h)) for h in df_allint[['h','k','l']].values]
+            if not 'O' in opt:df_allint=df_allint.drop(str((0,0,0)))
+            return df_allint
 
     ###########################################################################
     #### compute :
@@ -690,9 +834,6 @@ class Pets:
         # dsp.stddisp(plts,rc='3d',view=[0,0],name='figures/glycine_orient.png',opt='sc')
 
 
-
-
-
 def gauss2D(X, amp, x0, y0, sx,sy,noise):
     x,y = X
     g = noise + amp*np.exp(-((x-x0)/sx)**2 - ((y-y0)/sy)**2)
@@ -706,6 +847,8 @@ def make_pets(pts_file:str,
     aperpixel:float,alphas:Sequence[float]=None,
     deg:float=None,
     ref_cell:Sequence[float]=None,
+    pxy:Optional[tuple] = (256,)*2,
+    dmM:Optional[tuple] = (0.05,3),
     tag:Optional[str]=''):
     """creates a .pts file from info to process a simulated experiment with pets
 
@@ -726,6 +869,8 @@ def make_pets(pts_file:str,
     if not deg:deg=alphas[1]-alphas[0]
     phi,omega= deg/2 ,0
     ax,by,cz,alpha,beta,gamma = ref_cell
+    px,py = pxy
+    dm,dM = dmM
     # ax,by,cz,alpha,beta,gamma = 8.1218, 9.977, 17.725, 90.0, 90.0, 90.0
     pts = '''lambda 0.025080
 geometry continuous
@@ -737,13 +882,15 @@ aperpixel    %.6f
 noiseparameters      2.5000      1.0000
 saturationlimit   20000
 
-center    256.0 256.0
+center    %s %s
 centermode friedelpairs 0
 
 beamstop no
 
-dstarmax  3.0
-dstarmaxps  3.0
+
+dstarmax  3
+dstarmaxps  %s
+dstarmin  %s
 i/sigma    7.00    5.00
 reflectionsize  7
 
@@ -752,9 +899,10 @@ referencecell     %.5f    %.5f     %.5f    %.5f   %.5f    %.5f 1
 #List of images
 #columns: file name,alpha,beta,delta omega,frame scale,calibration correction(px/rec.angstrom),ellipt.distortion correction(amplitude),ellipt.distortion correction(phase), use for calculations(0/1)
 imagelist
-'''%(omega,phi,aperpixel,  ax,by,cz,alpha,beta,gamma)
+'''%(omega,phi,aperpixel,px,py,dM,dm,  ax,by,cz,alpha,beta,gamma)
     out = os.path.dirname(pts_file)
     tif_files = np.sort(glob.glob(out+'/tiff/%s*.tiff' %tag))
+    # print(tif_files)
     if type(alphas)==type(None):
         alphas = np.arange(tif_files.size)*deg
 

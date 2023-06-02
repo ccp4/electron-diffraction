@@ -1,16 +1,16 @@
-####################################################################### 
-# 
-# This file contains crystal structure data downloaded from the 
-# Cambridge Structural Database (CSD) hosted by the Cambridge 
+#######################################################################
+#
+# This file contains crystal structure data downloaded from the
+# Cambridge Structural Database (CSD) hosted by the Cambridge
 # Crystallographic Data Centre (CCDC).
-# 
-# Full information about CCDC data access policies and citation 
-# guidelines are available at http://www.ccdc.cam.ac.uk/access/V1 
-# 
-# Audit and citation data items may have been added by the CCDC. 
-# Please retain this information to preserve the provenance of 
-# this file and to allow appropriate attribution of the data. 
-# 
+#
+# Full information about CCDC data access policies and citation
+# guidelines are available at http://www.ccdc.cam.ac.uk/access/V1
+#
+# Audit and citation data items may have been added by the CCDC.
+# Please retain this information to preserve the provenance of
+# this file and to allow appropriate attribution of the data.
+#
 #######################################################################
 
 data_BIOTIN01
@@ -23,7 +23,7 @@ _citation_doi
 _citation_year
 1 10.1021/ja00423a045 1976
 _audit_creation_method           'Created from the CSD'
-_audit_update_record             
+_audit_update_record
 ;
 2020-06-05 downloaded from the CCDC.
 ;
@@ -31,7 +31,7 @@ _database_code_NBS               503141
 _chemical_name_common            'Vitamin H'
 _chemical_formula_moiety         'C10 H16 N2 O3 S1'
 _chemical_name_systematic        Biotin
-_chemical_properties_biological  
+_chemical_properties_biological
 'coenzyme activity in fixation and transfer of carbon dioxide in biological systems'
 _chemical_absolute_configuration unk
 _diffrn_special_details          'data of GTDT and JWE'
@@ -52,13 +52,13 @@ _symmetry_equiv_pos_as_xyz
 2 1/2+x,1/2-y,-z
 3 -x,1/2+y,1/2-z
 4 1/2-x,-y,1/2+z
-_cell_length_a                   5.241(1)
-_cell_length_b                   10.350(2)
-_cell_length_c                   20.964(2)
-_cell_angle_alpha                90
-_cell_angle_beta                 90
-_cell_angle_gamma                90
-_cell_volume                     1137.17
+_cell_length_a                   5.31372(1)
+_cell_length_b                   10.33982(2)
+_cell_length_c                   20.82505(2)
+_cell_angle_alpha                88.88358
+_cell_angle_beta                 91.55703
+_cell_angle_gamma                90.28489
+_cell_volume                     1143.53857
 _cell_formula_units_Z            4
 loop_
 _atom_site_label

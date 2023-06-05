@@ -581,7 +581,13 @@ def project_beams(K,qxyz,e0=[1,0,0],v=0):
     '''
     #build the frames basis
     e3 = K/np.linalg.norm(K)
-    e0 = e0/np.linalg.norm(e0)
+    if not np.linalg.norm(e3-e0):
+        if not np.linalg.norm(e3-np.array([1,0,0])):
+            e0=[0,1,0]
+        else:
+            e0=[1,0,0]
+
+    e0 = np.array(e0)/np.linalg.norm(e0)
     e2 = np.cross(e3,e0)
     e1 = np.cross(e2,e3)
 

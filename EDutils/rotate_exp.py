@@ -6,6 +6,7 @@ from utils import displayStandards as dsp   #;imp.reload(dsp)
 from utils import glob_colors as colors     #;imp.reload(colors)
 from utils import handler3D as h3D          #;imp.reload(h3D)
 from scipy.integrate import trapz
+from scipy.stats import linregress
 from . import utilities as ut               #;imp.reload(ut)
 
 class Rocking:
@@ -180,6 +181,22 @@ class Rocking:
             self.df_int.loc[b0.df_G.index] += b0.Iz
         self.save()
         # print(self.z.shape,self.df_int.values.shape)
+
+    def Rfactor(self,df_exp):
+        refl = self.df_int.loc[self.df_int.index.isin(df_exp.index)].index
+        I_exp = df_exp.loc[refl,'I'].values
+
+        z=self.df_int.columns
+        self.R = pd.DataFrame(index=z,columns=['scale','r_value','Rfac'])
+        Isum = I_exp.sum()
+        for z0 in z :
+            I_sim = self.df_int[self.df_int[z0]].values
+            scale, intercept, r_value, p_value, std_err = linregress(I_sim, I_exp)
+            Rfac = abs(I_sim*scale - I_exp).sum()/Isum
+            self.R.loc[z0] = [scale,r_value,Rfac]
+
+        self.save()
+        return self.R
     ###########################################################################
     #### Display
     ###########################################################################

@@ -181,16 +181,17 @@ class Rocking:
             self.df_int.loc[b0.df_G.index] += b0.Iz
         self.save()
         # print(self.z.shape,self.df_int.values.shape)
+        return self.df_int
 
     def Rfactor(self,df_exp):
         refl = self.df_int.loc[self.df_int.index.isin(df_exp.index)].index
-        I_exp = df_exp.loc[refl,'I'].values
+        I_exp = df_exp.loc[refl,'I'].values             #;print(I_exp)
 
         z=self.df_int.columns
         self.R = pd.DataFrame(index=z,columns=['scale','r_value','Rfac'])
         Isum = I_exp.sum()
         for z0 in z :
-            I_sim = self.df_int[self.df_int[z0]].values
+            I_sim = self.df_int.loc[refl,z0].values     #;print(I_sim)
             scale, intercept, r_value, p_value, std_err = linregress(I_sim, I_exp)
             Rfac = abs(I_sim*scale - I_exp).sum()/Isum
             self.R.loc[z0] = [scale,r_value,Rfac]
@@ -480,6 +481,15 @@ class Rocking:
         # file = os.path.join(self.path,os.path.basename(self.df.iloc[i].pkl))
         sim_obj = ut.load_pkl(file)
         return sim_obj
+
+    def change_path(self,path):
+        self.path=path
+        self.df.pkl=[s.replace(os.path.dirname(s),self.path) for s in self.df.pkl]
+        self.save()
+        for i in range(self.df.shape[0]):
+            obj = self.load(i)
+            obj.path=path
+            obj.save()
 
     def do(self,f,v=True,**args):
         """ apply function to all simus

@@ -1,5 +1,8 @@
 # Changelog
 ## 1.2dev
+### Fri  9 Jun 17:51:51 BST 2023
+- quick update to the smv reader
+
 ### Fri  9 Jun 15:08:57 BST 2023
 - added image readers in readers.py
 - ported read_space_group

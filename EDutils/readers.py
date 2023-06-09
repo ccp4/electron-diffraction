@@ -22,18 +22,19 @@ def mrc_reader(mrc_file):
     with mrcfile.open(mrc_file) as mrc:
         return mrc.data
 
-def smv_reader(file):
-    with open(file, "r") as f:
-        header = [f.readline().strip('\n;') for i in range(25)]
-        header = {k: v for k, v in map(lambda s: s.split("="), header[1:])}
-    # print(header)
+def smv_reader(file,head=False):
+    with open(file, "rb") as f:
+        buf= f.read()
+
+    header = [l.strip('\n;') for l in buf[:512].decode().split('\n')]
+    header = {k: v for k, v in map(lambda s: s.split("="), header[1:-3])}
+    if head: print(header)
     h_bytes = int(header['HEADER_BYTES'])
     assert(header['TYPE']=='unsigned_short')
-
-    with open(file, "rb") as f:
-        img = np.reshape(np.frombuffer(f.read()[h_bytes:], dtype=np.uint16),
-            (int(header['SIZE1']),int(header['SIZE2'])))
-
+    nx,ny=int(header['SIZE1']),int(header['SIZE2'])
+    img = np.reshape(
+        np.frombuffer(buf[h_bytes:], dtype=np.uint16),
+        (nx,ny))
     return img
 
 

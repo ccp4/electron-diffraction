@@ -1,5 +1,5 @@
 import importlib as imp
-import tifffile,os,glob,pickle5,subprocess,crystals
+import json,tifffile,os,glob,pickle5,subprocess,crystals
 import numpy as np,pandas as pd
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from crystals import Crystal
@@ -634,3 +634,46 @@ def to_shelx(hkl,file):
         f.write(content)
 
     print(colors.green+'file saved : \n'+colors.yellow,file,colors.black)
+
+def read_space_group(struct_file):
+    dataset={}
+    if struct_file.split('.')[-1]=='cif':
+        with open(struct_file,'r') as f:
+            lines=f.readlines()
+        spg_info = {
+            'lattice_system'      :['_space_group_crystal_system','_symmetry_cell_setting'],
+            'international_number':['_space_group_IT_number'     ,],
+            'international_symbol':['_space_group_name_H-M_alt'  ,'_symmetry_space_group_name_H-M'],
+        }
+
+        # (key,vals),l=next(spg_info),next(lines)
+        for l in lines:
+            if l.strip() in ['_space_group_symop_operation_xyz','_symmetry_equiv_pos_as_xyz']:
+                break
+            for key,vals in spg_info.items():
+                for v in vals:
+                    if v==l.split(' ')[0]:
+                        val = l.replace(v,'').strip(" '\n")
+                        # print('match found:',l.split(' ')[0],v,val)
+                        dataset[key]=val
+                        break
+
+    elif struct_file.split('.')[-1]=='pdb':
+        with open(struct_file,'r') as f:
+            lines=f.readlines()
+        for l in lines:
+            if 'SYMMETRY OPERATORS FOR SPACE GROUP' in l:
+                dataset['international_symbol'] = l.split(':')[1].strip()
+                break
+
+    if dataset:
+        print(colors.green+'Reading space group info manually in cif file'+colors.black)
+        if 'international_symbol' in dataset.keys() and 'international_number' not in dataset.keys():
+            with open('static/spg/spg_groups_hm.json','r') as f:
+                spg_hm=json.load(f)
+            hm = dataset['international_symbol']
+            if hm in spg_hm.keys():
+                dataset['international_number'] = spg_hm[hm]
+                print(colors.blue+'retrieved space group number from dictionary'+colors.black)
+
+    return dataset

@@ -1,6 +1,14 @@
 import glob,os,re
 import tifffile,mrcfile,cbf,numpy as np
 from utils import glob_colors as colors
+from utils import displayStandards as dsp
+import cv2
+
+nb_colors=100
+cmaps = ['hot','viridis','Spectral','Greys']
+
+cs  = {cmap : (np.array(dsp.getCs(cmap,nb_colors))*255).astype(np.uint8)
+    for cmap in cmaps}
 
 def read(file):
     fmt=file.split('.')[-1]#;print(fmt)
@@ -91,3 +99,22 @@ def detect_frame(path):
         }
         # print(frames_dict)
     return frames_dict
+
+
+def save_image(file,zmax=1000,cmap='hot',dir='',v=False):
+    if v:print('reading...')
+    im  = read(file)    #;print(im.shape)
+
+    if v:print('processing...')
+    idx = np.maximum(0,np.floor((np.minimum(im,zmax-1)/zmax)*nb_colors)).astype(np.int)
+
+    fmt = file.split('.')[-1]
+    out = os.path.join(dir,os.path.basename(file).replace(fmt,'jpg'))
+    if v:print('writing...')
+    success=cv2.imwrite(out, cs[cmap][idx,:])
+
+    if success:
+        print(colors.green,'file saved : ')
+        print(colors.yellow,out,colors.black)
+    else:
+        print(colors.red,'saving failed',colors.black)

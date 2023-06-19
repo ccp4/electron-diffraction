@@ -53,7 +53,7 @@ class Bloch:
         beam:Optional[dict]={},keV:float=200,u:Sequence[float]=[0,0,1],
         Nmax:int=1,dmin:int=None,
         Smax:float=0.2,
-        solve:bool=True,
+        solve:bool=True,init=True,
         felix:bool=False,nbeams:int=200,
         eps:float=1,
         **kwargs,
@@ -74,7 +74,7 @@ class Bloch:
         if solve :
             self.solve(Smax=Smax,Nmax=Nmax,dmin=dmin,**kwargs)
         else:
-            if not felix:
+            if not felix and init:
                 print(colors.blue+'...Nmax... '+colors.black)
                 self.update_Nmax(Nmax,dmin)
                 print(colors.blue+'...Excitation errors... '+colors.black)

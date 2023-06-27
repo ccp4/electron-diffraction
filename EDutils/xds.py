@@ -102,7 +102,7 @@ class XDS(ED.Dataset):
         hkl['F'] = hkl.pz.round()
         hkl['hkl'] = hkl.index
         self.rpl = hkl[['h','k','l','I','px','py','pz','F','hkl']].copy()
-
+        self.hkl = self.rpl[['I']].copy()
 
     def get_qxy(self):
         ED = self.ED

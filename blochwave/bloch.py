@@ -198,7 +198,7 @@ class Bloch:
         self.Kabc0 = self.Kabc/(abs(self.Kabc)[abs(self.Kabc)>0.01].min()) #;print(Kabc)
         self.Kuvw0 = self.Kuvw/(abs(self.Kuvw)[abs(self.Kuvw)>0.01].min()) #;print(Kabc)
 
-    def set_thickness(self,thick:float=100):
+    def set_thickness(self,thick:float=100,v=True):
         """set thickness and update beams
 
         Parameters
@@ -210,7 +210,7 @@ class Bloch:
         self._set_kinematic()
         if self.solved:
             self._set_intensities()
-            print('updated intensities')
+            if v: print('updated intensities')
 
 
     def solve(self,

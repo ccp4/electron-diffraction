@@ -186,12 +186,13 @@ class Rocking:
     def Rfactor(self,df_exp):
         refl = self.df_int.loc[self.df_int.index.isin(df_exp.index)].index
         I_exp = df_exp.loc[refl,'I'].values             #;print(I_exp)
+        prescale=I_exp.mean() 
 
         z=self.df_int.columns
         self.R = pd.DataFrame(index=z,columns=['scale','r_value','Rfac'])
         Isum = I_exp.sum()
         for z0 in z :
-            I_sim = self.df_int.loc[refl,z0].values     #;print(I_sim)
+            I_sim = self.df_int.loc[refl,z0].values*prescale     #;print(I_sim)
             scale, intercept, r_value, p_value, std_err = linregress(I_sim, I_exp)
             Rfac = abs(I_sim*scale - I_exp).sum()/Isum
             self.R.loc[z0] = [scale,r_value,Rfac]
@@ -491,13 +492,13 @@ class Rocking:
             obj.path=path
             obj.save()
 
-    def do(self,f,v=True,**args):
+    def do(self,f,verbose=True,**args):
         """ apply function to all simus
         """
         for i in range(self.df.shape[0]):
             obj = self.load(i)
             obj.__getattribute__(f)(**args)
-            obj.save(v=v)
+            obj.save(v=verbose)
 
 
 def rock_name(path,tag):

@@ -17,7 +17,7 @@ from blochwave import bloch                 #;imp.reload(bloch)
 
 
 class Pets():
-    def __init__(self,pts_file:str,
+    def __init__(self,pts_file:str='',path:str='',
         cif_file:Optional[str]=None,gen:bool=False,dyn:bool=False):
         """ Pets importer
 
@@ -32,9 +32,13 @@ class Pets():
             dyn
                 load dyn_cif into .cif if True
         """
-        self.name = os.path.basename(pts_file).split('.pts')[0] #;print(self.name)
+        if path:
+            # print(glob.glob(os.path.join(path,'*.pts')))
+            pts_file = glob.glob(os.path.join(path,'*.pts'))[0]
+        self.name = os.path.basename(pts_file).split('.pts')[0]
         self.path = os.path.dirname(pts_file)
         self.out  = self.path+'/dat/'
+        # print('path %s,pts_file : %s ' %(self.path,self.name))
 
 
         self.cif_file   = ut.find_cif_file(self.path,cif_file)
@@ -52,6 +56,8 @@ class Pets():
         tiffs = glob.glob(os.path.join(self.path,'tiff','*.tiff'))
         if len(tiffs):
             self.nxy = tifffile.imread(tiffs[0]).shape
+        else:
+            self.nxy = np.round([self.rpl.px.max(),self.rpl.py.max()])
 
     def hkl_to_pixels(self,h,frame):
         hkl = np.array([eval(hkl) for hkl in h])
@@ -86,7 +92,9 @@ class Pets():
         ut.save_pkl(self, os.path.join(self.path,'pets.pkl'))
 
     def _convert_pets(self):
-        cmd = "%s/convert_pets.sh %s %s" %(os.path.dirname(__file__),self.path,self.name)
+        cmd = "%s/convert_pets.sh %s %s" %(os.path.dirname(__file__),
+            self.path,self.name)
+        # print(cmd)
         p = Popen(cmd,shell=True,stdout=PIPE,stderr=PIPE);p.wait();o,e=p.communicate()
         print(o.decode(),e.decode())
 

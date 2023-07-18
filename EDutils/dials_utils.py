@@ -26,8 +26,12 @@ class Dials(ED.Dataset):
         self.rpl[['px','py']] = df[['o_px','o_py']]
         # self.rpl[['qy']]*=-1
         self.rpl['F'] = np.array(np.round(df['o_pz'])+1,dtype=int)
-        self.index = self.rpl.hkl
 
+        #integrated intensities
+        self.hkl = self.rpl[['I','hkl']].groupby('hkl').sum()
+        self.hkl = self.hkl.drop(str((0,0,0)))
+
+        self.rpl.index = self.rpl.hkl
         ######
         self.read_expt_file()
         self.init_geom()

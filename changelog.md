@@ -1,6 +1,9 @@
 # Changelog Summaries
 ##1.2dev
-
+- EDutils :
+  - pets and dials
+- blochwave :
+  - bug fix
 ##1.1.0
 ### EDutils
 - xds importer

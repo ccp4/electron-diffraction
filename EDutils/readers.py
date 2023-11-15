@@ -38,7 +38,8 @@ def smv_reader(file,head=False):
     header = {k: v for k, v in map(lambda s: s.split("="), header[1:-3])}
     if head: print(header)
     h_bytes = int(header['HEADER_BYTES'])
-    assert(header['TYPE']=='unsigned_short')
+    if 'TYPE' in header:
+        assert(header['TYPE']=='unsigned_short')
     nx,ny=int(header['SIZE1']),int(header['SIZE2'])
     img = np.reshape(
         np.frombuffer(buf[h_bytes:], dtype=np.uint16),
@@ -56,7 +57,10 @@ img_readers = {
 }
 fmts = list(img_readers.keys())
 
+
+
 def detect_frame(path):
+    '''returns a structure with frames info'''
     files = glob.glob(os.path.join(path,'*.*'))
     if not len(files):return
     #detect format

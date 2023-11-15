@@ -1,5 +1,20 @@
 # Changelog
 ## 1.2dev
+### Wed 15 Nov 14:32:42 GMT 2023
+- pets :
+  - more stable import pets info
+  - fix hkl S line in
+  - nxy from tiff
+- dials
+  - added import capabilities for multi-panel detectors
+  - import refl.txt from integrated.expt
+  - get image_size
+  - Sw excitation error
+- rotate_exp
+  - change_path fix
+  - frame parameter `sweep_var`
+### Mon 25 Sep 17:05:13 BST 2023
+- fix 'img' reader bug so it does not automatically fails if TYPE not in header
 ### Tue 18 Jul 14:05:19 BST 2023
 - added path option to import pets
 - added manual integration to dials

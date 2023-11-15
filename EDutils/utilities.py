@@ -60,7 +60,7 @@ def sweep_var(Simu:object,
     for i,val in enumerate(vals):
         kwargs.update(dict(zip(params,val)))
         name = '%s_%s%s' %('-'.join(params),tag,str(i).zfill(pad))
-        sim_obj = Simu(path=path,name=name,**kwargs)
+        sim_obj = Simu(path=path,name=name,frame=i,**kwargs)
         df.loc[name,cols] = ''
         # df.loc[name,cols] = list(val)+[sim_obj._get_pkl()]
         df.loc[name,params] = list(val)

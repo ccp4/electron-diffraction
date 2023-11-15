@@ -7,8 +7,9 @@ if [ ! -d $out ];then echo "creating $out"; mkdir $out;fi
 
 echo "...pts..."
 sed -n '/lambda/,/List/p' $pathname.pts \
-| grep "lambda\|omega\|aper" \
-| awk '{print $2;}' > $out/pts.txt
+| grep "lambda\|omega\|aperpixel" > $out/pts.txt #\
+# | awk '{print $2;}'
+
 
 sed -n '/imagelist/,/endimagelist/p' $pathname.pts \
 | sed '1d; $d' |  sed 's/\( *\) /,/g' \
@@ -55,3 +56,7 @@ echo "...orientation matrix..."
 grep _diffrn_orient_matrix_UB $dyn | awk '{print $2}' > $out/UB_dyn.txt
 echo "...lattice_parameters..."
 grep _cell_ $dyn | awk '{print $2}' > $out/cell_dyn.txt
+
+
+echo "...fix hkl S line..."
+sed -i 's/,S//'  $out/hkl.txt

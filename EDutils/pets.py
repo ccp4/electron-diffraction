@@ -1,5 +1,5 @@
 import importlib as imp
-import os,glob, numpy as np, pandas as pd, tifffile,mrcfile,scipy.optimize as opt
+import re,os,glob, numpy as np, pandas as pd, tifffile,mrcfile,scipy.optimize as opt
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from subprocess import Popen,PIPE,check_output
 from crystals import Crystal,Lattice
@@ -13,12 +13,13 @@ from multislice.rotating_crystal import get_crystal_rotation
 from gemmi import cif
 from utils import physicsConstants as cst
 from blochwave import bloch                 #;imp.reload(bloch)
+from . import readers                       #;imp.reload(readers)
 # from . import import_ED as ED               ;imp.reload(ED)
 
 
 class Pets():
     def __init__(self,pts_file:str='',path:str='',
-        cif_file:Optional[str]=None,gen:bool=False,dyn:bool=False):
+        cif_file:Optional[str]=None,gen:bool=False,dyn:bool=False,frame_folder='tiff'):
         """ Pets importer
 
         parameters
@@ -31,6 +32,8 @@ class Pets():
                 force reload if True
             dyn
                 load dyn_cif into .cif if True
+            frame_folder
+                folder name for the frames
         """
         if path:
             # print(glob.glob(os.path.join(path,'*.pts')))
@@ -53,13 +56,16 @@ class Pets():
         self._load_all(dyn)
         self.nFrames = self.uvw.shape[0]
 
-        tiffs = glob.glob(os.path.join(self.path,'tiff','*.tiff'))
-        if len(tiffs):
-            self.nxy = tifffile.imread(tiffs[0]).shape
+        d_frames = readers.detect_frame(os.path.join(self.path,frame_folder))
+        if d_frames:
+            fmt = d_frames['fmt']
+            frames = glob.glob(os.path.join(self.path,frame_folder,'*.%s' %fmt))
+            self.nxy = readers.read(frames[0]).shape
         else:
             self.nxy = np.round([self.rpl.px.max(),self.rpl.py.max()])
 
     def hkl_to_pixels(self,h,frame):
+        '''frame index starts at 1'''
         hkl = np.array([eval(hkl) for hkl in h])
         #spot locations in reciprocal crystal frame (with shape 3 x n_refl)
         rxyz = self.UB.dot(hkl.T).T
@@ -107,10 +113,12 @@ class Pets():
         df[['h','k','l']]     = np.array(np.round(hkl),dtype=int).T
 
     def _load_all(self,dyn=1):
-        lam,omega,aper = np.loadtxt(self.out+'pts.txt')
-        self.omega = omega
-        self.aper  = aper
-        self.lam   = lam
+        with open(self.out+'pts.txt','r') as f:
+            info = list(map(lambda s: re.sub(' +',' ',s.strip()).split(" "), f.readlines()))
+            info={v[0]:float(v[1]) for v in info}
+        self.omega = info['omega']
+        self.aper  = info['aperpixel']
+        self.lam   = info['lambda']
         self.K0    = 1/self.lam
         self.keV = cst.lam2keV(self.lam)
 
@@ -133,6 +141,13 @@ class Pets():
         self.cif = [self.kin,self.dyn][dyn]
         uvw   = self.cif[['u','v','w']].values
 
+        ##################################################################
+        # uvw are indices in the real crystal frame
+        # beams convert uvw to lab frame
+        # lat=[a1,a2,a3]; uvw.T=[u,v,w] so lat.T.dot(uvw.T) a1.u + a2.v +a3.w
+        # since the beam is along -z  uvw0=-beam is the orientation in the cartesian
+        # reciprocal space so that g+K are in defined in the same frame
+        ##################################################################
         beams = self.lat.T.dot(uvw.T).T
 
         self.uvw   = uvw #/np.linalg.norm(uvw,axis=1)[:,None]

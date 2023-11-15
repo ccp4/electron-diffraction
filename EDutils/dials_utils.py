@@ -10,11 +10,16 @@ from gemmi import cif
 from . import import_ED as ED               ;imp.reload(ED)
 
 class Dials(ED.Dataset):
-    def __init__(self,path:str):
+    def __init__(self,path:str,frame_folder:str=''):
         '''Importing dials information
         It expects a .expt file and a reflections.txt file
+        To produce a reflections.txt file :
+    dials.show integrated.refl show_all_reflection_data=True > reflections.txt
+        To obtain the frame_orientations with dials :
+    dials.frame_orientations integrated.expt | grep -E "[0-9]+ \|"  | cut -d "|" -f 4 >> uvw.txt
         '''
         self.path = path
+        self.frame_folder=frame_folder
         refl_file = os.path.join(self.path,'reflections.txt')
         if not os.path.exists(refl_file):
             raise Exception('%s file not found' %refl_file)
@@ -29,18 +34,37 @@ class Dials(ED.Dataset):
 
         #integrated intensities
         self.hkl = self.rpl[['I','hkl']].groupby('hkl').sum()
-        self.hkl = self.hkl.drop(str((0,0,0)))
+        # self.hkl = self.hkl.drop(str((0,0,0)))
 
         self.rpl.index = self.rpl.hkl
         ######
         self.read_expt_file()
         self.init_geom()
         self.get_uvw()
-        self.uvw0*=-1
+        self.get_image_size()
+        #
 
         dyn_cif_file=os.path.join(self.path,'dials_dyn.cif_pets')
         if os.path.exists(dyn_cif_file):
             self.read_dyn_cif(dyn_cif_file)
+
+
+    def get_uvw(self):
+        super().get_uvw()
+        uvw_file=os.path.join(self.path,'uvw.txt')
+        if os.path.exists(uvw_file):
+            print('import uvw.txt')
+            self.uvw=np.loadtxt(uvw_file)
+            # self.uvw0 = self.Alat.dot(self.uvw.T).T
+            # self.uvw0 = self.Alat.dot(self.uvw.T)
+            #### Alat = [a1;a2;a3]
+            # M = np.linalg.inv(self.Arec).dot(self.Alat)
+            M = np.linalg.inv(self.Arec.T).dot(self.Alat.T)
+            self.uvw0 = (M.dot(self.uvw.T)).T
+            # self.uvw0 = (self.uvw0/np.linalg.norm(self.uvw0,axis=0)).T
+            for i,u in enumerate(self.uvw0):
+                self.uvw0[i] = u/np.linalg.norm(u)
+            # # self.uvw0[:,0]*=-1
 
     def xd_to_px(self,xd):
         '''
@@ -66,10 +90,15 @@ class Dials(ED.Dataset):
         # expt = expt
         self.beam = -np.array(expt['beam'][0]['direction'])
         self.lam  = expt['beam'][0]['wavelength']
-        detector  = expt["detector"][0]["panels"][0]
+        detector  = expt["detector"][0]
+        panel=detector["panels"][0]
+        if len(detector['panels'])>1:
+            detector=detector["hierarchy"]
+        else:
+            detector=panel
         self.orgx,self.orgy,self.F  = detector['origin']
-        self.dx,self.dy             = detector['pixel_size']
-        self.nxy                    = detector['image_size']
+        self.dx,self.dy             = panel['pixel_size']
+        self.nxy                    = panel['image_size']
         oscillation = expt['scan'][0]['oscillation']
         self.hm     = expt['crystal'][0]['space_group_hall_symbol']
 
@@ -165,22 +194,38 @@ def load_dials_predict(refl_txt):
 
 def load_dials_reflections(refl_txt):
     print(colors.blue+'reading %s' %refl_txt+colors.black)
+    # skip=39#46
+    skip=47
     tmp = 'tmp.txt'
-    cmd = "tail --lines=+39 %s | "\
+    cmd = "tail --lines=+{skip} {refl} | "\
         "sed -E 's/ +/ /g' | sed -E 's/^ //' | sed 's/,//g' "\
-        "> %s" %(refl_txt, tmp)
+        "> {tmp}" .format(skip=skip,refl=refl_txt,tmp=tmp)
+
+    names = ['h','k','l', 'd','id','imageset_id','panel','flags','background.mean',
+        'background.sum.value','background.sum.variance','intensity.prf.value','intensity.prf.variance',
+        'intensity_sum_value','intensity.sum.variance','lp','num_pixels.background',
+        'num_pixels.background_used','num_pixels.foreground','num_pixels.valid','partial_id',
+        'partiality','profile.correlation',
+        # 'xyzcal.mm','xyzcal.px',
+        'c_qx','c_qy','c_qz','c_px','c_py','c_pz',
+        # 'xyzobs.mm.value','xyzobs.mm.variance',
+        'm_x','m_py','m_pz','v_mx','v_my','v_mz',
+        # 'xyzobs.px.value','xyzobs.px.variance',
+        'o_px','o_py','o_pz','v_px','v_py','v_pz',
+        # 's1',
+        's1x','s1y','s1z',
+        'zeta']
+    # names=[
+    #     'h','k','l','id','i','panel','flag','I','sig',
+    #     'c_qx','c_qy','c_qz','c_px','c_py','c_pz',
+    #     'o_qx','o_qy','o_qz','vqx','vqy','vqz',
+    #     'o_px','o_py','o_pz','vpx','vpy','vpz',
+    #     's1x','s1y','s1z','Npix','rlpx','rlpy','rlpz'],
 
     out = check_output(cmd,shell=True).decode()
     if out:print(out)
-    df = pd.read_csv(tmp,
-        names=[
-            'h','k','l','id','i','panel','flag','I','sig',
-            'c_qx','c_qy','c_qz','c_px','c_py','c_pz',
-            'o_qx','o_qy','o_qz','vqx','vqy','vqz',
-            'o_px','o_py','o_pz','vpx','vpy','vpz',
-            's1x','s1y','s1z','Npix','rlpx','rlpy','rlpz'],
-        engine="python",sep=" ")
-
+    df = pd.read_csv(tmp,names=names,engine="python",sep=" ")
+    df['I']=df.intensity_sum_value
     out=check_output("rm %s" %tmp ,shell=True).decode()
     if out:print(out)
     return df

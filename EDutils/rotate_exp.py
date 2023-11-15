@@ -126,7 +126,7 @@ class Rocking:
         z0 = self.load(0).z.copy()[iZs][-1]
         if not self.load(0).thick==z0:
             print('setting thickness to %dA' %z0)
-            self.do('_set_I',v=0,iZ=iZs[-1])
+            self.do('_set_I',verbose=0,iZ=iZs[-1])
 
         refl,nbs = self.get_beams(cond=cond,refl=refl,opts=opts)  #;print(refl)
         nts = self.ts.size
@@ -186,7 +186,7 @@ class Rocking:
     def Rfactor(self,df_exp):
         refl = self.df_int.loc[self.df_int.index.isin(df_exp.index)].index
         I_exp = df_exp.loc[refl,'I'].values             #;print(I_exp)
-        prescale=I_exp.mean() 
+        prescale=I_exp.mean()
 
         z=self.df_int.columns
         self.R = pd.DataFrame(index=z,columns=['scale','r_value','Rfac'])
@@ -254,13 +254,13 @@ class Rocking:
         cond,refl,iZs,zs,opts
             select beams and thicknesses (see :meth:`~Rocking.get_rocking`)
         x
-            to display on x axis
+            to display on x axis (Frame,Sw,theta)
         kwargs
             args to pass to dsp.stddisp
         """
         z,I = self.get_rocking(cond=cond,refl=refl,opts=opts,zs=zs,iZs=iZs,n=n)
         refl,plts = list(I.keys()),[]           #;print(refl)
-        xlab = {'frame':'frame','Sw':r'$S_w(\AA^{-1})$','theta':r'$\theta(deg)$'}[x]
+        xlab = {'Frame':'frame','Sw':r'$S_w(\AA^{-1})$','theta':r'$\theta(deg)$'}[x]
 
         print('gathering plots')
         nbs,nzs = len(refl),z.size
@@ -271,7 +271,7 @@ class Rocking:
                 legElt.update({'$z=%d A$' %(zi):['k',ms[iz]+'-']})
                 for i,refl0 in enumerate(refl):
                     df_b=self.beams.loc[refl0]
-                    plts += [[df_b.Sw,I[refl0][df_b.Frame,iz],[cs[i],ms[iz]+'-'],'']]
+                    plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[i],ms[iz]+'-'],'']]
         else:
             # rocking for different thicknesses
             cs,ms = dsp.getCs(cmap,nzs),  dsp.markers
@@ -280,7 +280,7 @@ class Rocking:
             for i,refl0 in enumerate(refl):
                 for iz,zi in enumerate(z):
                     df_b=self.beams.loc[refl0]
-                    plts += [[df_b.Sw,I[refl0][df_b.Frame,iz],[cs[iz],ms[i]+'-'],'']]
+                    plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[iz],ms[i]+'-'],'']]
             legElt.update({'$z=%d A$' %(zi):[cs[iz],'-'] for iz,zi in enumerate(z) })
 
         # print('displaying')
@@ -484,13 +484,15 @@ class Rocking:
         return sim_obj
 
     def change_path(self,path):
-        self.path=path
-        self.df.pkl=[s.replace(os.path.dirname(s),self.path) for s in self.df.pkl]
-        self.save()
-        for i in range(self.df.shape[0]):
-            obj = self.load(i)
-            obj.path=path
-            obj.save()
+        if not self.path==path:
+            self.path=path
+            self.df.pkl=[s.replace(os.path.dirname(s),self.path) for s in self.df.pkl]
+            self.save()
+            print(self.df.pkl)
+            for i in range(self.df.shape[0]):
+                obj = self.load(i)
+                obj.path=path
+                obj.save(v=0)
 
     def do(self,f,verbose=True,**args):
         """ apply function to all simus

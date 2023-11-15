@@ -1,8 +1,9 @@
 # import importlib as imp
-import os,glob,json,numpy as np, pandas as pd, tifffile,mrcfile,scipy.optimize as opt
+import re,os,glob,json,numpy as np, pandas as pd, tifffile,mrcfile,scipy.optimize as opt
 from crystals import Crystal,Lattice
 from utils import physicsConstants as cst
 from . import utilities as ut               #;imp.reload(ut)
+from . import readers                       #;imp.reload(readers)
 
 
 class Dataset:
@@ -21,8 +22,16 @@ class Dataset:
             deg=True)
         return R
 
-    def init_geom(self):
+    def get_image_size(self):
+        if self.frame_folder:
+            frame_folder=self.frame_folder
+            d_frames = readers.detect_frame(os.path.join(self.path,frame_folder))
+            if d_frames:
+                fmt = d_frames['fmt']
+                frames = glob.glob(os.path.join(self.path,frame_folder,'*.%s' %fmt))
+                self.nxy = readers.read(frames[0]).shape
 
+    def init_geom(self):
         self.aper = 1/abs(self.lam*self.F/self.dx) #;print('aper : %.4f recAngstrom' %self.aper)
         self.keV = cst.lam2keV(self.lam)
 
@@ -40,9 +49,10 @@ class Dataset:
         It is such that K-g as it appears in the blochwave excitation error
         can be computed where the components of the beam g are simply calculated
         from the crystal reciprocal lattice vectors and the beam miller indices (h,k,l)
+        g = lat_rec.dot(hkl)
+        The beam is given is real space lab frame
         '''
         self.frames=np.arange(self.info['DATA_RANGE'][0],self.info['DATA_RANGE'][1])
-        # mat=self.UB2
         beam = self.info['INCIDENT_BEAM_DIRECTION']
         self.uvw0 = np.array([
             self.Arec.dot(np.linalg.inv(self.R(f).dot(self.UB))).dot(beam)
@@ -50,6 +60,16 @@ class Dataset:
         self.n_frames = self.uvw0.shape[0]
         self.cen = pd.DataFrame([[self.orgx,self.orgy]]*self.n_frames,
             columns=['px','py'])
+
+    def sw(self,hkl,frame):
+        g_lab = self.R(frame).dot(self.UB).dot(hkl.T)
+        s0 = self.info['INCIDENT_BEAM_DIRECTION']/self.lam
+
+        K0 = 1/self.lam
+        qx,qy,qz = g_lab
+        Kx,Ky,Kz = s0
+        Sw = (K0**2-((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2))/(2*K0)
+        return Sw
 
     def hkl_to_pixels(self,h,frame):
         ''' convert miller indices to pixel locations

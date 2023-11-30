@@ -31,7 +31,7 @@ class Rocking:
         self.uvw  = uvw
         self.Sargs = Sargs
         self.df = ut.sweep_var(Simu,params='u',vals=uvw,tag=tag,path=path,**Sargs)
-        self.n_simus=uvw.shape[0]
+        self.n_simus  = uvw.shape[0]
         ts            = np.arange(self.n_simus)
         self.ts       = ts
         self.df['ts'] = ts

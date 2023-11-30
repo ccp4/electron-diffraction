@@ -1,5 +1,8 @@
 # Changelog
 ## 1.2dev
+### Thu 30 Nov 15:21:35 GMT 2023
+- removed minor changes in rotate_exp
+
 ### Wed 15 Nov 14:32:42 GMT 2023
 - pets :
   - more stable import pets info

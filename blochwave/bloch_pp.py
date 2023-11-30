@@ -1,6 +1,6 @@
 """Bloch contiuous rotation experiment"""
 import importlib as imp
-import os,glob,numpy as np
+import os,glob,tifffile,numpy as np,pandas as pd
 from subprocess import Popen,check_output
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from utils import displayStandards as dsp#;imp.reload(dsp)
@@ -24,15 +24,57 @@ class Bloch_cont(rotate_exp.Rocking):
             to pass to :class:~EDutils.rotate_exp.Rocking
         """
         super().__init__(bloch.Bloch,**kwargs)
-        self.figpath = os.path.join(self.path,'tiff')
-        # self.thick=
-        if not os.path.exists(self.figpath):
-            Popen('mkdir %s' %self.figpath,shell=True)
+        # self.figpath = os.path.join(self.path,'tiffs')
+        # # self.thick=
+        # if not os.path.exists(self.figpath):
+        #     Popen('mkdir %s' %self.figpath,shell=True)
         self.save()
 
     def set_beams_vs_thickness(self,thicks,v=1):
-        self.do('_set_beams_vs_thickness',thicks=thicks,v=v)
+        self.do('_set_beams_vs_thickness',thicks=thicks,verbose=v)
         self.z = self.load(0).z
+
+    def set_thickness(self,verbose=True,**kwargs):
+        self.do('set_thickness',verbose,**kwargs)
+
+
+    #### Frames production related
+    def make_frames(self,exp,
+        path='',
+        im_args=dict(gs3=0.1),
+        tiff_writer_args={},
+        png=False,
+        ):
+        '''
+        Parameters
+        ----------
+        exp : Experiment object
+        '''
+        i=0
+        sub_frames=self.sub_frames
+        rock_frames=self.rock_frames
+        pad=int(np.ceil(np.log10(self.n_simus/sub_frames)))+1
+        while i<self.n_simus:
+            exp_frame = rock_frames[0] + i//sub_frames
+            print('exp frame %d' %exp_frame)
+            simus = i+np.arange(sub_frames)
+            beams = np.unique(np.hstack([self.load(j).df_G.index for j in simus]))
+            df = pd.DataFrame(0,index=beams,
+                columns=['px','py','I'])
+            df.loc[beams,['px','py']] = exp.hkl_to_pixels(beams,exp_frame+1)
+            for j in simus:
+                b0=self.load(j)
+                df.loc[b0.df_G.index,'I'] += b0.df_G.I
+            # print(df.I*1000)
+            im = _make_img(df,**im_args)
+            # print(im.max(),im.mean())
+            #save
+            tiff_file=os.path.join(path,'%s.tiff' %str(exp_frame).zfill(pad))
+            tifffile.imwrite(tiff_file,im.T,**tiff_writer_args)
+            print(colors.yellow+tiff_file+colors.green+' saved'+colors.black)
+
+            i+=sub_frames
+
 
     def sum_images(self,n,fmt='',figpath=None,frames=()):
         ''' Sums images found in figpath by chuncks of n images
@@ -146,16 +188,23 @@ class Bloch_cont(rotate_exp.Rocking):
                 b.convert2tiff(tiff_file=figpath+'/%s.tiff' %b.name,**kwargs)
                 b.save()
 
-    def convert2png(self,cutoff=20,n=None,**kwargs):
+    def convert2png(self,path,cutoff=20,n=None,**kwargs):
         import tifffile
-        for i in range(self.df[:n].shape[0]):
-            b = self.load(i)
-            tiff_file=self.figpath+'/%s.tiff' %b.name
+        tiff_files=glob.glob(path+'/*.tiff')
+        png_path=os.path.join(path,'png')
+        if not os.path.exists(png_path):
+            cmd="if [ -d {path} ];then rm -rf {path};fi;mkdir -p {path}".format(
+                path=png_path)
+            check_output(cmd,shell=True).decode()
+        for tiff_file in tiff_files:
+            png_file=os.path.join(png_path,
+                os.path.basename(tiff_file).replace('.tiff','.png'))
             im=tifffile.imread(tiff_file)
             dsp.stddisp(im=[im],
                 cmap='gray',caxis=[0,cutoff],axPos='F',pOpt='p',
-                opt='sc',name=tiff_file.replace('.tiff','.png'),figsize='im',**kwargs)
+                opt='sc',name=png_file,figsize='im',**kwargs)
 
+    ##### visualization
     def show_tiff(self,sum_opt=False,**kwargs):
         # figpath=self.figpath
         sum_path=os.path.join(self.figpath,'sum')
@@ -200,99 +249,61 @@ def strong_beams(dfG,
     return list(df.index.values)
 
 
+def _make_img(df=None,
+        Nmax:int=512,
+        Imax=1000,
+        gs3=0.1,nX=1,fbroad=None,
+        show_kernel=False,
+    ):
+    '''Make image
+
+    Parameters
+    -----------
+    df
+        intensities dataframe ['px','py','I']
+    Imax
+        max value for the intensities
+    Nmax
+        image resolution in pixel
+    kernel
+        fbroad
+            broadening function f(r2) (default np.exp(-r2/(gs3/3)**2))
+        gs3
+            Gaussian broadening factor for each reflections
+        nX
+            width factor of the Gaussian window (in pixels)
+    '''
+    #### kernel (converted to pixel locations)
+    # fbroad,gs3,nX = [kernel[k] for k in ['fbroad','gs3','nX']]
+    if not fbroad:
+        # fbroad=lambda r2:np.exp(-r2/(gs3/3)**2)
+        fbroad=lambda r2:np.exp(-r2/gs3)
+        # nx,ny = np.array(np.floor(gs3/np.array([dqx,dqy])),dtype=int)
+    # else:
+    nx,ny=nX,nX
+    ix,iy = np.meshgrid(range(-nx,nx+1),range(-ny,ny+1))
+    # x,y = ix*dqx,iy*dqy
+    r2 = (ix**2+iy**2)
+    Pb = fbroad(r2)
+    if show_kernel:
+        dsp.stddisp(im=[ix,iy,Pb],pOpt='im');dsp.plt.show()
+        return
+
+    # get intensity
+    hkl=df.index
+    px,py,I = df.loc[hkl,['px','py','I']].values.T
+    Nmax=Nmax//2
+
+    # pixel locations
+    i,j = np.array(df[['px','py']].values,dtype=int).T
 
 
-# def bloch_rock(tag,path='',opts='',
-#     uvw=None,u=None,u1=None,omega=np.linspace(-1,1,3),
-#     thicks=(0,1000,1000),bloch_args={},hkls=None,
-#     S_args={},W_args={},R_args={},Q_args={},I_args={},Z_args={},
-#     refl=[],cond='',ts0=None,i=0,iZs=None,zs=[],cm='hsv',
-#     opt='p'):
-#     ''' complete a rocking curve simulation sweep with Blochwave approach
-#     - tag : Sweep tag
-#     - uvw,u,u1,omega : beam orientation vectors : see ut.get_uvw_rock
-#     - bloch_args : thicknesses
-#     - opts : options to perform
-#         - generic : s(solve all), t(set_thickness),
-#         - ts0 dependent       : S(setup), I(Iz)
-#         - zs dependent        : R(rocking curve),Q(Idyn-Ikin plot)
-#         - refl dependent only : W(Excitation error),Z(integrated)
-#     - refl,cond : selected beams
-#     - iZs,zs : thicknesses to select (RQ)
-#     - i,ts0  : single simulation to select for opts(SWI)
-#     '''
-#     b_args = {}#'keV':200,'solve':1,'opts':'s','thick':thicks[1]}
-#     b_args.update(bloch_args)
-#
-#     pkl = os.path.join(path,'rock_%s.pkl' %tag)
-#     figpath = os.path.join(path,'figures')
-#     if 's' in opts:
-#         if not isinstance(uvw,np.ndarray):
-#             uvw  = ut.get_uvw_rock(u0=u,u1=u1,omega=omega)
-#         rock = exp.Rocking(Simu=bloch.Bloch,param='u',vals=uvw,ts=omega,
-#             tag=tag,path=path,thicks=thicks,**b_args)
-#     else:
-#         rock = ut.load_pkl(pkl)
-#
-#     if 't' in opts:
-#         rock.do('set_beams_vs_thickness',thicks=thicks)
-#
-#     if any([c in opts for c in 'XSI']):
-#         i,ts0 = rock._get_ts(i,ts0)
-#         b = rock.load(i=i)#;print(b.u)
-#
-#     for ch in opts:
-#         if   ch=='X' :print(b.get_Xig())
-#         elif ch=='S' :
-#             figname = '%s_Sw.svg' %tag
-#             idx = b.get_beam(cond=cond,refl=refl)#;print(idx)
-#             frame_args = {'opts':'SVkr','mag':500,'xylims':1.5,'rot':0}
-#             frame_args.update(S_args)
-#             EDdisp.show_frame(df_bloch=b.df_G,single_mode=False,
-#                 hkl_idx=idx,name=os.path.join(figpath,figname),opt=opt,
-#                 **frame_args)
-#         elif ch=='I':
-#             figname = '%s_Iz.svg' %tag
-#             refl += [[0,0,0]]
-#             b.show_beams_vs_thickness(thicks=thicks,refl=refl,cond=cond,
-#                 title=r'$\theta=%.2f$' %ts0,cm='Spectral',
-#                 name=os.path.join(figpath,figname),opt=opt,
-#                 **I_args)
-#         elif ch=='W':
-#             figname = '%s_theta' %tag
-#             fz = lambda x:-np.log10(np.maximum(x,1e-10))
-#             sw_args = {'cm':cm,'fz':fz,'opts':'t'}#,'thick':thick}
-#             sw_args.update(W_args)
-#             rock.Sw_vs_theta(refl=refl,cond=cond,
-#                 figname=os.path.join(figpath,figname),opt=opt,lw=2,
-#                 **sw_args)
-#         elif ch=='R':
-#             rocking_args={'cmap':'Spectral'}
-#             if not isinstance(hkls,list):hkls = [refl]
-#             for iB,hkl in enumerate(hkls):
-#                 figname = '%s_beams%d.svg' %(tag,iB)
-#                 rocking_args.update(R_args)
-#                 rock.plot_rocking(zs=zs,cond='',refl=hkl,
-#                     lw=2,opt=opt,name=os.path.join(figpath,figname),
-#                     **rocking_args)
-#         elif ch=='Q':
-#             figname = '%s_QQ.svg' %tag
-#             rock.QQplot(zs=zs,iZs=iZs,refl=refl,cond=cond,
-#                 lw=2,opt=opt,name=os.path.join(figpath,figname),
-#                 **Q_args)
-#         elif ch=='Z':
-#             figname = '%s_Iint.svg' %tag
-#             int_args = {'cm':cm}
-#             int_args.update(Z_args)
-#             rock.plot_integrated(cond=cond,refl=refl,
-#                 lw=2,opt=opt,name=os.path.join(figpath,figname),
-#                 **int_args)
-#
-#     return rock
-#
-#
-#
-#
-# def load_pkl(file):
-#     with open(file,'rb') as f : obj = pickle5.load(f)
-#     return obj
+    ## Apply Gaussian broadening
+    im0 = np.zeros((2*Nmax,)*2)
+    for i0,j0,I0 in zip(i,j,I):
+        i0x,j0y = i0+ix,j0+iy
+        idx     = (i0x>=0) & (j0y>=0)  & (i0x<2*Nmax) & (j0y<2*Nmax)
+        i0x,j0y = i0+ix[idx],j0+iy[idx]
+        im0[i0x,j0y] += Pb[idx]/Pb[idx].sum()*I0
+
+    return np.array(im0/im0.max()*Imax,dtype=int)

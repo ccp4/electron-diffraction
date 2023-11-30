@@ -55,11 +55,12 @@ class Bloch:
         Smax:float=0.2,
         solve:bool=True,init=True,
         felix:bool=False,nbeams:int=200,
-        eps:float=1,
+        eps:float=1,f_sw=None,
         **kwargs,
     ):
         self.solved = False
         self.Nmax   = 0
+        self.dmin   = None
         self.thick  = 100
         self.thicks = self._set_thicks((0,1000,1000))
         self.eps=eps
@@ -72,13 +73,13 @@ class Bloch:
         self.nbeams=nbeams
 
         if solve :
-            self.solve(Smax=Smax,Nmax=Nmax,dmin=dmin,**kwargs)
+            self.solve(Smax=Smax,Nmax=Nmax,dmin=dmin,f_sw=f_sw,**kwargs)
         else:
             if not felix and init:
                 print(colors.blue+'...Nmax... '+colors.black)
                 self.update_Nmax(Nmax,dmin)
                 print(colors.blue+'...Excitation errors... '+colors.black)
-                self._set_excitation_errors(Smax)
+                self._set_excitation_errors(Smax,f_sw=f_sw)
                 print(colors.blue+'...Vg... '+colors.black)
                 self._set_Vg()
         self.save()
@@ -125,34 +126,53 @@ class Bloch:
         dmin
             minimum resolution
         """
+        gemmi=not isinstance(dmin,type(None)) and self.pdb_file
+        if Nmax:
+            b1,b2,b3  = self.lat_vec
+            gmax = Nmax*np.linalg.norm(b1+b2+b3) #A^-1
+            dmin = max(0.1,min(3,gmax))
+        self.dmin=dmin
+        self.Nmax=Nmax
 
-        if dmin and self.pdb_file:
-            self.hklF,self.Fhkl = ut.gemmi_sf(self.pdb_file,dmin)
-            self.Nmax=np.array(self.Fhkl.shape[0])//4#.min()
-            print('Nmax:',self.Nmax)
-            # gemmi='/home/tarik/Documents/git/github/gemmi/gemmi'
-            # gemmi_cmd="%s sfcalc -v --dmin=%.3f --wavelength=%3.f --for=mott-bethe %s | " %(gemmi,dmin,self.lam,crys)
-            # print(gemmi_cmd)
-            # sed_cmd = r"sed 's/^ //' | sed 's/ /,/g' >>sf.txt"
-            # sf = check_output("%s | %s " %(gemmi_cmd,sed_cmd) ,shell=True).decode()
-            # df = pd.DataFrame('sf.txt',delimiter='\t',index_col=0,names=['index','A','phi'])
-            # sf = check_output("rm sf.txt",shell=True).decode()
-            # df['F'] = df.A*np.exp(1J*np.deg2rad(df.phi))
-            # df[['h','k','l']]=list(map(lambda s:list(eval(s)),df.index))
-            # df[['qx','qy','qz']] = df[['h','k','l']].values.dot(self.lat_vec0)
-            # df['q'] = np.linalg.norm(df[['qx','qy','qz']],axis=1)
-            # df['res']=1/df.q
+        if not os.path.exists(self.Fhkl_file()):
+            if gemmi:
+                print(colors.blue+'...gemmi structure factors...'+colors.black)
+                hklF,Fhkl = ut.gemmi_sf(self.pdb_file,dmin)
 
-        else:
-            if type(Nmax) in [int,np.int64] :
-                if not Nmax==self.Nmax:
-                    self.Nmax=Nmax
-                    idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
-                    self.pattern=self.pattern[idx,:]
-                    self.hklF,self.Fhkl = sf.structure_factor3D(self.pattern,
-                        2*np.pi*self.lat_vec,hklMax=2*self.Nmax)
-        (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
-        self.lattice = [(h,k,l),(qx,qy,qz)]
+                Nmax=np.array(Fhkl.shape[0])//4#.min()
+                self.Nmax=Nmax
+                print('Nmax gemmi:',Nmax)
+                # gemmi='/home/tarik/Documents/git/github/gemmi/gemmi'
+                # gemmi_cmd="%s sfcalc -v --dmin=%.3f --wavelength=%3.f --for=mott-bethe %s | " %(gemmi,dmin,self.lam,crys)
+                # print(gemmi_cmd)
+                # sed_cmd = r"sed 's/^ //' | sed 's/ /,/g' >>sf.txt"
+                # sf = check_output("%s | %s " %(gemmi_cmd,sed_cmd) ,shell=True).decode()
+                # df = pd.DataFrame('sf.txt',delimiter='\t',index_col=0,names=['index','A','phi'])
+                # sf = check_output("rm sf.txt",shell=True).decode()
+                # df['F'] = df.A*np.exp(1J*np.deg2rad(df.phi))
+                # df[['h','k','l']]=list(map(lambda s:list(eval(s)),df.index))
+                # df[['qx','qy','qz']] = df[['h','k','l']].values.dot(self.lat_vec0)
+                # df['q'] = np.linalg.norm(df[['qx','qy','qz']],axis=1)
+                # df['res']=1/df.q
+
+            else:
+                print(colors.blue+'...Structure factors...'+colors.black)
+                idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
+                self.pattern=self.pattern[idx,:]
+                hklF,Fhkl = sf.structure_factor3D(self.pattern,
+                    2*np.pi*self.lat_vec,hklMax=2*Nmax)
+
+            #save
+
+            (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
+            lattice = [(h,k,l),(qx,qy,qz)]
+            # self.lattice=lattice
+            # self.Fhkl=Fhkl
+            np.save(self.Fhkl_file(),Fhkl)
+            np.save(os.path.join(self.path,'hklF.npy'),hklF)
+            np.save(os.path.join(self.path,'lattice.npy'),lattice)
+            print(colors.green+'structure factors updated.'+colors.black)
+
 
     def set_beam(self,
         keV:float=200,
@@ -220,7 +240,7 @@ class Bloch:
         thick:float=None,thicks:Sequence[float]=None,
         opts:str='sv0',
         felix:bool=False,
-        nbeams:int=None,
+        nbeams:int=None,f_sw=None,
     ):
         """ Diagonalize the Blochwave matrix
 
@@ -258,10 +278,10 @@ class Bloch:
             self._set_excitation_errors(hkl=self.df_G[['h','k','l']].values,felix=True)
             self._set_Vg(felix=True)
         else:
-            if Nmax or dmin :self.update_Nmax(Nmax,dmin)
+            if Nmax or dmin:self.update_Nmax(Nmax,dmin)
             if beam : self.set_beam(**beam)
             if Smax or isinstance(hkl,np.ndarray):
-                self._set_excitation_errors(Smax,hkl)
+                self._set_excitation_errors(Smax=Smax,hkl=hkl,f_sw=f_sw)
                 self._set_Vg()
             self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts,
                 dyngo_args=dyngo_args)
@@ -274,12 +294,14 @@ class Bloch:
             self.save()
 
     def update(self,keV=None,u=None,Smax=None,Nmax=None,dmin=None,
-            gemmi=False,hkl=None,**kwargs):
+            gemmi=False,hkl=None,
+            f_sw=None,
+            **kwargs):
         if not gemmi:dmin=None
         self.set_beam(keV=keV,u=u)
         if Nmax or dmin :self.update_Nmax(Nmax,dmin)
         if Smax or isinstance(hkl,np.ndarray):
-            self._set_excitation_errors(Smax,hkl)
+            self._set_excitation_errors(Smax,hkl,f_sw=f_sw)
             self._set_Vg()
         self.save()
 
@@ -358,8 +380,7 @@ class Bloch:
             Sg*=2*self.k0/sqrtkg
 
         pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
-        Ug = pre*self.Fhkl/(self.crys.volume*np.pi)*self.eps #/3
-
+        Ug = pre*self.get_Fhkl()/(self.crys.volume*np.pi)*self.eps #/3
         #####################
         # setting average potential to 0
         # Ug[U0_idx] = U0
@@ -368,9 +389,10 @@ class Bloch:
         U0_idx = [2*self.Nmax]*3
         Ug[tuple(U0_idx)] = 0
         # if Vopt0 :Ug[tuple(U0_idx)] = 0   #setting average potential to 0
-
-        print(Ug.shape)
-        if v:print(colors.blue+'...assembling %dx%d matrix...' %((Sg.shape[0],)*2)+colors.black)
+        if v:
+            msg = '...assembling {N}x{N} matrix (structure factor shape : {Ug}) ...\
+            '.format(N=Sg.shape[0],Ug=Ug.shape)
+            print(colors.blue,msg,colors.black)
         H = np.diag(Sg+0J)
         for iG,hkl_G in enumerate(hkl) :
             U_iG = np.array([Ug[tuple(hkl_J+U0_idx)] for hkl_J in hkl_G-hkl]) #;print(V_iG.shape)
@@ -394,7 +416,8 @@ class Bloch:
         if show_H:self.show_H()
 
         if v:print(colors.blue+'...diagonalization...'+colors.black)
-        self.gammaj,self.CjG = np.linalg.eigh(self.H) #;print(red+'Ek',lk,black);print(wk)
+        self.gammaj,self.CjG = np.linalg.eigh(self.H)
+        # print(self.gammaj)
         self.invCjG = np.linalg.inv(self.CjG)
         self.solved = True
 
@@ -411,10 +434,12 @@ class Bloch:
         self.lat_vec  = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
         self.pattern  = np.array([np.hstack([a.coords_fractional,a.atomic_number]) for a in self.crys.atoms] )
 
-    def _set_excitation_errors(self,Smax=0.02,hkl=None,felix=False):
+    def _set_excitation_errors(self,Smax=0.02,hkl=None,felix=False,f_sw=None):
         """ get excitation errors for Sg<Smax
         - Smax : maximum excitation error to be included
         - hkl : list of tuple or nbeams x 3 ndarray - beams to be included (for comparison with other programs)
+        - felix : to compare with felix
+        - f_sw : optional function to compute Sw f(hkl,frame) for
         """
         # print(colors.blue+'... setting excitation error ... '+colors.black)
         K,K0 = self.K,self.k0
@@ -423,15 +448,17 @@ class Bloch:
             h,k,l = hkl.T
             qx,qy,qz = hkl.dot(self.lat_vec).T
         else:
-            (h,k,l),(qx,qy,qz) = self.lattice
-
-        Kx,Ky,Kz = K
-        # Sw = K0-np.sqrt((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2)
-        Sw_full = (K0**2-((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2))/(2*K0)
-        Sw = Sw_full #;print(Sw)
-        # Gz  = -( qx*Kx+qy*Ky+qz*Kz)/K0
-        # GzG = Gz -(qx**2+qy**2+qz**2)/(2*K0)
-        # print(Sw.shape,Gz.shape,GzG.shape)
+            hkl,(qx,qy,qz) = self.get_lattice()
+            h,k,l = hkl
+        if f_sw:
+            args  = {'hkl':hkl.T}
+            frame = self.name.split('_')[-1]
+            if frame.isdigit():
+                args['frame'] = int(frame)#+1
+            Sw = f_sw(**args)
+        else:
+            Kx,Ky,Kz = K
+            Sw = (K0**2-((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2))/(2*K0)
         q = np.linalg.norm(np.array([qx,qy,qz]).T,axis=1)
         if felix:
             self.df_G[['qx','qy','qz','q','Sw','Swa']] = np.array([qx,qy,qz,q,Sw,abs(Sw)]).T
@@ -447,6 +474,7 @@ class Bloch:
             # Gz,GzG = Gz[idx],GzG[idx]
         d = dict(zip(['h','k','l','qx','qy','qz','q','Sw','Swa'],[h,k,l,qx,qy,qz,q,Sw,abs(Sw)]))
 
+
         self.Smax = Smax
         self.nbeams = Sw.size
         self.df_G = pd.DataFrame.from_dict(d)
@@ -454,7 +482,7 @@ class Bloch:
         self.solved = False
         self.df_G['I'] = 0
         self.df_G.loc[str((0,0,0)),'I'] = 1
-        # print(self.df_G['I'].shape)
+        # print(self.df_G.iloc[60])
 
 
     def _set_Vg(self,felix=0):
@@ -472,13 +500,13 @@ class Bloch:
             # print(self.crys,xi)
         else:
             hkl  = self.df_G[['h','k','l']].values
-            Fhkl = self.Fhkl.copy()
+            Fhkl = self.get_Fhkl()
             V0_idx = np.array([2*self.Nmax]*3)
             Fhkl[tuple(V0_idx)] = 0
             Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
 
         self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
-        Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
+        # Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
         Vg_G = Fhkl
         px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
         self.e0x = e0x
@@ -490,6 +518,7 @@ class Bloch:
         self.df_G['L']  = np.ones(Vg_G.shape)
         self._set_zones()
         self.df_G.loc[str((0,0,0)),'Vg'] = 0
+        # print('set_Vg : Vg=',self.df_G['Vg'][80])
 
     def _set_zones(self):
         hkl     = self.df_G[['h','k','l']].values
@@ -514,8 +543,10 @@ class Bloch:
         S = S[id0,:]
         self.df_G['S'] = S
         self.df_G['I'] = np.abs(S)**2
+        # print(CjG[0]);print(self.df_G.sort_values('I')[['Sw','Ig','I']])
         if self.dyngo:
             self.df_G['I']*=self.scale**2
+        # print(self.df_G['I'])
 
     def _set_I(self,iZ=-1):
         idx=self.get_beam(refl=self.df_G.index)
@@ -527,6 +558,7 @@ class Bloch:
         t,sig = self.thick, self.sig
 
         #[Ug]=[A-2], [k0]=[A^-1], [t]=[A], [Fhkl]=3[fe]=[A]
+        # print(Ug[0],t,Sw[0])
         Sg = np.pi/self.k0*Ug*t*np.sinc(Sw*t)
         self.df_G['Sg'] = Sg
         self.df_G['Ig'] = np.abs(Sg)**2
@@ -678,6 +710,14 @@ class Bloch:
             return Iz
 
 
+    def get_lattice(self):
+        return np.load(os.path.join(self.path,'lattice.npy'))
+    def get_Fhkl(self):
+        return np.load(self.Fhkl_file())
+    def Fhkl_file(self):
+        return os.path.join(self.path,'Fhkl_%d.npy' %self.Nmax)
+        # return os.path.join(self.path,'Fhkl_%.2f.npy' %self.dmin)
+
     def get_intensities(self):return self.df_G.I
     def get_hkl(self):return self.df_G[['h','k','l']].values
     def get_kin(self):return self.df_G[['h','k','l','Sw','Vg','Sg','Ig']]
@@ -804,15 +844,15 @@ class Bloch:
         fz,fz_str = bloch_util.get_fz(opts)
         s,s_str = self._get_slice(s)
         tle = 'Structure factor($\AA$), showing %s in %s'  %(fz_str,s_str)
-        Fhkl  = self.Fhkl #.copy()
+        Fhkl  = self.get_Fhkl() #.copy()
         if isinstance(s,tuple):
             Fhkl   = Fhkl[s]
             nx,ny  = np.array((np.array(Fhkl.shape)-1)/2,dtype=int)
             i,j    = np.meshgrid(np.arange(-nx,nx+1),np.arange(-ny,ny+1))
             fig,ax = dsp.stddisp(scat=[i,j,fz(Fhkl)],title=tle,**kwargs)
         else:
-            h,k,l = self.hklF
-            fig,ax = dsp.stddisp(scat=[h,k,l,fz(self.Fhkl)],title=tle,rc='3d',**kwargs)
+            h,k,l = self.get_hklF()
+            fig,ax = dsp.stddisp(scat=[h,k,l,fz(self.get_Fhkl())],title=tle,rc='3d',**kwargs)
             if h3D:h3d.handler_3d(fig,persp=False)
 
     def show_H(self,**kwargs):
@@ -1099,100 +1139,3 @@ class Bloch:
         # legElt.update({'$%s$' %l:[c,'-'] for c,l in zip(cs,self.df.index)})
         # return dsp.stddisp(plts,labs=['$z$','$I$'],legElt=legElt,lw=2)
         return dsp.stddisp(plts,labs=['$%s$' %xlab,'$I$'],lw=2,**kwargs)
-
-
-# from wallpp import wallpaper as wallpp  ;imp.reload(wallpp)
-# from multislice import mupy_utils as mut;imp.reload(mut)
-# class Bloch2D(Bloch):
-#     def _set_structure(self,file):
-#         '''wallpaper file (see import_wallpp)'''
-#         self.file = file
-#         if not crys:crys=file
-#         self.crys = mut.import_wallpp(crys)
-#         # self.crys = wallpp.Wallpaper(**crys)
-#         self.lat_vec0 = self.crys.lattice_vectors
-#         self.lat_vec  = self.crys.reciprocal_vectors#/(2*np.pi)
-#         self.pattern  = self.crys.pattern_fract
-#
-#     def convert2tiff(self):
-#         printf('not relevant in 2D')
-#     def show_Fhk(self,opts='m',**kwargs):
-#         """Displays structure factor over grid
-#
-#         Parameters
-#         -----------
-#         opts
-#             see bloch_util:get_fz
-#         """
-#         fz,fz_str = bloch_util.get_fz(opts)
-#         Fhk   = self.Fhk
-#         nx,ny  = np.array((np.array(Fhk.shape)-1)/2,dtype=int)
-#         i,j    = np.meshgrid(np.arange(-nx,nx+1),np.arange(-ny,ny+1))
-#         return dsp.stddisp(scat=[i,j,fz(Fhk)],title=tle,**kwargs)
-#
-#     def update_Nmax(self,Nmax:int):
-#         """
-#         Update resolution/max order
-#
-#         Parameters
-#         ----------
-#         Nmax
-#             maximum h,k order
-#         """
-#         if type(Nmax) in [int,np.int64] :
-#             if not Nmax==self.Nmax:
-#                 self.Nmax=Nmax
-#                 (h,k),(qx,qz) = mut.get_lattice2D(self.lat_vec,self.Nmax)
-#                 self.lattice = [(h,k),(qx,qz)]
-#                 self.hkF,self.Fhk = sf.structure_factor2D(self.pattern, 2*np.pi*self.lat_vec,hkMax=2*self.Nmax,eps=self.eps)
-#
-#
-#     def _get_central_beam():
-#         return self.get_beam(refl=[str(0,0)],index=True)[0]
-#     def _set_zones(self):return
-#
-#     def _set_excitation_errors(self,Smax=0.02):
-#         ''' get excitation errors for Sg<Smax
-#         - Smax : maximum excitation error to be included
-#         '''
-#         K,K0 = self.K,self.k0
-#         (h,k),(qx,qy) = self.lattice
-#
-#         Kx,Ky = K
-#         Sw = np.abs(np.sqrt((Kx-qx)**2+(Ky-qy)**2) - K0)
-#         if Smax:
-#             idx = Sw<Smax
-#             h,k = np.array([h[idx],k[idx]],dtype=int)
-#             qx,qy,Sw = qx[idx],qy[idx],Sw[idx]
-#         d = dict(zip(['h','k','qx','qy','Sw'],[h,k,qx,qy,Sw]))
-#
-#         self.Smax   = Smax
-#         self.nbeams = Sw.size
-#         self.df_G   = pd.DataFrame.from_dict(d)
-#         self.solved = False
-#
-#     def _set_Vg(self):
-#         #in 2D Fhk is just the Fourier transform of fv
-#         vg = self.Fhk.copy()
-#         #It needs to be converted into a scattering amplitude [A]
-#         #Fg[no dim] = vg[kVA^2], sig=[1/kVA], k0[A-1]
-#         Fg = vg*self.sig*self.k0/np.pi
-#         # Vg[A^-2]
-#         Vg_G =  Fg/self.crys.area
-#
-#         #self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
-#         # Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
-#         # px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
-#         # self.e0x = e0x
-#         # self.df_G['px'] = px
-#         # self.df_G['py'] = py
-#         self.set_beam_positions()
-#         self.df_G['Vg'] = Vg_G
-#         self.df_G['Vga'] = abs(Vg_G)
-#         self.df_G['Swl'] = bloch_util.logM(self.df_G['Sw'])
-#         self.df_G['L']  = np.ones(Vg_G.shape)
-#         self._set_zones()
-#         self.df_G.loc[str((0,0)),'Vg'] = 0
-#
-#     def set_beam_positions(self):
-#         self.df_G['px'] = mut.project_beams2D(K=self.K,qxy=self.get_G())

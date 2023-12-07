@@ -1,5 +1,9 @@
 # Changelog
 ## 1.2dev
+### Thu  7 Dec 08:18:49 GMT 2023
+- added frame support for rotate_exp
+- dials_utils : more robust import of reflection.txt
+
 ### Thu 30 Nov 15:21:35 GMT 2023
 - removed minor changes in rotate_exp
 

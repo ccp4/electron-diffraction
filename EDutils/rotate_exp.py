@@ -12,7 +12,7 @@ from . import utilities as ut               #;imp.reload(ut)
 class Rocking:
     def __init__(self,Simu:object,
             uvw:list,tag:str,path:str,
-            Sargs:dict):
+            Sargs:dict,frames:list=None):
         """ simulate rocking curve
 
         Parameters
@@ -24,13 +24,19 @@ class Rocking:
         tag
             a tag identifying the sweep
         Sargs
-            Simulator constructor arguments
+            Simulator constructor arguments common to all simulations
         """
         self.path = path
         self.tag  = tag
         self.uvw  = uvw
         self.Sargs = Sargs
-        self.df = ut.sweep_var(Simu,params='u',vals=uvw,tag=tag,path=path,**Sargs)
+        params=['u']
+        vals=uvw
+        if any(frames):
+            params+=['frame']
+            vals=[[u,f] for u,f in zip(uvw,frames)]
+
+        self.df = ut.sweep_var(Simu,params=params,vals=vals,tag=tag,path=path,**Sargs)
         self.n_simus  = uvw.shape[0]
         ts            = np.arange(self.n_simus)
         self.ts       = ts

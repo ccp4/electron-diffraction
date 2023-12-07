@@ -55,7 +55,7 @@ class Bloch:
         Smax:float=0.2,
         solve:bool=True,init=True,
         felix:bool=False,nbeams:int=200,
-        eps:float=1,f_sw=None,
+        eps:float=1,f_sw=None,frame=None,
         **kwargs,
     ):
         self.solved = False
@@ -64,6 +64,8 @@ class Bloch:
         self.thick  = 100
         self.thicks = self._set_thicks((0,1000,1000))
         self.eps=eps
+        self.frame=frame
+
 
         self._set_structure(cif_file)
         beam_args={'keV':keV,'u':u}
@@ -451,10 +453,7 @@ class Bloch:
             hkl,(qx,qy,qz) = self.get_lattice()
             h,k,l = hkl
         if f_sw:
-            args  = {'hkl':hkl.T}
-            frame = self.name.split('_')[-1]
-            if frame.isdigit():
-                args['frame'] = int(frame)#+1
+            args  = {'hkl':hkl.T,'frame':self.frame}
             Sw = f_sw(**args)
         else:
             Kx,Ky,Kz = K

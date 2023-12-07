@@ -1,5 +1,5 @@
 import importlib as imp
-import os,glob,json,numpy as np, pandas as pd, tifffile,mrcfile,scipy.optimize as opt
+import os,re,glob,json,numpy as np, pandas as pd, tifffile,mrcfile,scipy.optimize as opt
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from subprocess import Popen,PIPE,check_output
 from utils import glob_colors as colors
@@ -16,7 +16,7 @@ class Dials(ED.Dataset):
         To produce a reflections.txt file :
     dials.show integrated.refl show_all_reflection_data=True > reflections.txt
         To obtain the frame_orientations with dials :
-    dials.frame_orientations integrated.expt | grep -E "[0-9]+ \|"  | cut -d "|" -f 4 >> uvw.txt
+    dials.frame_orientations integrated.expt | grep -E "[0-9]+ \|"  | cut -d "|" -f 4 > uvw.txt
         '''
         self.path = path
         self.frame_folder=frame_folder
@@ -36,7 +36,7 @@ class Dials(ED.Dataset):
         self.hkl = self.rpl[['I','hkl']].groupby('hkl').sum()
         # self.hkl = self.hkl.drop(str((0,0,0)))
 
-        self.rpl.index = self.rpl.hkl
+        self.rpl.set_index(self.rpl.hkl)
         ######
         self.read_expt_file()
         self.init_geom()
@@ -195,37 +195,47 @@ def load_dials_predict(refl_txt):
 def load_dials_reflections(refl_txt):
     print(colors.blue+'reading %s' %refl_txt+colors.black)
     # skip=39#46
-    skip=47
+    # skip=47
     tmp = 'tmp.txt'
-    cmd = "tail --lines=+{skip} {refl} | "\
-        "sed -E 's/ +/ /g' | sed -E 's/^ //' | sed 's/,//g' "\
-        "> {tmp}" .format(skip=skip,refl=refl_txt,tmp=tmp)
 
-    names = ['h','k','l', 'd','id','imageset_id','panel','flags','background.mean',
-        'background.sum.value','background.sum.variance','intensity.prf.value','intensity.prf.variance',
-        'intensity_sum_value','intensity.sum.variance','lp','num_pixels.background',
-        'num_pixels.background_used','num_pixels.foreground','num_pixels.valid','partial_id',
-        'partiality','profile.correlation',
-        # 'xyzcal.mm','xyzcal.px',
-        'c_qx','c_qy','c_qz','c_px','c_py','c_pz',
-        # 'xyzobs.mm.value','xyzobs.mm.variance',
-        'm_x','m_py','m_pz','v_mx','v_my','v_mz',
-        # 'xyzobs.px.value','xyzobs.px.variance',
-        'o_px','o_py','o_pz','v_px','v_py','v_pz',
-        # 's1',
-        's1x','s1y','s1z',
-        'zeta']
-    # names=[
-    #     'h','k','l','id','i','panel','flag','I','sig',
-    #     'c_qx','c_qy','c_qz','c_px','c_py','c_pz',
-    #     'o_qx','o_qy','o_qz','vqx','vqy','vqz',
-    #     'o_px','o_py','o_pz','vpx','vpy','vpz',
-    #     's1x','s1y','s1z','Npix','rlpx','rlpy','rlpz'],
-
+    ### get the columns
+    cmd="awk '/Column/,/^+---/' {refl}  |" \
+        " tail --lines=+3 | head --lines=-1 | cut -d'|' -f1-3 |"\
+        " sed 's/|//g' > {tmp}".format(refl=refl_txt,tmp=tmp)
     out = check_output(cmd,shell=True).decode()
     if out:print(out)
-    df = pd.read_csv(tmp,names=names,engine="python",sep=" ")
-    df['I']=df.intensity_sum_value
+
+    with open(tmp,'r') as f:
+        cols=[re.sub(" +"," ",l.strip()).split(' ') for l in f.readlines()]
+        cols={c[0]:len(c[1:]) for c in cols}
+        cols['miller_index'] = 3
+
+
+    ### get the actual reflections now
+    cmd = "sed -n '/^ miller/,$p' {refl} |" \
+        "sed -E 's/ +/ /g' | sed -E 's/^ //' | sed 's/,//g' "\
+        "> {tmp}" .format(refl=refl_txt,tmp=tmp)
+    out = check_output(cmd,shell=True).decode()
+    if out:print(out)
+    with open(tmp,'r') as f:
+        names = re.sub(" +"," ",f.readline().strip()).split(' ')
+        names = ["%s_%d" % (s, i) for s in names
+            for i in range(cols[s])]
+
+
+    df = pd.read_csv(tmp,names=names,engine="python",sep=" ",skiprows=1)
+    df=df.rename(columns={
+        'miller_index_0':'h',
+        'miller_index_1':'k',
+        'miller_index_2':'l',
+        'intensity.sum.value_0':'I',
+        'xyzobs.px.value_0':'o_px',
+        'xyzobs.px.value_1':'o_py',
+        'xyzobs.px.value_2':'o_pz',
+        's1_0':'s1x',
+        's1_1':'s1y',
+        's1_2':'s1z',
+        })
     out=check_output("rm %s" %tmp ,shell=True).decode()
     if out:print(out)
     return df

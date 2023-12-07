@@ -200,9 +200,9 @@ class Bloch_cont(rotate_exp.Rocking):
             png_file=os.path.join(png_path,
                 os.path.basename(tiff_file).replace('.tiff','.png'))
             im=tifffile.imread(tiff_file)
-            dsp.stddisp(im=[im],
-                cmap='gray',caxis=[0,cutoff],axPos='F',pOpt='p',
-                opt='sc',name=png_file,figsize='im',**kwargs)
+            args=dict(axPos='F',pOpt='p',opt='sc',figsize='im',cmap='gray',caxis=[0,cutoff])
+            args.update(kwargs)
+            dsp.stddisp(im=[im],name=png_file,**args)
 
     ##### visualization
     def show_tiff(self,sum_opt=False,**kwargs):

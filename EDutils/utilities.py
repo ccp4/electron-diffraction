@@ -620,13 +620,19 @@ def show_tiff(file,cutoff=100):
         cmap='gray',caxis=[0,cutoff],pOpt='tX')
 
 
-def to_shelx(hkl,file):
+def to_shelx(df_hkl,file):
     '''converts to a.hkl file ready to use by shelx
     hkl: dataframe containing h,k,l,I,sig
     '''
+    hkl=df_hkl.copy()
+    hkl=hkl.drop(str((0,0,0)))
+    #### max the intensity at 9999.99 for shelx (lol)
+    maxI=hkl.I.max()
+    if maxI>=1e4:
+        hkl.I=hkl.I*9999.99/maxI
     formats = {
-        'h':'{:>4}', 'k':'{:>4}', 'l':'{:>4}',
-        'I':'{:>8.2f}', 'sig':'{:>8}',
+        'h':'{:>4}', 'k':'{:>3}', 'l':'{:>3}',
+        'I':'{:>7.2f}', 'sig':'{:>7.2f}',
         }
     formatters = {k: v.format for k, v in formats.items()}
     content=hkl.to_string(formatters=formatters, index=False, header=False)

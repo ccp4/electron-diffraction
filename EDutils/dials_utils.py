@@ -106,6 +106,7 @@ class Dials(ED.Dataset):
         self.A = np.array([
             expt['crystal'][0]['real_space_%s' %s] for s in 'abc'
             ])
+        self.UBs=[np.reshape(UB,(3,3)) for UB in expt['crystal'][0]['A_at_scan_points']]
 
         lat_c = np.linalg.norm(self.A,axis=1)
         angles = [ np.rad2deg(np.arccos(
@@ -128,7 +129,7 @@ class Dials(ED.Dataset):
         e3 = np.array([self.orgx,self.orgy,self.F])
         ED = np.array([e1,e2,e3]).T
         self.ED = ED
-
+        self.expt=expt
 
     def read_dyn_cif(self,dyn_cif_file):
         print(colors.blue+'reading %s' %dyn_cif_file+colors.black)
@@ -167,6 +168,23 @@ class Dials(ED.Dataset):
         #             self.aper = f.extended_header["Pixel size X"][0]*1e-10 #A^-1
         #             self.nxy  = int(f.header.nx)
         #             self.Imax =  f.data.max()
+
+    def get_RUB(self,frame):
+        F = int(frame)
+        ndeg = frame-F
+        B     = ut.compute_B(self.lat_params)
+        invB  = np.linalg.inv(B)
+
+        U1 = self.R(F  ).dot(self.UBs[F].dot(invB))   #;print('U1:',U1)
+        U2 = self.R(F+1).dot(self.UBs[F+1].dot(invB)) #;print('U2:',U2)
+
+        M = U2.dot(U1.transpose())                    #;print('M:',M)
+        axis,angle = ut.axis_and_angle_from_R(M,deg=False)
+        # print(axis)
+        M_frame = ut.rotation_matrix(axis,angle * ndeg, deg=False)
+        U_frame = M_frame.dot(U1)
+
+        return U_frame.dot(B)
 
 def load_dials_predict(refl_txt):
     tmp = 'tmp.txt'
@@ -236,8 +254,8 @@ def load_dials_reflections(refl_txt):
         's1_1':'s1y',
         's1_2':'s1z',
         })
-    out=check_output("rm %s" %tmp ,shell=True).decode()
-    if out:print(out)
+    # out=check_output("rm %s" %tmp ,shell=True).decode()
+    # if out:print(out)
     return df
 
 def load_dyn_intensities(file_dyn):

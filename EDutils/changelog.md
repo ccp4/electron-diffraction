@@ -1,5 +1,14 @@
 # Changelog
 ## 1.2dev
+### Fri 12 Jan 16:40:48 GMT 2024
+- utilities :
+  - added axis_and_angle_from_R
+  - shelx misc tweak
+  - compute_B from parameters (Dials convention)
+- importED : get_UB and get_RUB base definition
+- dials_utils :
+  - fine orientation import and get_RUB
+
 ### Thu  7 Dec 08:18:49 GMT 2023
 - added frame support for rotate_exp
 - dials_utils : more robust import of reflection.txt

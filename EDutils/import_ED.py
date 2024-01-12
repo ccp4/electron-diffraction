@@ -61,8 +61,16 @@ class Dataset:
         self.cen = pd.DataFrame([[self.orgx,self.orgy]]*self.n_frames,
             columns=['px','py'])
 
+
+    def get_UB(self,frame):
+        return self.UB
+    def get_RUB(self,frame):
+        return self.R(frame).dot(self.UB)
+
     def sw(self,hkl,frame):
-        g_lab = self.R(frame).dot(self.UB).dot(hkl.T)
+        ''' compute blochwave excitation error at hkl for given frame '''
+        # g_lab = self.R(frame).dot(self.get_UB(frame)).dot(hkl.T)
+        g_lab = self.get_RUB(frame).dot(hkl.T)
         s0 = self.info['INCIDENT_BEAM_DIRECTION']/self.lam
 
         K0 = 1/self.lam
@@ -81,7 +89,7 @@ class Dataset:
         hkl = np.array([eval(hkl) for hkl in h])
 
         #### #reflection in reciprocal lab frame
-        r = self.R(frame).dot(self.UB).dot(hkl.T).T
+        r = self.R(frame).dot(self.get_UB(frame)).dot(hkl.T).T
         #incident beam in reciprocal lab frame
         s0 = self.info['INCIDENT_BEAM_DIRECTION']/self.lam
         # scattering vector in reciprocal lab frame

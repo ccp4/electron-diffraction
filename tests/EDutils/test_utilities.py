@@ -90,6 +90,29 @@ def test_remove_friedel_pairs():
     print(ut.remove_friedel_pairs(refl))
 
 
+def test_rotation():
+    N=10
+    k_s,alpha_s = np.random.rand(N,3),np.random.randint(0,360,N)
+
+    for k,alpha in zip(k_s,alpha_s):
+
+        k = k/np.linalg.norm(k)
+        R = ut.rotation_matrix(k,alpha,deg=True)
+
+
+        k_v,alpha_v= ut.axis_and_angle_from_R(R,deg=True)
+        R_v = ut.rotation_matrix(k_v,alpha_v,deg=True)
+
+        v=np.random.rand(3,N)
+        # RRv=np.linalg.norm(R.dot([])-R_v,axis=1)
+        RRv=np.linalg.norm(R-R_v)
+        if RRv>1e-10:
+            print('k   =' ,k)
+            print('k_v =' ,k_v)
+            print('alpha   =%.2f' %(alpha))
+            print('alpha_c =%.2f' %(alpha_v))
+            print(RRv)
+
 ################################################################################
 #### later
 ################################################################################

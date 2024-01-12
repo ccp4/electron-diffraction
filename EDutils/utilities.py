@@ -97,8 +97,9 @@ def rot(a,axis='x',deg=True):
     elif axis=='z':R = np.array([[c,s,0],[-s,c,0],[0,0,1]])
     return R
 
+
 def rotation_matrix(k,a,deg=True):
-    '''Rotation matrix from a vector'''
+    '''Rotation matrix from vector k and angle a'''
     #https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
     if deg:a = np.deg2rad(a)
     kx,ky,kz = k
@@ -106,6 +107,28 @@ def rotation_matrix(k,a,deg=True):
     R = np.eye(3) + np.sin(a)*K + (1-np.cos(a))*K.dot(K)
 
     return R
+
+def axis_and_angle_from_R(R,deg=True):
+    ''' vector and angle from rotation matrix R'''
+    g,C = np.linalg.eig(R)
+    idx = np.where(np.abs(np.real(g)-1)<1e-5)[0][0]
+    k = np.real(C[:,idx]).flatten()
+
+    v0 = np.array([0,0,1])
+    if np.linalg.norm(k-v0)<1e-2:
+        v0=np.array([0,1,0])
+    vr = R.dot(v0)
+    v0_p = v0-v0.dot(k)*k
+    vr_p = vr-vr.dot(k)*k
+    alpha = np.arccos(np.dot(v0_p,vr_p)/(np.linalg.norm(v0_p)*np.linalg.norm(vr_p)))
+
+    if np.sign(np.cross(k,v0_p).dot(vr_p))==-1:
+        alpha=2*np.pi-alpha
+    if deg:
+        alpha=np.rad2deg(alpha)
+    return k,alpha
+
+
 #############################################################################
 #### orientation vectors
 #############################################################################
@@ -620,13 +643,19 @@ def show_tiff(file,cutoff=100):
         cmap='gray',caxis=[0,cutoff],pOpt='tX')
 
 
-def to_shelx(hkl,file):
+def to_shelx(df_hkl,file):
     '''converts to a.hkl file ready to use by shelx
     hkl: dataframe containing h,k,l,I,sig
     '''
+    hkl=df_hkl.copy()
+    hkl=hkl.drop(str((0,0,0)))
+    #### max the intensity at 9999.99 for shelx (lol)
+    maxI=hkl.I.max()
+    if maxI>=1e4:
+        hkl.I=hkl.I*9999.99/maxI
     formats = {
-        'h':'{:>4}', 'k':'{:>4}', 'l':'{:>4}',
-        'I':'{:>8.2f}', 'sig':'{:>8}',
+        'h':'{:>4}', 'k':'{:>3}', 'l':'{:>3}',
+        'I':'{:>7.2f}', 'sig':'{:>7.2f}',
         }
     formatters = {k: v.format for k, v in formats.items()}
     content=hkl.to_string(formatters=formatters, index=False, header=False)
@@ -677,3 +706,17 @@ def read_space_group(struct_file):
                 print(colors.blue+'retrieved space group number from dictionary'+colors.black)
 
     return dataset
+
+
+def compute_B(params):
+    a,b,c,alpha,beta,gamma = params
+    angles=np.deg2rad([alpha,beta,gamma])
+    ca,cb,cc = np.cos(angles)
+    sa,sb,sc = np.sin(angles)
+    V=a*b*c*np.sqrt(1-ca**2-cb**2-cc**2 + 2*ca*cb*cc)
+    B = np.array([
+        [1/a,0,0],
+        [-cc/(a*sc),1/(b*sc),0],
+        [b*c/V*(cc*(ca-cb*cc)/sc - cb*sc), a*c/(V*sc)*(ca-cb*cc),a*b*sc/V ],
+        ])
+    return B

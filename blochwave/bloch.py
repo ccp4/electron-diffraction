@@ -166,13 +166,13 @@ class Bloch:
 
             #save
 
-            (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
-            lattice = [(h,k,l),(qx,qy,qz)]
+            # (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
+            # lattice = [(h,k,l),(qx,qy,qz)]
             # self.lattice=lattice
             # self.Fhkl=Fhkl
             np.save(self.Fhkl_file(),Fhkl)
             np.save(os.path.join(self.path,'hklF.npy'),hklF)
-            np.save(os.path.join(self.path,'lattice.npy'),lattice)
+            # np.save(os.path.join(self.path,'lattice.npy'),lattice)
             print(colors.green+'structure factors updated.'+colors.black)
 
 
@@ -450,8 +450,10 @@ class Bloch:
             h,k,l = hkl.T
             qx,qy,qz = hkl.dot(self.lat_vec).T
         else:
-            hkl,(qx,qy,qz) = self.get_lattice()
-            h,k,l = hkl
+            (h,k,l),(qx,qy,qz) = self.get_lattice()
+            # print(hkl.shape)
+            # h,k,l = hkl
+            hkl = np.array([h,k,l])
         if f_sw:
             args  = {'hkl':hkl.T,'frame':self.frame}
             Sw = f_sw(**args)
@@ -502,6 +504,7 @@ class Bloch:
             Fhkl = self.get_Fhkl()
             V0_idx = np.array([2*self.Nmax]*3)
             Fhkl[tuple(V0_idx)] = 0
+            # print(Fhkl.shape,hkl.max())
             Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
 
         self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
@@ -710,7 +713,16 @@ class Bloch:
 
 
     def get_lattice(self):
-        return np.load(os.path.join(self.path,'lattice.npy'))
+        # U0_idx = [2*self.Nmax]*3
+        # lat=np.load(os.path.join(self.path,'lattice.npy'))
+        # print(lat)#self.Nmax,lat.shape)
+        # if lat.shape[0]>4*self.Nmax:
+        #     print(self.Nmax)
+        #     snmax=slice(U0_idx-2*Nmax,U0_idx-2+Nmax)
+        #     lat=lat[snmax,snmax,snmax]
+        #     print(lat)
+        lat = ut.get_lattice(self.lat_vec,self.Nmax)
+        return lat
     def get_Fhkl(self):
         return np.load(self.Fhkl_file())
     def Fhkl_file(self):

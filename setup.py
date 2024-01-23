@@ -27,8 +27,8 @@ setuptools.setup(
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
-    install_requires=['numpy','scipy','matplotlib','colorama','pandas',
+    install_requires=['wheel','numpy','scipy','matplotlib','colorama','pandas',
     'crystals','TarikDrevonUtils','easygui','tifffile','pickle5','bs4',
-    'cbf','mrcfile','gemmi',
+    'cbf','mrcfile','gemmi','opencv-python',
     ],
 )

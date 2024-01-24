@@ -107,6 +107,7 @@ class Bloch:
         .. NOTE::
             By default the simulation name is '<cif><zone axis>_<keV>keV_bloch'
         """
+
         basefile = self.cif_file.replace('.cif','')
         if not name:
             u_str = ''.join(['%d' %np.round(u) for u in self.Kabc0])
@@ -114,6 +115,10 @@ class Bloch:
         if not path:path=os.path.dirname(basefile)
         self.path = path                #; print(self.path)
         self.name = name                #;print('name:',self.name)
+        if not os.path.exists(self.path):
+            cmd='mkdir -p %s' %self.path
+            p=check_output(cmd,shell=True).decode();print(p)
+
         if self.pdb_file:
             check_output('mv %s %s' %(self.cif_file,self.path),shell=True)
 
@@ -163,18 +168,24 @@ class Bloch:
                 self.pattern=self.pattern[idx,:]
                 hklF,Fhkl = sf.structure_factor3D(self.pattern,
                     2*np.pi*self.lat_vec,hklMax=2*Nmax)
-
+                h,k,l= [h.flatten() for h in hklF]
+                df_Fhkl=pd.DataFrame()
+                df_Fhkl[['h','k','l']] = np.array([h,k,l]).T
+                df_Fhkl['F']=Fhkl.flatten()
+                df_Fhkl.index=[str((h,k,l)) for h,k,l in zip(h,k,l)]
             #save
-
             # (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
             # lattice = [(h,k,l),(qx,qy,qz)]
             # self.lattice=lattice
             # self.Fhkl=Fhkl
             np.save(self.Fhkl_file(),Fhkl)
+            df_Fhkl.to_pickle(self.get_Fhkl_pkl())
             np.save(os.path.join(self.path,'hklF.npy'),hklF)
             # np.save(os.path.join(self.path,'lattice.npy'),lattice)
             print(colors.green+'structure factors updated.'+colors.black)
 
+    def get_Fhkl_pkl(self):
+        return self.Fhkl_file().replace('npy','pkl')
 
     def set_beam(self,
         keV:float=200,

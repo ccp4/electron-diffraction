@@ -9,7 +9,10 @@ green="\u1b[32m"
 
 
 printf $green"installing python locally\n"$black
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+### if python
+# wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+# chmod +x Miniconda3-latest-Linux-x86_64.sh
+
 pip3 install IPython
 
 # sudo apt-get install python3

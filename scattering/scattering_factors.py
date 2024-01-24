@@ -43,14 +43,14 @@ def get_fe(Zs,q,fit='kirkland'):
 
 def get_fe_shelxl(Zs,q):
     fparams = pd.read_csv(dat_path+'ab_shelx.csv',index_col=0)
-    q2 = q**2
+    s2 = (q/2)**2
     fq_e = np.zeros((q.size,Zs.size))
     for iZ,Z in enumerate(Zs):
         a = fparams.loc[Z,['a%s' %s for s in range(1,5)]]
         b = fparams.loc[Z,['b%s' %s for s in range(1,5)]]
         fq = np.zeros(q.shape)
         for i in range(4):
-             fq += a[i]*np.exp(-b[i]*q2)
+             fq += a[i]*np.exp(-b[i]*s2)
         fq_e[:,iZ]=fq
     return fq_e
 

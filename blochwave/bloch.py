@@ -115,7 +115,7 @@ class Bloch:
         if not path:path=os.path.dirname(basefile)
         self.path = path                #; print(self.path)
         self.name = name                #;print('name:',self.name)
-        if not os.path.exists(self.path):
+        if not os.path.exists(self.path) and self.path:
             cmd='mkdir -p %s' %self.path
             p=check_output(cmd,shell=True).decode();print(p)
 

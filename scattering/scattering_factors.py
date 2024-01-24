@@ -23,13 +23,38 @@ def get_xray_atomic_factors(elts,qmax=2,npts=100):
     fx_q = [(ai*np.exp(-bi*q2)).sum(axis=1) + c  for ai,bi,c in zip(Ai,Bi,C)]
     return q,fx_q
 
-def get_fe(Zs,q):
+def get_fe(Zs,q,fit='kirkland'):
     ''' computes th atomic form factors
-    - Z : atomic numbers
+    - Z : atomic numbers or
     - q : reciprocal vectors
+    - fit : type of fit :
+        kirkland    : Kirkland, E. J. (2019). Advanced Computing in Electron Microscopy (Third Edit). Springer.
+        shelxl      : https://srv.mbi.ucla.edu/faes/
     returns :
     - fq_e : nZ x Nqs
     '''
+    if not fit in ['kirkland','shelxl']:
+        fit='kirkland'
+
+    if fit=="kirkland":
+        return get_fe_kirkland(Zs,q)
+    elif fit=="shelxl":
+        return get_fe_shelxl(Zs,q)
+
+def get_fe_shelxl(Zs,q):
+    fparams = pd.read_csv(dat_path+'ab_shelx.csv',index_col=0)
+    q2 = q**2
+    fq_e = np.zeros((q.size,Zs.size))
+    for iZ,Z in enumerate(Zs):
+        a = fparams.loc[Z,['a%s' %s for s in range(1,5)]]
+        b = fparams.loc[Z,['b%s' %s for s in range(1,5)]]
+        fq = np.zeros(q.shape)
+        for i in range(4):
+             fq += a[i]*np.exp(-b[i]*q2)
+        fq_e[:,iZ]=fq
+    return fq_e
+
+def get_fe_kirkland(Zs,q):
     fparams = np.load(dat_path+'abcd.npy',allow_pickle=True)
     q2 = q**2
     fq_e = np.zeros((q.size,Zs.size))

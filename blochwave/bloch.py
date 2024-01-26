@@ -8,7 +8,7 @@ from utils import displayStandards as dsp           #;imp.reload(dsp)
 from utils import physicsConstants as cst           #;imp.reload(cst)
 from utils import glob_colors as colors,handler3D as h3d
 from multislice import postprocess as pp            #;imp.reload(pp)
-from scattering import structure_factor as sf       #;imp.reload(sf)
+from scattering import structure_factor as sf       ;imp.reload(sf)
 from scattering import scattering_factors as scatf  #;imp.reload(scatf)
 from EDutils import viewers                         #;imp.reload(viewers)
 from EDutils import utilities as ut                 #;imp.reload(ut)
@@ -149,18 +149,6 @@ class Bloch:
                 Nmax=np.array(Fhkl.shape[0])//4#.min()
                 self.Nmax=Nmax
                 print('Nmax gemmi:',Nmax)
-                # gemmi='/home/tarik/Documents/git/github/gemmi/gemmi'
-                # gemmi_cmd="%s sfcalc -v --dmin=%.3f --wavelength=%3.f --for=mott-bethe %s | " %(gemmi,dmin,self.lam,crys)
-                # print(gemmi_cmd)
-                # sed_cmd = r"sed 's/^ //' | sed 's/ /,/g' >>sf.txt"
-                # sf = check_output("%s | %s " %(gemmi_cmd,sed_cmd) ,shell=True).decode()
-                # df = pd.DataFrame('sf.txt',delimiter='\t',index_col=0,names=['index','A','phi'])
-                # sf = check_output("rm sf.txt",shell=True).decode()
-                # df['F'] = df.A*np.exp(1J*np.deg2rad(df.phi))
-                # df[['h','k','l']]=list(map(lambda s:list(eval(s)),df.index))
-                # df[['qx','qy','qz']] = df[['h','k','l']].values.dot(self.lat_vec0)
-                # df['q'] = np.linalg.norm(df[['qx','qy','qz']],axis=1)
-                # df['res']=1/df.q
 
             else:
                 print(colors.blue+'...Structure factors...'+colors.black)
@@ -168,18 +156,19 @@ class Bloch:
                 self.pattern=self.pattern[idx,:]
                 hklF,Fhkl = sf.structure_factor3D(self.pattern,
                     2*np.pi*self.lat_vec,hklMax=2*Nmax)
-                h,k,l= [h.flatten() for h in hklF]
-                df_Fhkl=pd.DataFrame()
-                df_Fhkl[['h','k','l']] = np.array([h,k,l]).T
-                df_Fhkl['F']=Fhkl.flatten()
-                df_Fhkl.index=[str((h,k,l)) for h,k,l in zip(h,k,l)]
+                df_Fhkl = get_structure_factor(self.cif_file,hklMax=2*Nmax)
+                # df_Fhkl=pd.DataFrame()
+                # h,k,l = [h.flatten() for h in hklF]
+                # df_Fhkl[['h','k','l']] = np.array([h,k,l]).T
+                # df_Fhkl['F']=Fhkl.flatten()
+                # df_Fhkl.index=[str((h,k,l)) for h,k,l in zip(h,k,l)]
+                df_Fhkl.to_pickle(self.get_Fhkl_pkl())
             #save
             # (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
             # lattice = [(h,k,l),(qx,qy,qz)]
             # self.lattice=lattice
             # self.Fhkl=Fhkl
             np.save(self.Fhkl_file(),Fhkl)
-            df_Fhkl.to_pickle(self.get_Fhkl_pkl())
             np.save(os.path.join(self.path,'hklF.npy'),hklF)
             # np.save(os.path.join(self.path,'lattice.npy'),lattice)
             print(colors.green+'structure factors updated.'+colors.black)

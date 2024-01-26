@@ -23,6 +23,25 @@ def get_xray_atomic_factors(elts,qmax=2,npts=100):
     fx_q = [(ai*np.exp(-bi*q2)).sum(axis=1) + c  for ai,bi,c in zip(Ai,Bi,C)]
     return q,fx_q
 
+
+def get_fx(elts,q):
+    '''elts : list of atoms by name
+    '''
+    q2 = (q/2)**2
+    dfx = pd.read_pickle(dat_path+'xray.pkl')
+    dfx.loc['Si']=dfx.loc['Siv']
+    dfx = dfx.loc[elts].astype(float)
+    fx_q = np.zeros((q.size,elts.size))
+    for iZ,Z in enumerate(elts):
+        Ai = dfx.loc[Z,['a%d' %i for i in range(1,5)]].values
+        Bi = dfx.loc[Z,['b%d' %i for i in range(1,5)]].values
+        C  = dfx.loc[Z,'c']
+        e = np.array([ai*np.exp(-bi*q2)  for ai,bi in zip(Ai,Bi)])
+        fx = np.array([ai*np.exp(-bi*q2)  for ai,bi in zip(Ai,Bi)]).sum(axis=0) + C
+        fx_q[:,iZ] =fx
+    return q,fx_q
+
+
 def get_fe(Zs,q,fit='kirkland'):
     ''' computes th atomic form factors
     - Z : atomic numbers or

@@ -1,6 +1,8 @@
 import utils.displayStandards as dsp
 from . import scattering_factors as scatf
+from crystals import Crystal
 import numpy as np
+import pandas as pd
 from math import pi
 
 __all__=['structure_factor3D','plot_structure3D','get_miller3D',
@@ -10,8 +12,60 @@ __all__=['structure_factor3D','plot_structure3D','get_miller3D',
 ai = 1/np.array([0.1,0.25,0.26,0.27,1.5])**2
 fj = lambda q,j,eps:eps*(np.pi/ai[j])*np.exp(-(np.pi*q)**2/ai[j])
 
+def get_structure_factor(cif_file,hkl=None,hklMax=10,sym=1,ed=True,v=''):
+    '''Computes structure factor in 3D from :
+    - `cif_file` : cif file
+    - `hkl`     : list of miller indices h,k,l (shape Nx3 => [h;k;l])
+    - `hklMax`  : int - max miller index in each direction from -hklMax to hklMax
+    - `ed` : True for electron
+    - `v` : verbosity
+    '''
+    ####init
+    crys = Crystal.from_cif(cif_file)
+    ra = np.array([a.coords_fractional for a in crys.atoms] )
+    fa = np.array([a.atomic_number for a in crys.atoms] ).astype(int)
+    lat_vec = np.array(crys.reciprocal_vectors)/(2*np.pi)
+    df_Fhkl = pd.DataFrame()
 
-def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
+    #### reflection list
+    if not hkl :
+        hkl = get_miller3D(hklMax,sym)
+        hkl = np.array([h.flatten() for h in hkl]).T
+    df_Fhkl[['h','k','l']] = hkl
+    h,k,l = hkl.T
+
+    #### wave vector
+    #### [h,k,l].dot([b1;b2;b3] => hb1+kb2+lb3)
+    q = np.linalg.norm(hkl.dot(lat_vec),axis=1)
+    df_Fhkl['q']=q
+
+    #### scattering factor
+    atoms=np.unique(fa).tolist()
+    if ed:
+        q,fq = scatf.get_elec_atomic_factors(atoms,q)
+        fq = np.array(fq).T
+    else:
+        elements = np.unique([a.element for a in crys.atoms])
+        q,fq = scatf.get_fx(elements,q)
+    if 'q' in v:qmax=q.max();print('qmax=%.4f A^-1\nmax_res=%.4f A' %(qmax,1/qmax))
+
+    #structure factor
+    Fhkl = np.zeros(q.shape,dtype=complex)
+    for i,atom in enumerate(atoms):
+        F_i = np.zeros(q.shape,dtype=complex)
+        idx = fa==atom
+        #loop over atoms with of atomic number "atom"
+        for ri in ra[idx,:]:
+            x,y,z=ri
+            F_i += np.exp(-2*pi*1J*(x*h+y*k+z*l))
+        Fhkl += F_i*fq[:,i]
+    df_Fhkl['F'] = Fhkl
+
+    df_Fhkl.index=[str((h,k,l)) for h,k,l in hkl]
+    return df_Fhkl
+
+
+def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,ed=True,v=''):
     '''Computes structure factor in 3D from :
     - `pattern` : Nx4 array - N atoms with each row : fractional coordinates and Za
     - `lat_vec` : 3x3 array - reciprocal lattice vectors (2*pi/a convention)
@@ -27,16 +81,20 @@ def structure_factor3D(pattern,lat_vec,hkl=None,hklMax=10,sym=1,v=''):
     ra,fa = pattern[:,:3],pattern[:,3]
     atoms = list(np.array(np.unique(fa),dtype=int));#print(atoms)
     # get scattering factor
-    b1,b2,b3 = lat_vec
+    b1,b2,b3 = lat_vec/(2*pi)
     k_x,k_y,k_z = hx*b1[0]+ky*b2[0]+lz*b3[0],hx*b1[1]+ky*b2[1]+lz*b3[1],hx*b1[2]+ky*b2[2]+lz*b3[2]
-    q = np.sqrt(k_x**2+k_y**2+k_z**2)/(2*pi)
-    q,fq = scatf.get_elec_atomic_factors(atoms,q)
+    q = np.sqrt(k_x**2+k_y**2+k_z**2)
+    if ed:
+        q,fq = scatf.get_elec_atomic_factors(atoms,q)
+    else:
+        q,fq = scatf.get_fx(atoms,q)
     if 'q' in v:qmax=q.max();print('qmax=%.4f A^-1\nmax_res=%.4f A' %(qmax,1/qmax))
     #structure factor
     Fhkl,n_atoms = np.zeros(hx.shape,dtype=complex),len(atoms)
     for i,atom in zip(range(n_atoms),atoms):
         F_i = np.zeros(hx.shape,dtype=complex)
         idx = fa==atom
+        #loop over atoms with of atomic number "atom"
         for ri in ra[idx,:]:
             # print(ri)
             # print(ri,np.exp(-2*pi*1J*(ri[0]*hx+ri[1]*ky+ri[2]*lz)))

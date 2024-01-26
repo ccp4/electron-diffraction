@@ -156,7 +156,7 @@ class Bloch:
                 self.pattern=self.pattern[idx,:]
                 hklF,Fhkl = sf.structure_factor3D(self.pattern,
                     2*np.pi*self.lat_vec,hklMax=2*Nmax)
-                df_Fhkl = get_structure_factor(self.cif_file,hklMax=2*Nmax)
+                df_Fhkl = sf.get_structure_factor(self.cif_file,hklMax=2*Nmax)
                 # df_Fhkl=pd.DataFrame()
                 # h,k,l = [h.flatten() for h in hklF]
                 # df_Fhkl[['h','k','l']] = np.array([h,k,l]).T

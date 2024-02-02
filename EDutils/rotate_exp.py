@@ -264,19 +264,21 @@ class Rocking:
         df['i'] = np.arange(len(hkls))
 
         fig,ax = dsp.create_fig(figsize=figs)
-        for h,r in df.iterrows():
-            ax.scatter([r.i]*len(r.Frame),r.Frame,40,sw_color(r.Sw),cmap=cm,vmin=vmin,vmax=vmax)
         ##highlight beams with full rocking curves
-        hkl_f = self.get_full_refl(Swm=vmax)
-        ax.scatter(df.loc[hkl_f].i,df.loc[hkl_f].Sw_cen,50,'g')
-
+        for h,r in df.iterrows():
+            ax.scatter([r.i]*len(r.Frame),r.Frame,40,sw_color(r.Sw),marker='s',cmap=cm,vmin=vmin,vmax=vmax)
+        hkl_f = df.index[df.index.isin(self.get_full_refl(Swm=vmax))]
+        idx,f_cen = df.loc[hkl_f,['i','f_cen']].values.T
+        ax.plot(idx,f_cen,'gs',markersize=8,mew=2,mfc='none',mec='g')
+        # ax.scatter(idx,f_cen,50,'g',marker='o',linewidths=3)
 
         ax.tick_params(axis='x',direction='in',labelrotation=90);
         ax.set_xticks(list(range(len(hkls))));
         ax.set_xticklabels(list(hkls));
-        args=dict(labs=['','Frames'])
-        # args.update(kwargs)
-        # dsp.displayStandards(**args);
+        args=dict(labs=['','Frames'],axPos=[0.05,0.3,0.93,0.65],
+            xylims=['x',-1,len(hkls)])
+        args.update(kwargs)
+        dsp.standardDisplay(ax=ax,**args);
         return fig,ax
 
     def plot_integrated(self,refl,new:bool=False,cm='Spectral',kin=False,

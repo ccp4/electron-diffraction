@@ -1,4 +1,9 @@
 ### 1.0
+###Fri  2 Feb 15:18:40 GMT 2024
+- add quantities in df_G
+- add `show_df_G`
+### Fri 26 Jan 13:11:38 GMT 2024
+- change structure_factor dataframe callback
 ### Wed 24 Jan 10:26:49 GMT 2024
 - added structure factor dataframe `pd.read_pickle(b0.get_Fhkl_pkl())``
 ### Fri 12 Jan 16:40:48 GMT 2024

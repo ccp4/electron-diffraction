@@ -1,5 +1,13 @@
 # Changelog
 ## 1.2dev
+### Fri  2 Feb 14:52:12 GMT 2024
+- rotate_exp :
+  - added filtering for full rocking curve and some info into `beams`
+  - added `show_excitation_map` 
+- utilities :
+  - added `get_uvw` about an orientation
+  - added `import_fcf`
+  - in `to_shelx` rescale max to 9999.99
 ### Fri 12 Jan 16:40:48 GMT 2024
 - utilities :
   - added axis_and_angle_from_R

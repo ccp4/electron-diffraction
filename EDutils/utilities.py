@@ -132,6 +132,19 @@ def axis_and_angle_from_R(R,deg=True):
 #############################################################################
 #### orientation vectors
 #############################################################################
+def get_uvw(u,npts=20,osc=0.2):
+    """get a list of orientation vectors in a continuously rotated fashion
+    about u += osc with npts point.
+    The rotation axis is u x ez
+    """
+    ez = [0,0,1]
+    rot_axis = np.cross(ez,u)
+
+    u1  = rotation_matrix(rot_axis,-osc,deg=True).dot(u)
+    u2  = rotation_matrix(rot_axis, osc,deg=True).dot(u)
+    uvw = get_uvw_cont(u1,u2,nframes=npts)
+    return uvw
+
 def get_uvw_cont(u0:Sequence,u1:Sequence,nframes:int=2,show:bool=False,**kwargs):
     """get a list of orientation vectors in a continuously rotated fashion between u0 and u1.
 
@@ -426,6 +439,8 @@ def gemmi_sf(pdb_file:str='',dmin=2):
         Fhkl[tuple(idx)] = dc.mott_bethe_factor(hkl) * grid.get_value(*hkl)
     return hklF,Fhkl
 
+
+
 def import_crys(file:str=''):
     """import a Crystal
 
@@ -643,6 +658,46 @@ def show_tiff(file,cutoff=100):
         cmap='gray',caxis=[0,cutoff],pOpt='tX')
 
 
+def import_fcf(file_path = 'shelx_thick_10A.fcf'):
+    # Initialize an empty list to store your data
+    data = []
+    # Open the file and read it line by line
+    with open(file_path, 'r') as file:
+        # A flag to mark when the relevant data block starts
+        data_block_start = False
+        for line in file:
+            # Check for the start of the data block
+            if line.strip() == '_refln_index_h':
+                data_block_start = True
+                continue
+
+            # If in the data block and the line starts with an underscore, it's a column header, so skip it
+            if data_block_start and line.strip().startswith('_'):
+                continue
+
+            # If in the data block and the line doesn't start with an underscore, it's a data row
+            if data_block_start and not line.strip().startswith('_'):
+                # Check for the end of the data block (empty line or new section starting)
+                if line.strip() == '' or line.strip().startswith('_'):
+                    data_block_start = False
+                    continue
+                # Split the line by whitespace and add the resulting list to the data
+                data.append(line.split())
+
+    # Define the column names
+    columns = ['h', 'k', 'l', 'Fc-squared', 'Fo-squared', 'sigma(Fo-squared)', 'status flag']
+
+    # # Create a DataFrame
+    df = pd.DataFrame(data, columns=columns)
+
+    # Convert numerical columns to appropriate types
+    df[['h', 'k', 'l']] = df[['h', 'k', 'l']].astype(int)
+    df[['Fc-squared', 'Fo-squared', 'sigma(Fo-squared)']] = df[['Fc-squared', 'Fo-squared', 'sigma(Fo-squared)']].astype(float)
+
+    df.index=[str((h,k,l)) for h,k,l in df[['h','k','l']].values]
+    df['hkl']=df.index
+    return df
+
 def to_shelx(df_hkl,file):
     '''converts to a.hkl file ready to use by shelx
     hkl: dataframe containing h,k,l,I,sig
@@ -651,8 +706,8 @@ def to_shelx(df_hkl,file):
     hkl=hkl.drop(str((0,0,0)))
     #### max the intensity at 9999.99 for shelx (lol)
     maxI=hkl.I.max()
-    if maxI>=1e4:
-        hkl.I=hkl.I*9999.99/maxI
+    # if maxI>=1e4:
+    hkl.I=hkl.I*9999.99/maxI
     formats = {
         'h':'{:>4}', 'k':'{:>3}', 'l':'{:>3}',
         'I':'{:>7.2f}', 'sig':'{:>7.2f}',

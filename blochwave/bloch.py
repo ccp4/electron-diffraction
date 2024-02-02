@@ -514,10 +514,15 @@ class Bloch:
         self.e0x = e0x
         self.df_G['px'] = px
         self.df_G['py'] = py
-        self.df_G['Vg'] = Vg_G
-        self.df_G['Vga'] = abs(Vg_G)
-        self.df_G['Swl'] = bloch_util.logM(self.df_G['Sw'])
-        self.df_G['L']  = np.ones(Vg_G.shape)
+        self.df_G['Fg' ]  = Fhkl
+        self.df_G['Vg']   = np.abs(self.df_G.Fg)/self.crys.volume
+        self.df_G['Ikin'] = np.abs(self.df_G.Fg)**2
+        self.df_G['Ug']   = self.pre*self.df_G.Fg/(self.crys.volume*np.pi)*self.eps
+        self.df_G['Uga']  = np.abs(self.df_G.Ug)
+        self.df_G['xi_g'] = self.k0/np.abs(self.df_G.Ug)
+        self.df_G['Swl']  = bloch_util.logM(self.df_G['Sw'])
+        self.df_G['L']    = np.ones(Vg_G.shape)
+
         self._set_zones()
         self.df_G.loc[str((0,0,0)),'Vg'] = 0
         # print('set_Vg : Vg=',self.df_G['Vg'][80])
@@ -761,6 +766,20 @@ class Bloch:
     ################################################################################
     #### display
     ################################################################################
+    def show_df_G(self,n=-1,hkl=[],cols=['Sw','Fg','Ikin','Vg','Uga','xi_g'],sort='Swa'):
+        formats = {'Sw':'{:>7.1e}','Swa':'{:>7.1e}',
+            'Fg':'{:>6.1f}','Ikin':'{:>8.1f}',
+            'Vg':'{:>6.2e}','Uga':'{:>8.1e}','xi_g':'{:>5.0f}',
+            }
+        df = self.df_G
+        if any(hkl):
+            df=df.loc[[str(tuple(h)) for h in hkl]]
+        df=df.sort_values(sort)
+        if type(n)==int:
+            df=df[:n]
+        print(df[cols].to_string(
+                formatters={k: v.format for k, v in formats.items()}))
+
     def show_beams(self,opts='BVSkr',cond='',refl=[],name='',**kwargs):
         """ display beams"""
         # cond = self.get_cond(cond)

@@ -1,5 +1,7 @@
 import importlib as imp
 import tifffile,os,glob,pickle5,subprocess
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import numpy as np,pandas as pd
 from typing import TYPE_CHECKING, Dict, Iterable, Optional, Sequence, Union
 from utils import displayStandards as dsp   #;imp.reload(dsp)
@@ -7,7 +9,7 @@ from utils import glob_colors as colors     #;imp.reload(colors)
 from utils import handler3D as h3D          #;imp.reload(h3D)
 from scipy.integrate import trapz
 from scipy.stats import linregress
-from . import utilities as ut               #;imp.reload(ut)
+from . import utilities as ut               ;imp.reload(ut)
 
 class Rocking:
     def __init__(self,Simu:object,
@@ -63,7 +65,31 @@ class Rocking:
                 self.beams.loc[h,'Frame'].append(i)
                 self.beams.loc[h,'Sw'   ].append(c.Sw.real)
         self.df['nbeams']=[self.load(i).df_G.index.shape[0] for i,f in enumerate(self.df.index)]
-        self.save(v=1)
+        self.beams['nframes' ] = [len(r) for r in self.beams.Frame]
+        self.beams['f_min' ] = [np.min(r.Frame) for h,r in self.beams.iterrows()]
+        self.beams['f_cen' ] = [r.Frame[np.abs(r.Sw).argmin()] for h,r in self.beams.iterrows()]
+        self.beams['f_max' ] = [np.max(r.Frame) for h,r in self.beams.iterrows()]
+        self.beams['f_range'] = [(r.f_min,r.f_cen,r.f_max) for h,r in self.beams.iterrows()]
+        self.beams['Sw_min'] = [np.min(r.Sw) for h,r in self.beams.iterrows()]
+        self.beams['Sw_cen'] = [np.min(np.abs(r.Sw)) for h,r in self.beams.iterrows()]
+        self.beams['Sw_max'] = [np.max(r.Sw) for h,r in self.beams.iterrows()]
+
+    def get_full_refl(self,Swm=0.01):
+        hkl = self.beams.loc[[ (r.Sw_min<-Swm) & (r.Sw_max>Swm)
+            for h,r in self.beams.iterrows()]].index
+        return hkl
+
+    def show_beams(self,hkl=[],cols=['f_range','Sw_min','Sw_cen','Sw_max'],n=-1):
+        e='{:>7.2e}'
+        formats = {'Sw_min':e,'Sw_cen':e,'Sw_max':e}
+            # 'f_range':'{:>6.2f}'}
+        df = self.beams.sort_values('Sw_cen')
+        if any(hkl):
+            df=df.loc[hkl]
+        if n:
+            df=df[:n]
+        print(df[cols].to_string(
+                formatters={k: v.format for k, v in formats.items()}))
 
     def reset_int(self):
         self.Iz_dyn,self.Iz_kin = {},{}
@@ -130,9 +156,9 @@ class Rocking:
         """
         iZs,nzs  = self._get_iZs(iZs,zs)        #;print(iZs)
         z0 = self.load(0).z.copy()[iZs][-1]
-        if not self.load(0).thick==z0:
-            print('setting thickness to %dA' %z0)
-            self.do('_set_I',verbose=0,iZ=iZs[-1])
+        # if not self.load(0).thick==z0:
+        #     print('setting thickness to %dA' %z0)
+        #     self.do('_set_I',verbose=0,iZ=iZs[-1])
 
         refl,nbs = self.get_beams(cond=cond,refl=refl,opts=opts)  #;print(refl)
         nts = self.ts.size
@@ -208,33 +234,61 @@ class Rocking:
     ###########################################################################
     #### Display
     ###########################################################################
-    # def QQplot(self,zs=None,iZs=10,refl=[],cond='',
-    #     int_opt=True,cmap='Spectral',**kwargs):
-    #     if int_opt:self.integrate_rocking(refl,cond)
-    #     iZs,nzs  = self._get_iZs(iZs,zs)    #;print(iZs)
-    #     z  = self.load(0).z.copy()[iZs]
-    #
-    #     refl = self.get_beams(refl=refl,cond=cond)
-    #     refl = [str(tuple(h)) for h in refl]
-    #     Iz_dyn = np.array([self.Iz_dyn[h].copy()[iZs] for h in refl])
-    #     Iz_kin = np.array([self.Iz_kin[h].copy()[iZs] for h in refl])
-    #     # print(Iz_dyn.shape)
-    #     iB = np.argsort(np.sum(Iz_dyn,axis=1))[-1]
-    #     Iz_dyn/= Iz_dyn[iB,:]
-    #     Iz_kin/= Iz_kin[iB,:]
-    #     cs = dsp.getCs(cmap,nzs) #; print(len(cs),Iz_dyn.shape,Iz_kin.shape)
-    #
-    #     plts=[[I_kin,I_dyn,[cs[i],'o'],r'$z=%d \AA$' %z0] for i,(z0,I_dyn,I_kin) in enumerate(zip(z,Iz_dyn.T,Iz_kin.T))]
-    #     plts+=[ [[0,1],[0,1],[(0.5,)*3,'--'],''] ]
-    #     dsp.stddisp(plts,labs=['$I_{kin}$','$I_{dyn}$'],sargs={'alpha':0.5},**kwargs)
+    def show_excitation_map(self,cmaps=('Reds','Reds_r'),hkls=[],
+            sw_color=lambda Sw:Sw,vm=0.05,vmin=-0.005,vmax=0.005,
+            figs=(20,5),nb_max=80,sw_min=1e-3,**kwargs,
+        ):
+        # cmaps=('PuRd','OrRd_r')
+        # swc,vm = lambda Sw:-np.sign(Sw)*np.log10(np.maximum(np.abs(Sw),1e-10)),4
+        cm = mcolors.LinearSegmentedColormap.from_list('my_cmap', np.vstack((
+            plt.get_cmap(cmaps[0])(np.linspace(0, 1, 128)),
+            plt.get_cmap(cmaps[1])(np.linspace(0, 1, 128)),
+        )))
+        if vm:
+            vmin=-vm
+            vmax=vm
 
-    def plot_integrated(self,refl,new:bool=False,cm='Spectral',**kwargs):
+
+        if not any(hkls):
+            hkls  = self.beams.index
+        if len(hkls)>nb_max:
+            hkls = self.beams.loc[self.beams.Sw_cen< sw_min].index
+            print('%d beam within sw_min=%.2e' %(len(hkls),sw_min))
+            if len(hkls)>nb_max:
+                print('too many beams %d/%d : keeping only top %d' %(len(hkls),nb_max,nb_max))
+                hkls = self.beams.sort_values('Sw_cen')[:nb_max].index
+
+        # sort by how long they sitck around
+        df      = self.beams.loc[hkls].sort_values('nframes',ascending=False)
+        hkls    = df.index
+        df['i'] = np.arange(len(hkls))
+
+        fig,ax = dsp.create_fig(figsize=figs)
+        for h,r in df.iterrows():
+            ax.scatter([r.i]*len(r.Frame),r.Frame,40,sw_color(r.Sw),cmap=cm,vmin=vmin,vmax=vmax)
+        ##highlight beams with full rocking curves
+        hkl_f = self.get_full_refl(Swm=vmax)
+        ax.scatter(df.loc[hkl_f].i,df.loc[hkl_f].Sw_cen,50,'g')
+
+
+        ax.tick_params(axis='x',direction='in',labelrotation=90);
+        ax.set_xticks(list(range(len(hkls))));
+        ax.set_xticklabels(list(hkls));
+        args=dict(labs=['','Frames'])
+        # args.update(kwargs)
+        # dsp.displayStandards(**args);
+        return fig,ax
+
+    def plot_integrated(self,refl,new:bool=False,cm='Spectral',kin=False,
+        **kwargs):
         """plot the integrated rocking curves for selected beams as function of z
 
         Parameters
         ----------
         refl
             beams to consider
+        kin
+            True to overlay kinematic integration
         new
             update integration
         """
@@ -243,9 +297,14 @@ class Rocking:
         z = self.load(0).z
         Iz = np.array([self.Iz_dyn[h] for i,h in enumerate(refl)])
 
-        cs = dsp.getCs(cm,nbs)
+        cs,legElt = dsp.getCs(cm,nbs),{}
         plts = [[z,Iz[i],cs[i],'%s' %h] for i,h in enumerate(refl)]
-        fig,ax=dsp.stddisp(plts,labs=[r'$z(\AA)$','$I_{int}$'],**kwargs)
+        if kin:
+            Iz = np.array([self.Iz_kin[h] for i,h in enumerate(refl)])
+            plts += [[z,Iz[i],[cs[i],'--'],''] for i,h in enumerate(refl)]
+            legElt={'dyn':'k-','kin':'k--'}
+        fig,ax=dsp.stddisp(plts,labs=[r'$z(\AA)$','$I_{int}$'],
+            legElt=legElt**kwargs)
         vw=Rock_viewer(self,fig,ax,z,Iz,refl)
         return fig,ax
 

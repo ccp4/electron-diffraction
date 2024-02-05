@@ -1,9 +1,11 @@
 # Changelog
 ## 1.2dev
+### Mon  5 Feb 10:29:24 GMT 2024
+- rotate_exp : `params` and `vals` (such as `hkl`) can be added to the continuous sweep
 ### Fri  2 Feb 14:52:12 GMT 2024
 - rotate_exp :
   - added filtering for full rocking curve and some info into `beams`
-  - added `show_excitation_map` 
+  - added `show_excitation_map`
 - utilities :
   - added `get_uvw` about an orientation
   - added `import_fcf`

@@ -59,6 +59,7 @@ def sweep_var(Simu:object,
     pad = int(np.ceil(np.log10(nsimus)))
     for i,val in enumerate(vals):
         kwargs.update(dict(zip(params,val)))
+        # print(kwargs)
         name = '%s_%s_%s' %('-'.join(params),tag,str(i).zfill(pad))
         sim_obj = Simu(path=path,name=name,**kwargs)
         df.loc[name,cols] = ''

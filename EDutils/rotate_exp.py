@@ -14,7 +14,8 @@ from . import utilities as ut               ;imp.reload(ut)
 class Rocking:
     def __init__(self,Simu:object,
             uvw:list,tag:str,path:str,
-            Sargs:dict,frames:list=None):
+            Sargs:dict,frames:list=None,
+            params=[],vals=[]):
         """ simulate rocking curve
 
         Parameters
@@ -32,14 +33,21 @@ class Rocking:
         self.tag  = tag
         self.uvw  = uvw
         self.Sargs = Sargs
-        params=['u']
-        vals=uvw
+        self.n_simus  = uvw.shape[0]
+
+        params+=['u']
+        vals+=[uvw]
         if any(frames):
             params+=['frame']
-            vals=[[u,f] for u,f in zip(uvw,frames)]
+            vals+=[frames]
 
-        self.df = ut.sweep_var(Simu,params=params,vals=vals,tag=tag,path=path,**Sargs)
-        self.n_simus  = uvw.shape[0]
+        #reshape vals into [val_param_1,..,val_param_N] x n_simus
+        _vals = []#[[v] for v in vals[0]]
+        for i in  range(self.n_simus):
+            _vals.append([row[i] for row in vals ])
+
+
+        self.df = ut.sweep_var(Simu,params=params,vals=_vals,tag=tag,path=path,**Sargs)
         ts            = np.arange(self.n_simus)
         self.ts       = ts
         self.df['ts'] = ts

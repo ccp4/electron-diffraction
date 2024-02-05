@@ -66,7 +66,6 @@ class Bloch:
         self.eps=eps
         self.frame=frame
 
-
         self._set_structure(cif_file)
         beam_args={'keV':keV,'u':u}
         beam_args.update(beam)
@@ -440,6 +439,7 @@ class Bloch:
         """ get excitation errors for Sg<Smax
         - Smax : maximum excitation error to be included
         - hkl : list of tuple or nbeams x 3 ndarray - beams to be included (for comparison with other programs)
+            Note that the Smax filter will still be applied to these beams(use Smax=0 to force all beams)
         - felix : to compare with felix
         - f_sw : optional function to compute Sw f(hkl,frame) for
         """
@@ -570,11 +570,11 @@ class Bloch:
         self.df_G['Sg'] = Sg
         self.df_G['Ig'] = np.abs(Sg)**2
 
-    def _set_beams_vs_thickness(self,thicks=None):
+    def _set_beams_vs_thickness(self,thicks=None,v=True):
         """ get Scattering matrix as function of thickness for all beams
         - thicks : tuple(ti,tf,step) or list or np.ndarray thicknesses
         """
-        print(colors.blue+'... beam vs thickness ...'+colors.black)
+        if v:print(colors.blue+'... beam vs thickness ...'+colors.black)
         if not type(thicks)==type(None):
             self._set_thicks(thicks)
 

@@ -15,16 +15,18 @@ if 0:
 if 1:
     u  = np.array([0.66865363, 0.29164837, 0.6521759 ])
     u  = u/np.linalg.norm(u)
-    uvw = ut.get_uvw(u,osc=1,npts=50)
+    uvw = ut.get_uvw(u,osc=0.1,npts=3)
     name='test'
-    Sargs=dict(cif_file=cif_file,Smax=0.01,keV=200,Nmax=10,solve=False)
-    # rock = bl.Bloch_cont(path='dat/LTA/rocks/%s' %name,uvw=uvw,tag='',Sargs=Sargs,
-    #                      frames=np.arange(len(uvw)) )
+    Sargs=dict(cif_file=cif_file,Smax=0.01,keV=200,Nmax=10,solve=True)
+    params = ['hkl']
+    vals = [ [np.array([[0,0,0],[-1,-7,4]])]*len(uvw)]
+    rock = bl.Bloch_cont(path='dat/LTA/rocks/%s' %name,params=params,vals=vals,uvw=uvw,tag='',Sargs=Sargs,
+                         frames=np.arange(len(uvw)) )
 
 
     # hkl_f=rock.get_full_refl(Swm=0.01)
     # rock.show_beams(hkl=hkl_f, cols=['Sw_min','Sw_max'])
-    rock=ut.load_pkl('dat/LTA/rocks/test/rock_.pkl')
-    rock.show_excitation_map(vm=0.001,nb_max=50,
+    # rock=ut.load_pkl('dat/LTA/rocks/test/rock_.pkl')
+    # rock.show_excitation_map(vm=0.001,nb_max=50,
         # axpos=[0.1,0.3,085,0.6],xylims=['x',0,50],
-        );plt.show()
+        # );plt.show()

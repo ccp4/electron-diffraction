@@ -45,6 +45,8 @@ class Bloch:
         Use felix solver
     nbeams
         Number of beams to use (using felix only)
+    v
+        verbose
     kwargs
         arguments to be passed to :meth:`~Bloch.solve`
     """
@@ -56,6 +58,7 @@ class Bloch:
         solve:bool=True,init=True,
         felix:bool=False,nbeams:int=200,
         eps:float=1,f_sw=None,frame=None,
+        v = True,
         **kwargs,
     ):
         self.solved = False
@@ -83,7 +86,7 @@ class Bloch:
                 self._set_excitation_errors(Smax,f_sw=f_sw)
                 print(colors.blue+'...Vg... '+colors.black)
                 self._set_Vg()
-        self.save()
+        self.save(v=v)
 
         # if show_thicks or 't' in opts:
         #     self.show_beams_vs_thickness(strong=['I'])
@@ -151,25 +154,18 @@ class Bloch:
 
             else:
                 print(colors.blue+'...Structure factors...'+colors.black)
-                idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
+                idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)] #should not be necessary
                 self.pattern=self.pattern[idx,:]
                 hklF,Fhkl = sf.structure_factor3D(self.pattern,
                     2*np.pi*self.lat_vec,hklMax=2*Nmax)
                 df_Fhkl = sf.get_structure_factor(self.cif_file,hklMax=2*Nmax)
-                # df_Fhkl=pd.DataFrame()
-                # h,k,l = [h.flatten() for h in hklF]
-                # df_Fhkl[['h','k','l']] = np.array([h,k,l]).T
-                # df_Fhkl['F']=Fhkl.flatten()
-                # df_Fhkl.index=[str((h,k,l)) for h,k,l in zip(h,k,l)]
+                df_Fhkl['Fga']  = np.real(np.abs(df_Fhkl.F))
+                df_Fhkl['Uga']  = np.real(np.abs(df_Fhkl.F*cst.meff(cst.keV)/(np.pi*self.crys.volume)))
+                df_Fhkl['xi_g'] = self.k0/df_Fhkl.Uga
                 df_Fhkl.to_pickle(self.get_Fhkl_pkl())
             #save
-            # (h,k,l),(qx,qy,qz) = ut.get_lattice(self.lat_vec,self.Nmax)
-            # lattice = [(h,k,l),(qx,qy,qz)]
-            # self.lattice=lattice
-            # self.Fhkl=Fhkl
             np.save(self.Fhkl_file(),Fhkl)
             np.save(os.path.join(self.path,'hklF.npy'),hklF)
-            # np.save(os.path.join(self.path,'lattice.npy'),lattice)
             print(colors.green+'structure factors updated.'+colors.black)
 
     def get_Fhkl_pkl(self):
@@ -292,7 +288,7 @@ class Bloch:
         if not type(thicks)==type(None) and 'z' in opts:
             self._set_beams_vs_thickness(thicks)#;print('thicks solved')
         if 's' in opts:
-            self.save()
+            self.save('v' in opts)
 
     def update(self,keV=None,u=None,Smax=None,Nmax=None,dmin=None,
             gemmi=False,hkl=None,

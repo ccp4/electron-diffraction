@@ -141,7 +141,7 @@ class Rocking:
 
     def get_rocking(self,iZs:Optional[slice]=-1,
         zs:Optional[Iterable[float]]=None,
-        refl:Sequence[tuple]=[],cond:str='',opts:str='',n=0):
+        refl:Sequence[tuple]=[],cond:str='',opts:str='',n=0,v=True):
         """Get intensities at required beams and thicknesses
 
         Parameters
@@ -174,7 +174,7 @@ class Rocking:
         # for h in refl : I[str(h)]=np.nan*np.ones((nts,nzs))
         for h in refl : I[str(h)]=np.zeros((nts,nzs))
 
-        print("gathering the intensities")
+        if v : print("gathering the intensities")
         for i in range(nts):
             # print(colors.red,i,colors.black)
             sim_obj = self.load(i)
@@ -466,7 +466,7 @@ class Rocking:
             df.loc[i,cols] = vals.real
         return df
 
-    def get_beams(self,cond='',refl=[],opts='',n=None):
+    def get_beams(self,cond='',refl=[],opts='',n=None,v=True):
         if cond:
             refl = []
             for i,name in enumerate(self.df.index):
@@ -482,7 +482,7 @@ class Rocking:
 
         if n and len(refl)>n:refl=refl[:n]
         nbs = len(refl)#.size;print(nbs,refl)
-        print('total number of beams:%d' %nbs)
+        if v :print('total number of beams:%d' %nbs)
 
         return refl,nbs
 

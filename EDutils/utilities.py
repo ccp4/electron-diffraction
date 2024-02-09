@@ -68,7 +68,7 @@ def sweep_var(Simu:object,
         df.loc[name,'pkl']  = sim_obj._get_pkl()
     df_file = os.path.join(path,'df_%s.pkl' %tag)
     df.to_pickle(df_file)
-    print(colors.green+'Dataframe saved : '+colors.yellow+df_file+colors.black)
+    # print(colors.green+'Dataframe saved : '+colors.yellow+df_file+colors.black)
     return df
 
 def get_pkl(file=None,path='',name='unkown.pkl'):
@@ -442,7 +442,7 @@ def gemmi_sf(pdb_file:str='',dmin=2):
 
 
 
-def import_crys(file:str=''):
+def import_crys(file:str='',v=False):
     """import a Crystal
 
     Parameters
@@ -467,7 +467,7 @@ def import_crys(file:str=''):
             print('available builtins:\n')
             print(builtins.__str__())
             return
-    print(colors.green+'imported file : '+colors.yellow+file+colors.black)
+    if v:print(colors.green+'imported file : '+colors.yellow+file+colors.black)
     return crys
 
 def convert2tiff(tiff_file,im0,n0=0,rot=0,n=256,Imax=5e4):

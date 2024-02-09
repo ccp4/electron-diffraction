@@ -28,7 +28,7 @@ class Bloch_cont(rotate_exp.Rocking):
         # # self.thick=
         # if not os.path.exists(self.figpath):
         #     Popen('mkdir %s' %self.figpath,shell=True)
-        self.save()
+        # self.save()
 
     def set_beams_vs_thickness(self,thicks,v=1):
         self.do('_set_beams_vs_thickness',thicks=thicks,verbose=v)

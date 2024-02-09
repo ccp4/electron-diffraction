@@ -288,7 +288,7 @@ class Bloch:
         if not type(thicks)==type(None) and 'z' in opts:
             self._set_beams_vs_thickness(thicks)#;print('thicks solved')
         if 's' in opts:
-            self.save('v' in opts)
+            self.save(v='v' in opts)
 
     def update(self,keV=None,u=None,Smax=None,Nmax=None,dmin=None,
             gemmi=False,hkl=None,

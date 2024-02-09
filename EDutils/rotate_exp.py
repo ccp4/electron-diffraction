@@ -15,7 +15,7 @@ class Rocking:
     def __init__(self,Simu:object,
             uvw:list,tag:str,path:str,
             Sargs:dict,frames:list=None,
-            params=[],vals=[]):
+            params=[],vals=[],verbose=True):
         """ simulate rocking curve
 
         Parameters
@@ -53,17 +53,17 @@ class Rocking:
         self.df['ts'] = ts
         self.Iz_dyn = {}
         self.Iz_kin = {}
-        self._build_index()
-        self.save(v=1)
+        self._build_index(v=verbose)
+        self.save(v=verbose)
 
     ###########################################################################
     #### compute
     ###########################################################################
-    def _build_index(self):
+    def _build_index(self,v=True):
         frames = [ i for i,name in enumerate(self.df.index)]
         beams = np.unique(np.hstack([self.load(i).df_G.index.values for i,name in enumerate(self.df.index)]))
         self.nbeams = beams.size
-        print('...building index...')
+        if v:print('...building index...')
         self.beams = pd.DataFrame(index=beams,columns=['Frame','Sw'])
         for h in beams:
             self.beams.loc[h,'Frame']=[]

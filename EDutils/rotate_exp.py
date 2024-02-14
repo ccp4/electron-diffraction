@@ -141,7 +141,9 @@ class Rocking:
 
     def get_rocking(self,iZs:Optional[slice]=-1,
         zs:Optional[Iterable[float]]=None,
-        refl:Sequence[tuple]=[],cond:str='',opts:str='',n=0,v=True):
+        refl:Sequence[tuple]=[],cond:str='',opts:str='',n=0,
+        kin = False,
+        v=False):
         """Get intensities at required beams and thicknesses
 
         Parameters
@@ -156,7 +158,8 @@ class Rocking:
             condition to apply to selecte reflections
         opts
             F(include friedel), O(include central beam)
-
+        kin
+            Also include kinematic values if True(default False)
         Returns
         -------
             z,dict
@@ -172,7 +175,11 @@ class Rocking:
         nts = self.ts.size
         I = {}
         # for h in refl : I[str(h)]=np.nan*np.ones((nts,nzs))
-        for h in refl : I[str(h)]=np.zeros((nts,nzs))
+        for h in refl :
+            if kin:
+                I[str(h)]=[np.zeros((nts,nzs)),np.zeros((nts,nzs))]
+            else:
+                I[str(h)]=np.zeros((nts,nzs))
 
         if v : print("gathering the intensities")
         for i in range(nts):
@@ -183,7 +190,11 @@ class Rocking:
                 idx  = sim_obj.get_beam(refl=refl,index=True)
                 # hkl0 = [str(tuple(h)) for h in sim_obj.get_hkl()[idx]]
                 for idB,hkl_0 in zip(idx,hkl0):
-                    I[hkl_0][i,:] = np.array(sim_obj.Iz[idB,iZs])
+                    if kin:
+                        I[hkl_0][0][i,:] = np.array(sim_obj.Iz[idB,iZs])
+                        I[hkl_0][1][i,:] = np.array(sim_obj.Iz_kin[idB,iZs])
+                    else:
+                        I[hkl_0][i,:] = np.array(sim_obj.Iz[idB,iZs])
         if n and nbs>n:
             print('keeping only %d strongest beams' %n)
             df_Imax = pd.DataFrame.from_dict({h:Ib[:,0].max() for h,Ib in I.items()},orient='index',columns=['I'])
@@ -321,6 +332,7 @@ class Rocking:
 
     def plot_rocking(self,cmap='viridis',x:str='Sw',
         cond='',refl=[],opts:str='',iZs=-1,zs=None,n:int=0,
+        kin=False,v=False,
         **kwargs):
         """plot rocking curve for set of selected beams at thickness zs
 
@@ -333,11 +345,13 @@ class Rocking:
         kwargs
             args to pass to dsp.stddisp
         """
-        z,I = self.get_rocking(cond=cond,refl=refl,opts=opts,zs=zs,iZs=iZs,n=n)
+
+        z,I = self.get_rocking(cond=cond,refl=refl,opts=opts,zs=zs,iZs=iZs,n=n,kin=kin)
+
         refl,plts = list(I.keys()),[]           #;print(refl)
         xlab = {'Frame':'frame','Sw':r'$S_w(\AA^{-1})$','theta':r'$\theta(deg)$'}[x]
 
-        print('gathering plots')
+        if v:print('gathering plots')
         nbs,nzs = len(refl),z.size
         if nbs>=nzs:
             cs,ms = dsp.getCs(cmap,nbs), dsp.markers
@@ -346,7 +360,12 @@ class Rocking:
                 legElt.update({'$z=%d A$' %(zi):['k',ms[iz]+'-']})
                 for i,refl0 in enumerate(refl):
                     df_b=self.beams.loc[refl0]
-                    plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[i],ms[iz]+'-'],'']]
+                    if kin :
+                        plts += [[df_b[x],I[refl0][0][df_b.Frame,iz],[cs[i],ms[i]+'-' ],'']]
+                        plts += [[df_b[x],I[refl0][1][df_b.Frame,iz],[cs[i],ms[i]+'--'],'']]
+                    else:
+                        plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[i],ms[iz]+'-'],'']]
+
         else:
             # rocking for different thicknesses
             cs,ms = dsp.getCs(cmap,nzs),  dsp.markers
@@ -355,9 +374,15 @@ class Rocking:
             for i,refl0 in enumerate(refl):
                 for iz,zi in enumerate(z):
                     df_b=self.beams.loc[refl0]
-                    plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[iz],ms[i]+'-'],'']]
+                    if kin :
+                        plts += [[df_b[x],I[refl0][0][df_b.Frame,iz],[cs[iz],ms[i]+'-' ],'']]
+                        plts += [[df_b[x],I[refl0][1][df_b.Frame,iz],[cs[iz],ms[i]+'--'],'']]
+                    else:
+                        plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[iz],ms[i]+'-'],'']]
             legElt.update({'$z=%d A$' %(zi):[cs[iz],'-'] for iz,zi in enumerate(z) })
 
+        if kin :
+            legElt['kin'] = 'k--'
         # print('displaying')
         return dsp.stddisp(plts,labs=[xlab,'$I$'],legElt=legElt,**kwargs)
 
@@ -574,6 +599,7 @@ class Rocking:
         """
         for i in range(self.df.shape[0]):
             obj = self.load(i)
+            if verbose:print('rock %d' %i)
             obj.__getattribute__(f)(**args)
             obj.save(v=verbose)
 

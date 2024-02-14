@@ -160,7 +160,7 @@ class Bloch:
                     2*np.pi*self.lat_vec,hklMax=2*Nmax)
                 df_Fhkl = sf.get_structure_factor(self.cif_file,hklMax=2*Nmax)
                 df_Fhkl['Fga']  = np.real(np.abs(df_Fhkl.F))
-                df_Fhkl['Uga']  = np.real(np.abs(df_Fhkl.F*cst.meff(cst.keV)/(np.pi*self.crys.volume)))
+                df_Fhkl['Uga']  = np.real(np.abs(df_Fhkl.F*cst.meff(self.keV)/(np.pi*self.crys.volume)))
                 df_Fhkl['xi_g'] = self.k0/df_Fhkl.Uga
                 df_Fhkl.to_pickle(self.get_Fhkl_pkl())
             #save
@@ -277,7 +277,7 @@ class Bloch:
         else:
             if Nmax or dmin:self.update_Nmax(Nmax,dmin)
             if beam : self.set_beam(**beam)
-            if Smax or isinstance(hkl,np.ndarray):
+            if Smax or isinstance(hkl,np.ndarray) :
                 self._set_excitation_errors(Smax=Smax,hkl=hkl,f_sw=f_sw)
                 self._set_Vg()
             self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts,
@@ -511,11 +511,11 @@ class Bloch:
         self.df_G['px'] = px
         self.df_G['py'] = py
         self.df_G['Fg' ]  = Fhkl
+        self.df_G['Fg2']  = np.abs(self.df_G.Fg)**2
         self.df_G['Vg']   = np.abs(self.df_G.Fg)/self.crys.volume
-        self.df_G['Ikin'] = np.abs(self.df_G.Fg)**2
         self.df_G['Ug']   = self.pre*self.df_G.Fg/(self.crys.volume*np.pi)*self.eps
         self.df_G['Uga']  = np.abs(self.df_G.Ug)
-        self.df_G['xi_g'] = self.k0/np.abs(self.df_G.Ug)
+        self.df_G['xi_g'] = self.k0/self.df_G.Uga
         self.df_G['Swl']  = bloch_util.logM(self.df_G['Sw'])
         self.df_G['L']    = np.ones(Vg_G.shape)
 
@@ -557,14 +557,14 @@ class Bloch:
         self.df_G.I=self.Iz[idx,iZ]
 
     def _set_kinematic(self):
-        Sw,Ug = self.df_G[['Sw','Vg']].values.T
+        Sw,xi_g = self.df_G[['Sw','xi_g']].values.T
         t,sig = self.thick, self.sig
 
         #[Ug]=[A-2], [k0]=[A^-1], [t]=[A], [Fhkl]=3[fe]=[A]
         # print(Ug[0],t,Sw[0])
-        Sg = np.pi/self.k0*Ug*t*np.sinc(Sw*t)
-        self.df_G['Sg'] = Sg
-        self.df_G['Ig'] = np.abs(Sg)**2
+        Sg = np.pi*t/xi_g*np.sinc(Sw*t)
+        self.df_G['Skin'] = Sg
+        self.df_G['Ikin'] = np.abs(Sg)**2
 
     def _set_beams_vs_thickness(self,thicks=None,v=True):
         """ get Scattering matrix as function of thickness for all beams
@@ -595,8 +595,8 @@ class Bloch:
 
         self.Sz = St
         self.Iz = np.abs(self.Sz)**2
-        Sw,Ug = self.df_G[['Sw','Vg']].values.T
-        Sz_kin = np.array([np.pi/self.k0*Ug*t*np.sinc(Sw*t) for t in self.z]).T
+        Sw,xi_g = self.df_G[['Sw','xi_g']].values.T
+        Sz_kin = np.array([np.pi*t/xi_g*np.sinc(Sw*t) for t in self.z]).T
         self.Iz_kin = np.abs(Sz_kin)**2
 
     def _set_thicks(self,thicks):
@@ -762,9 +762,9 @@ class Bloch:
     ################################################################################
     #### display
     ################################################################################
-    def show_df_G(self,n=-1,hkl=[],cols=['Sw','Fg','Ikin','Vg','Uga','xi_g'],sort='Swa'):
+    def show_df_G(self,n=-1,hkl=[],cols=['Sw','Fg','Fg2','Vg','Uga','xi_g'],sort='Swa'):
         formats = {'Sw':'{:>7.1e}','Swa':'{:>7.1e}',
-            'Fg':'{:>6.1f}','Ikin':'{:>8.1f}',
+            'Fg':'{:>6.1f}','Fg2':'{:>8.1f}',
             'Vg':'{:>6.2e}','Uga':'{:>8.1e}','xi_g':'{:>5.0f}',
             }
         df = self.df_G
@@ -1165,3 +1165,65 @@ class Bloch:
         # legElt.update({'$%s$' %l:[c,'-'] for c,l in zip(cs,self.df.index)})
         # return dsp.stddisp(plts,labs=['$z$','$I$'],legElt=legElt,lw=2)
         return dsp.stddisp(plts,labs=['$%s$' %xlab,'$I$'],lw=2,**kwargs)
+
+    def solve_strong_beam(self,thick=500,solve_args={},
+        Imin=1e-4,dImin=0.01):
+        '''Run the simulation for only the strongest beams for which I>Imin
+        and iteratively removes all the reflections that affect those beams
+        by less than dImin.
+        Parameters :
+        -----------
+        solve_args : parsed to self.solve
+        Imin : strong beam criteria
+        dImin : perturbation beam criteria (relative error )
+        thick : thickness at which the procedure is performed
+        '''
+        self.solve(**solve_args)
+        self.set_thickness(thick=thick,v=False)
+        ## gather strong beams
+        hkls        = self.df_G.index
+        hkl_strong  = self.df_G.loc[self.df_G.I>Imin].index
+        hkl_weak    = np.setdiff1d(hkls,hkl_strong)
+        # print('hkl_strong',hkl_strong.values)
+        # print('hkl_weak',hkl_weak)
+
+        self.df_hkl_weak = pd.DataFrame(index=hkl_weak,columns=['dI','dImax','dhmax'])
+        solve_args['Smax']=0
+
+        self.df_hkl_weak.loc[hkl_weak,'Iref'] = self.df_G.loc[hkl_weak,'I']
+        self.df_hkl_weak.loc[hkl_weak,'Inew'] = 0
+        self.df_hkl_weak.loc[hkl_weak,'in']  = True
+        I0 = self.df_G.loc[hkl_strong,'I'].copy()
+        Iref = I0.copy()
+        for hi in hkl_weak:
+            #### run without beam hi
+            _hkls = np.array([eval(s) for s in hkls.drop(hi)])
+            self.solve(hkl=_hkls,**solve_args)
+            self.set_thickness(thick=thick,v=False)
+
+            v = np.abs(self.df_G.loc[hkl_strong,'I']-Iref)/Iref
+            # print(hi,len(_hkls),v.max(),hkl_strong[v.argmax()])
+            self.df_hkl_weak.loc[hi,'dI']=','.join(v.astype(str))
+            self.df_hkl_weak.loc[hi,'dImax'] = v.max()
+            self.df_hkl_weak.loc[hi,'dhmax'] = hkl_strong[v.argmax()]
+            if v.max()<dImin:
+                hkls=hkls.drop(hi)
+                Iref = self.df_G.loc[hkl_strong,'I']
+                self.df_hkl_weak.loc[hi,'in'] = False
+
+
+        hkl_in = self.df_hkl_weak.loc[self.df_hkl_weak['in']==True].index
+        #rerun previous to include last perturbation beam if necessary
+        if self.df_hkl_weak.loc[hkl_weak[-1],'in']:
+            print('rerunning for %s' %hkl_weak[-1])
+            _hkls = np.array([eval(s) for s in hkls])
+            self.solve(hkl=_hkls,**solve_args)
+            self.set_thickness(thick=thick,v=False)
+
+
+        self.df_hkl_weak.loc[hkl_in,'Inew'] = self.df_G.loc[hkl_in,'I']
+        self.df_hkl_strong = self.df_G.loc[hkl_strong,['I']].copy()
+        # self.df_G.loc['Iref'] = 0
+        self.df_hkl_strong['Iref'] = I0
+        # self.df_G.loc[hkl_in    ,'Iref'] = self.df_hkl_weak.loc[hkl_in,'Iref']
+        self.save()

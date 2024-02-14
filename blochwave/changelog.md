@@ -1,4 +1,8 @@
 ### 1.0
+###Wed 14 Feb 19:39:33 GMT 2024
+- fixed kinematic intensities
+- fixed error in `df_Fhkl.Uga`
+- added `solve_strong_beam` 
 ###Fri  2 Feb 15:18:40 GMT 2024
 - add quantities in df_G
 - add `show_df_G`

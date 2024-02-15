@@ -80,11 +80,11 @@ class Bloch:
             self.solve(Smax=Smax,Nmax=Nmax,dmin=dmin,f_sw=f_sw,**kwargs)
         else:
             if not felix and init:
-                print(colors.blue+'...Nmax... '+colors.black)
+                if v:print(colors.blue+'...Nmax... '+colors.black)
                 self.update_Nmax(Nmax,dmin)
-                print(colors.blue+'...Excitation errors... '+colors.black)
+                if v:print(colors.blue+'...Excitation errors... '+colors.black)
                 self._set_excitation_errors(Smax,f_sw=f_sw)
-                print(colors.blue+'...Vg... '+colors.black)
+                if v:print(colors.blue+'...Vg... '+colors.black)
                 self._set_Vg()
         self.save(v=v)
 

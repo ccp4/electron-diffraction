@@ -515,6 +515,7 @@ class Bloch:
         self.df_G['Vg']   = np.abs(self.df_G.Fg)/self.crys.volume
         self.df_G['Ug']   = self.pre*self.df_G.Fg/(self.crys.volume*np.pi)*self.eps
         self.df_G['Uga']  = np.abs(self.df_G.Ug)
+        self.df_G['Ug/2KSg'] = self.df_G.Uga/(2*self.k0*self.df_G.Swa)
         self.df_G['xi_g'] = self.k0/self.df_G.Uga
         self.df_G['Swl']  = bloch_util.logM(self.df_G['Sw'])
         self.df_G['L']    = np.ones(Vg_G.shape)
@@ -1226,4 +1227,28 @@ class Bloch:
         # self.df_G.loc['Iref'] = 0
         self.df_hkl_strong['Iref'] = I0
         # self.df_G.loc[hkl_in    ,'Iref'] = self.df_hkl_weak.loc[hkl_in,'Iref']
+        self.collect_beams()
         self.save()
+
+    def collect_beams(self):
+        self.df_hkl_strong.rename(columns={'I':'Inew'},inplace=True)
+        self.df_hkl_strong['in']=True
+        self.df_hkl_strong['dI']=0
+        self.df_hkl_strong['dImax']=0
+        self.df_hkl_strong['dhmax']=0
+        self.df_beams = pd.concat([self.df_hkl_strong,self.df_hkl_weak])
+        self.df_beams['tag']=''
+        self.df_beams.loc[self.df_hkl_strong.index,'tag']='strong'
+        self.df_beams.loc[self.df_hkl_weak.loc[self.df_hkl_weak['in']==True ].index,'tag']='weak'
+        self.df_beams.loc[self.df_hkl_weak.loc[self.df_hkl_weak['in']==False].index,'tag']='out'
+
+
+        Kx,Ky,Kz = self.K
+        df = ut.load_pkl(self.get_Fhkl_pkl()).loc[self.df_beams.index]
+        hkl = df[['h','k','l']].values
+        lat_vec = np.array(self.crys.reciprocal_vectors)/(2*np.pi)
+        qx,qy,qz = np.transpose(hkl.dot(lat_vec))
+        Sg = (self.k0**2-((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2))/(2*self.k0)
+        self.df_beams['Uga'] = df.Uga
+        self.df_beams['Sga'] = np.abs(Sg)
+        self.df_beams['Ug/2KSg'] = self.df_beams.Uga/(2*self.k0*self.df_beams.Sga)

@@ -1,8 +1,12 @@
 ### 1.0
-###Wed 14 Feb 19:39:33 GMT 2024
+### Thu 15 Feb 16:25:55 GMT 2024
+- added `collect_beams`
+- added perturbation strenght to Vg
+
+### Wed 14 Feb 19:39:33 GMT 2024
 - fixed kinematic intensities
 - fixed error in `df_Fhkl.Uga`
-- added `solve_strong_beam` 
+- added `solve_strong_beam`
 ###Fri  2 Feb 15:18:40 GMT 2024
 - add quantities in df_G
 - add `show_df_G`

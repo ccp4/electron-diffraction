@@ -45,6 +45,7 @@ df_wallpp['asym_cell'] = asym_cells.values()
 ################################# Atomic parameters
 V0 = 1.0
 Ai = np.array([0.1,0.25,0.26,0.27,1.5])
+f_V = lambda r,Za: V0*np.exp(-(r/Ai[Za])**2)
 fv = lambda X,X0,Za : V0*np.exp(-(np.linalg.norm(X-X0,axis=1)/Ai[Za])**2)
 #f  = np.sum(np.array([fc(X,X0) for X0 in Xasym]),axis=0)
 g,marker=0.5,'o' #^'

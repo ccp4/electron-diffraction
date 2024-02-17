@@ -6,7 +6,7 @@ import multislice.multi_2D as ms    ;imp.reload(ms)
 import multislice.pymultislice as pyms;imp.reload(pyms)
 plt.close('all')
 path='../multislice/docs_fig/multi2D/2_beam_'
-opts='MVv'#MK'
+opts='TMv'#MK'
 opt = 'p'
 
 # K = 5.008343065817388
@@ -21,7 +21,7 @@ pattern = np.array([[0.5,0.5,Za]])
 Nh = 20
 rot = lambda t:np.array([[np.cos(t),np.sin(t)],[-np.sin(t),np.cos(t)]])
 
-a1,a2 = lat.get_lattice_vec(lat_type='rect',a=ax,b=bz)
+a1,a2 = lat.set_lattice_vec(lat_type='rect',a=ax,b=bz)
 b1,b2 = lat.reciprocal_lattice_2D(a1,a2)
 
 n = 10
@@ -91,9 +91,10 @@ if 'T' in opts:
 
     zs  = np.array([0.25,0.5,0.75,1,1.25,1.5])*zeta_g #selected z for rocking curve
     iZs = [np.argmin(abs(z-z0)) for z0 in zs]
-    pyms.tilts_show(tilts,mst,iBs=20,iZs=iZs,
-        opt=opt,name=path+'rocking.svg')
+    pyms.tilts_show(tilts,mst,iBs=-1,iZs=iZs,
+        opt=opt,name=path+'rocking.svg');plt.show()
     # ms.tilts_show(tilts,mst,iBs=10,iZs=slice(0,Nz,100))
+
 
 if 'E' in opts:
     g,theta = 1,0.1
@@ -146,3 +147,4 @@ if 'K' in opts:
     plts = [[z,(F(i)/F(iM).max())**2*m,[cs[i],'--'],'$%d$' %i] for i in range(Nh-1)]
     dsp.stddisp(plts,ax=ax0,lw=2,labs=[r'$\AA(nm)$','$I$'],opt=opt)
     # plts  = [[t,fj(t,Za)**2,'g--','fe**2']]
+plt.show()

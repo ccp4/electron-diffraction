@@ -19,7 +19,7 @@ pattern = p1.get_potential_grid_p1()
 Nx=1
 iZv = np.inf
 def base():
-    mp0 = MS2D.Multi2D(pattern,a,b,keV,
+    mp0 = MS2D.Multi2D(pattern,a,b,keV=keV,
             Nx=Nx,dz=b,nz=100,ppopt='',#XQZTP
             TDS=False,
             iZs=1,iZv=10,opts='q',eps=eps)

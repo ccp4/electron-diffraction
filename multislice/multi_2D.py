@@ -124,15 +124,19 @@ class Multi2D(pymultislice.Multislice):
             title='Propagator',
             **kwargs)
 
-    def Xz_show(self,iZs=1,cmap='jet',**kwargs):
+    def Xz_show(self,iZs=1,s_opt=False,f_opt=None,cmap='jet',**kwargs):
         '''Show wave propagation for slices iZs '''
+        if not f_opt:
+            f_opt=lambda Px:np.array(np.abs(Px)**2,dtype=float)
         if isinstance(iZs,int):iZs=slice(0,self.z.size,iZs)
         z  = self.z[iZs]
         Px = self.psi_xz[iZs,:]
+        if s_opt:Px-=self.psi0
+        Px = f_opt(Px)
         cs = dsp.getCs(cmap,z.size)
         plts = [ [self.x,Px[i,:],cs[i]] for i in range(z.size)]
         return dsp.stddisp(plts,labs=[r'$x(\AA)$',r'$|\Psi(x)|^2$'],
-            imOpt='hc',caxis=[z.min(),z.max()],cmap=cmap,
+            imOpt='c',caxis=[z.min(),z.max()],cmap=cmap,axPos='V',
             **kwargs)
 
     def Qz_show(self,iZs=1,opts='',cmap='jet',**kwargs):
@@ -144,7 +148,7 @@ class Multi2D(pymultislice.Multislice):
         # if isinstance(iZs,list):iZs=slice(0,iZs,self.z.size)
         Pqs = np.zeros((self.psi_qz[iZs,:].shape))
         z   = self.z[iZs]
-        Pqs = self.psi_qz[iZs,:].copy()
+        Pqs = self.psi_qz[iZs,:].copy()/self.nx**2/self.dq
         if 'S' in opts:
             if 'O' not in opts:Pqs[:,0]=0# do not show central beam
             for i in range(z.size) : Pqs[i,:]/=np.sum(Pqs[i,:])
@@ -154,6 +158,7 @@ class Multi2D(pymultislice.Multislice):
                 for i in range(z.size) : Pqs[i,:]/=Pqs[i,:].max()
             elif 'n' in opts:
                 for i in range(z.size) : Pqs[i,:]/=Pqs[i,:].sum()
+
         q   = fft.fftshift(self.q.copy())
         Pqs = [fft.fftshift(Pqs[i,:]) for i in range(z.size)]
         cs  = dsp.getCs(cmap,z.size)
@@ -183,12 +188,18 @@ class Multi2D(pymultislice.Multislice):
             plts += [[self.z,Ib[:,i],[cs[i],'--'],'$%s$' %h[i]] for i,iB in enumerate(iBs)]
         return dsp.stddisp(plts,labs=[r'$z(\AA)$',r'$I_b$'],**kwargs)
 
-    def Xxz_show(self,iZs=1,iXs=1,**kwargs):
+    def Xxz_show(self,iZs=1,iXs=1,s_opt=False,**kwargs):
         '''Show 2D wave propagation solution'''
         if isinstance(iZs,int):iZs=slice(0,-1,iZs)
-        if isinstance(iXs,int):iZs=slice(0,-1,iXs)
-        x,z = np.meshgrid(self.x,self.z)
-        im = [x[iZs,:],z[iZs,:],self.psi_xz[iZs,:]]
+        if isinstance(iXs,int):iXs=slice(0,-1,iXs)
+        x,z = np.meshgrid(self.x[iXs],self.z[iZs])
+        if isinstance(iZs,np.ndarray) and isinstance(iXs,np.ndarray):
+            Psi=self.psi_xz[np.ix_(iZs,iXs)].copy()
+        else:
+            Psi=self.psi_xz[iZs,iXs].copy()
+        if s_opt:
+            Psi-=self.psi0[iXs]
+        im = [x,z,np.abs(Psi)**2]
         return dsp.stddisp(im=im,labs=[r'$x(\AA)$',r'$z(\AA)$'],
         **kwargs)
 
@@ -211,7 +222,7 @@ class Multi2D(pymultislice.Multislice):
         dt = deg*np.pi/180
         t  = 3*np.pi/2+dt*np.linspace(-1,1,1000)
         # reciprocal lattice
-        a1,a2 = lat.get_lattice_vec(lat_type='rect',a=self.ax,b=self.bz)
+        a1,a2 = lat.set_lattice_vec(lat_type='rect',a=self.ax,b=self.bz)
         b1,b2 = lat.reciprocal_lattice_2D(a1,a2)
         h,k = np.meshgrid(np.arange(-nh,nh+1),np.arange(nk))
         X = h*b1[0]+k*b2[0]
@@ -296,14 +307,15 @@ class Multi2D(pymultislice.Multislice):
 
     def set_Psi0(self,iTDS=0):
         Psi  = np.ones(self.x.shape,dtype=complex)
-        self.Psi_x = Psi/np.sqrt(np.sum(np.abs(Psi)**2)*self.dx)
+        self.psi0 = Psi/np.sqrt(np.sum(np.abs(Psi)**2)*self.dx)
+        self.Psi_x = self.psi0.copy()
         if self.TDS :
             if not iTDS :
-                self.psi_xz = np.zeros((0,self.nx))
+                self.psi_xz = np.zeros((0,self.nx),dtype=complex)
                 self.psi_qz = np.zeros((0,self.nx),dtype=complex)
         else:
-            self.psi_xz = np.zeros((0,self.nx))
-            self.psi_qz = np.zeros((0,self.nx))
+            self.psi_xz = np.zeros((0,self.nx),dtype=complex)
+            self.psi_qz = np.zeros((0,self.nx))#,dtype=complex)
         self.z  = np.array([])
         self.iz = 0
 
@@ -332,11 +344,12 @@ class Multi2D(pymultislice.Multislice):
             if not i%iZs :
                 if msg and v: msg+='iz=%d, z=%.1f A' %(self.iz, self.z[self.iz])
                 if 'x' in opts:
-                    self.psi_xz[self.iz,:] = np.abs(self.Psi_x)**2
+                    self.psi_xz[self.iz,:] = self.Psi_x
                 if 'q' in opts:
                     if self.TDS:
                         self.psi_qz[self.iz,:] += self.Psi_q
                     else:
+                        # self.psi_qz[self.iz,:] = self.Psi_q
                         self.psi_qz[self.iz,:] = np.abs(self.Psi_q)**2
                     self.iz+=1
             if msg:print(colors.green+msg+colors.black)

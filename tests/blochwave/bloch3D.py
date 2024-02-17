@@ -7,15 +7,15 @@ dsp.matplotlib.use('gtk3agg')
 if 1:
     args = dict(opts='')
     b0 = bloch.Bloch(cif_file,path='dat/dummy/',keV=200,
-        u=[1,6,15],Nmax=8,Smax=0.01,solve=True,
+        u=[1,6,15],Nmax=6,Smax=0.01,solve=True,
         opts='svt',thick=500)
 
     # df_Fhkl = pd.read_pickle(b0.get_Fhkl_pkl())
     # b0.show_df_G(n=10)
     # print(b0.df_G.sort_values('Ikin')[['Swa','xi_g','Ikin']])
     if 1:
-        b0.solve_strong_beam(thick=500,solve_args=args,Imin=5e-4,dImin=0.05)
-        print(b0.df_beams.sort_values('Iref')[['Inew','Iref','type']].to_string())
+        b0.solve_strong_beam(thick=500,solve_args=args,Imin=1e-3,dImin=0.01)
+        print(b0.df_beams.sort_values('Iref')[['Inew','Iref','tag','Uga','Sga','Ug/2KSg']].to_string())
         # print('strong   :\n',b0.df_hkl_strong.sort_values('I')[['I','Iref']])
         # print('weak in  :\n',b0.df_hkl_weak.loc[b0.df_hkl_weak['in']==True ,['dImax','dhmax','Iref','Inew']])
         # print('weak out :\n',b0.df_hkl_weak.loc[b0.df_hkl_weak['in']==False,['dImax','dhmax','Iref','Inew']])

@@ -1,4 +1,6 @@
-### 1.0
+## 1.3dev
+
+## 1.0
 ### Thu 15 Feb 16:25:55 GMT 2024
 - added `collect_beams`
 - added perturbation strength to Vg

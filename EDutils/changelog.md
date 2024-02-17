@@ -1,4 +1,6 @@
 # Changelog
+## 1.3dev
+
 ## 1.2
 ###Wed 14 Feb 19:39:33 GMT 2024
 - added `kin` flag to `plot_rocking`

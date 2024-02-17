@@ -1,7 +1,7 @@
 # Changelog
-## 1.2dev
+## 1.2
 ###Wed 14 Feb 19:39:33 GMT 2024
-- added kinematic flag to `plot_rocking`
+- added `kin` flag to `plot_rocking`
 ### Mon  5 Feb 10:29:24 GMT 2024
 - rotate_exp : `params` and `vals` (such as `hkl`) can be added to the continuous sweep
 ### Fri  2 Feb 14:52:12 GMT 2024

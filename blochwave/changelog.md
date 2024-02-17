@@ -1,7 +1,7 @@
 ### 1.0
 ### Thu 15 Feb 16:25:55 GMT 2024
 - added `collect_beams`
-- added perturbation strenght to Vg
+- added perturbation strength to Vg
 
 ### Wed 14 Feb 19:39:33 GMT 2024
 - fixed kinematic intensities
@@ -13,7 +13,7 @@
 ### Fri 26 Jan 13:11:38 GMT 2024
 - change structure_factor dataframe callback
 ### Wed 24 Jan 10:26:49 GMT 2024
-- added structure factor dataframe `pd.read_pickle(b0.get_Fhkl_pkl())``
+- added structure factor dataframe `pd.read_pickle(b0.get_Fhkl_pkl())`
 ### Fri 12 Jan 16:40:48 GMT 2024
 - get_lattice is not loaded any more but computed with ut.get_lattice to fix bug when updating Nmax
 ### Thu  7 Dec 08:17:10 GMT 2023

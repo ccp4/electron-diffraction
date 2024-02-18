@@ -1,11 +1,12 @@
 import setuptools
-
+import utils
+version = utils.get_version("changelog.md")
 with open("README.md", "r") as fh:
    long_description = fh.read()
 
 setuptools.setup(
     name="ccp4ED",
-    version="1.3",
+    version=version,
     author="Tarik Ronan Drevon",
     author_email="tarik.drevon@stfc.ac.uk",
     description="Electron diffraction utilities",

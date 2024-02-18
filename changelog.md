@@ -1,5 +1,5 @@
 # Changelog Summaries
-##1.3dev
+##1.3.1
 
 ##1.2
 - EDutils 1.2:

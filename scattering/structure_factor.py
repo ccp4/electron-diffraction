@@ -1,9 +1,13 @@
-import utils.displayStandards as dsp
-from . import scattering_factors as scatf
+import io
+from math import pi
 from crystals import Crystal
+from subprocess import check_output
 import numpy as np
 import pandas as pd
-from math import pi
+import gemmi
+import utils.displayStandards as dsp
+import utils.physicsConstants as cst
+from . import scattering_factors as scatf
 
 __all__=['structure_factor3D','plot_structure3D','get_miller3D',
         'get_pendulossung']
@@ -12,7 +16,65 @@ __all__=['structure_factor3D','plot_structure3D','get_miller3D',
 ai = 1/np.array([0.1,0.25,0.26,0.27,1.5])**2
 fj = lambda q,j,eps:eps*(np.pi/ai[j])*np.exp(-(np.pi*q)**2/ai[j])
 
-def get_structure_factor(cif_file,hkl=None,hklMax=10,sym=1,ed=True,v=''):
+def get_gemmi_structure_factor(cif_file,gemmi_prog,keV=200,dmin=0.5,aniso=True):
+    '''Uses gemmi program to compute structure factors.Efficient but ouptuts only unique reflections
+    Parameters : 
+    -----------
+        cif_file : cif file 
+        gemmi_prog : location of gemmi program
+        keV,dmin,aniso : energy,resolution, whether to model ADP
+    Returns:
+    --------
+        DataFrame containing structure factors 
+        
+    '''    
+    cmd="{gemmi_program} sfcalc --for=electron --wavelength={lam} --dmin={dmin} {aniso} {cif_file}".format(
+        gemmi_program=gemmi_prog,    
+        lam=cst.keV2lam(keV),
+        cif_file=cif_file,
+        dmin=dmin,
+        aniso=['--noaniso',''][aniso]
+        )
+    out = check_output(cmd,shell=True).decode()    
+    df_FhklG=pd.read_csv(io.StringIO(out),names=['hkl','amp','phi'],sep="\t",index_col=0)
+    df_FhklG['F'] = df_FhklG.amp*np.exp(1J*np.deg2rad(df_FhklG.phi))
+    df_FhklG['I'] = np.abs(df_FhklG.F)**2
+    hkl = [eval(','.join(hkl.strip()[1:-1].split(" "))) for hkl in df_FhklG.index]
+    df_FhklG['h']= [h[0] for h in hkl]
+    df_FhklG['k']= [h[1] for h in hkl]
+    df_FhklG['l']= [h[2] for h in hkl]
+    df_FhklG.index=[str(h) for h in hkl]
+    df_FhklG['hkl']=df_FhklG.index
+    return df_FhklG
+    
+def get_small_structure_factor(cif_file,Nmax=2,aniso=True):
+    '''Uses gemmi to compute structure factors. Not very efficient but accounts for ADPs
+    Parameters : 
+    -----------
+        cif_file : cif file 
+        
+    Returns:
+    --------
+        DataFrame containing structure factors 
+        
+    '''
+    small = gemmi.read_small_structure(cif_file)    
+    small.change_occupancies_to_crystallographic()    
+    calc_e = gemmi.StructureFactorCalculatorE(small.cell)
+    if not aniso:
+        for site in small.sites:
+            site.aniso.u11 = site.aniso.u22 = site.aniso.u33 = 0
+    # print(small.sites[0].aniso.nonzero())
+    hkl = get_miller3D(Nmax,sym=1,flat=True)
+    df  = pd.DataFrame(hkl,columns=['h','k','l'])
+    df.index=[str(tuple(h)) for h in hkl]
+    df['hkl']=df.index     
+    df['F'] = [calc_e.calculate_sf_from_small_structure(small, (r.h,r.k,r.l)) for h,r in df.iterrows()]
+    df['I'] = np.abs(df.F)**2
+    return df
+
+
+def get_structure_factor(cif_file,hkl=None,hklMax=10,sym=1,ed=True,aniso=False,v=''):
     '''Computes structure factor in 3D from :
     - `cif_file` : cif file
     - `hkl`     : list of miller indices h,k,l (shape Nx3 => [h;k;l])
@@ -48,20 +110,25 @@ def get_structure_factor(cif_file,hkl=None,hklMax=10,sym=1,ed=True,v=''):
         elements = np.unique([a.element for a in crys.atoms])
         q,fq = scatf.get_fx(elements,q)
     if 'q' in v:qmax=q.max();print('qmax=%.4f A^-1\nmax_res=%.4f A' %(qmax,1/qmax))
-
+ 
     #structure factor
     Fhkl = np.zeros(q.shape,dtype=complex)
     for i,atom in enumerate(atoms):
         F_i = np.zeros(q.shape,dtype=complex)
         idx = fa==atom
-        #loop over atoms with of atomic number "atom"
+        #loop over atoms with atomic number "atom"
         for ri in ra[idx,:]:
             x,y,z=ri
             F_i += np.exp(-2*pi*1J*(x*h+y*k+z*l))
         Fhkl += F_i*fq[:,i]
+
+    
     df_Fhkl['F'] = Fhkl
 
-    df_Fhkl.index=[str((h,k,l)) for h,k,l in hkl]
+    df_Fhkl.index  = [str((h,k,l)) for h,k,l in hkl]
+    df_Fhkl['hkl'] = df_Fhkl.index 
+    df_Fhkl['I']   = np.abs(df_Fhkl.F)**2
+    
     return df_Fhkl
 
 
@@ -207,10 +274,12 @@ def plot1Dcutline(Shkl,u='001',lat_vec=None,dopt='fq',**kwargs):
 
 ##########################################################################
 ##### def: misc
-def get_miller3D(hklMax=10,sym=1):
+def get_miller3D(hklMax=10,sym=1,flat=False):
     '''hklMax : Number of Beams such that Fourier components = 2^(N+1) - 1'''
     Nhkl = range(-hklMax*sym,hklMax+1)
     hkl = np.meshgrid(Nhkl,Nhkl,Nhkl)
+    if flat :
+        return np.array([h.flatten() for h in hkl]).T
     return hkl
 def get_miller2D(hkMax=10,sym=1):
     Nhk = range(-hkMax*sym,hkMax+1)

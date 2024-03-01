@@ -39,6 +39,8 @@ class Bloch:
         max order of reflections/resolution (see :meth:`~Bloch.update_Nmax`)
     Smax
         maximum excitation error (see :meth:`~Bloch.solve`)
+    aniso 
+        True to include ADP in structure factors 
     solve
         solve the system by diagonalizing the Bloch matrix
     felix
@@ -55,6 +57,7 @@ class Bloch:
         beam:Optional[dict]={},keV:float=200,u:Sequence[float]=[0,0,1],
         Nmax:int=1,dmin:int=None,
         Smax:float=0.2,
+        aniso:bool=True,         
         solve:bool=True,init=True,
         felix:bool=False,nbeams:int=200,
         eps:float=1,f_sw=None,frame=None,
@@ -64,6 +67,7 @@ class Bloch:
         self.solved = False
         self.Nmax   = 0
         self.dmin   = None
+        self.aniso  = aniso
         self.thick  = 100
         self.thicks = self._set_thicks((0,1000,1000))
         self.eps=eps
@@ -143,7 +147,7 @@ class Bloch:
         self.dmin=dmin
         self.Nmax=Nmax
 
-        if not os.path.exists(self.Fhkl_file()):
+        if not os.path.exists(self.get_Fhkl_file()):
             if gemmi:
                 print(colors.blue+'...gemmi structure factors...'+colors.black)
                 hklF,Fhkl = ut.gemmi_sf(self.pdb_file,dmin)
@@ -154,22 +158,22 @@ class Bloch:
 
             else:
                 print(colors.blue+'...Structure factors...'+colors.black)
-                idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)] #should not be necessary
-                self.pattern=self.pattern[idx,:]
-                hklF,Fhkl = sf.structure_factor3D(self.pattern,
-                    2*np.pi*self.lat_vec,hklMax=2*Nmax)
-                df_Fhkl = sf.get_structure_factor(self.cif_file,hklMax=2*Nmax)
+                # idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)] #should not be necessary
+                # self.pattern=self.pattern[idx,:]
+                # hklF,Fhkl = sf.structure_factor3D(self.pattern,
+                #     2*np.pi*self.lat_vec,hklMax=2*Nmax)
+                df_Fhkl = sf.get_small_structure_factor(self.cif_file,Nmax=2*Nmax,aniso=self.aniso)
                 df_Fhkl['Fga']  = np.real(np.abs(df_Fhkl.F))
-                df_Fhkl['Uga']  = np.real(np.abs(df_Fhkl.F*cst.meff(self.keV)/(np.pi*self.crys.volume)))
+                df_Fhkl['Ug']   = df_Fhkl.F*cst.meff(self.keV)/(np.pi*self.crys.volume)
+                df_Fhkl['Uga']  = np.real(np.abs(df_Fhkl.Ug))
                 df_Fhkl['xi_g'] = self.k0/df_Fhkl.Uga
-                df_Fhkl.to_pickle(self.get_Fhkl_pkl())
+                df_Fhkl.to_pickle(self.get_Fhkl_file())
+                
             #save
-            np.save(self.Fhkl_file(),Fhkl)
-            np.save(os.path.join(self.path,'hklF.npy'),hklF)
+            # np.save(self.Fhkl_file(),Fhkl)
+            # np.save(os.path.join(self.path,'hklF.npy'),hklF)
             print(colors.green+'structure factors updated.'+colors.black)
 
-    def get_Fhkl_pkl(self):
-        return self.Fhkl_file().replace('npy','pkl')
 
     def set_beam(self,
         keV:float=200,
@@ -277,7 +281,7 @@ class Bloch:
         else:
             if Nmax or dmin:self.update_Nmax(Nmax,dmin)
             if beam : self.set_beam(**beam)
-            if Smax or isinstance(hkl,np.ndarray) :
+            if Smax or isinstance(hkl,np.ndarray) or isinstance(hkl,list):                
                 self._set_excitation_errors(Smax=Smax,hkl=hkl,f_sw=f_sw)
                 self._set_Vg()
             self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts,
@@ -376,23 +380,31 @@ class Bloch:
             sqrtkg=np.sqrt(1+gn/Knorm)  #dyngo implementation
             Sg*=2*self.k0/sqrtkg
 
-        pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
-        Ug = pre*self.get_Fhkl()/(self.crys.volume*np.pi)*self.eps #/3
+        # pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
+        # Ug = pre*self.get_Fhkl()/(self.crys.volume*np.pi)*self.eps #/3
         #####################
         # setting average potential to 0
         # Ug[U0_idx] = U0
         # and Ug(iG,jG) are obtained from Ug[h,k,l] where h,k,l = hlk_iG-hkl_jG
         #####################
-        U0_idx = [2*self.Nmax]*3
-        Ug[tuple(U0_idx)] = 0
+        # U0_idx = [2*self.Nmax]*3
+        # Ug[tuple(U0_idx)] = 0
+
+        df_Fhkl = self.get_Fhkl()
+        df_Fhkl.loc[str((0,0,0)),'Ug'] = 0
         # if Vopt0 :Ug[tuple(U0_idx)] = 0   #setting average potential to 0
         if v:
-            msg = '...assembling {N}x{N} matrix (structure factor shape : {Ug}) ...\
-            '.format(N=Sg.shape[0],Ug=Ug.shape)
+            msg = '...assembling {N}x{N} matrix (structure factor shape : ({Ug}, {Ug}, {Ug}) ...\
+            '.format(N=len(Sg),Ug=np.int64(np.round((len(df_Fhkl))**(1/3))))
             print(colors.blue,msg,colors.black)
         H = np.diag(Sg+0J)
         for iG,hkl_G in enumerate(hkl) :
-            U_iG = np.array([Ug[tuple(hkl_J+U0_idx)] for hkl_J in hkl_G-hkl]) #;print(V_iG.shape)
+            # U_iG = np.array([Ug[tuple(hkl_J+U0_idx)] for hkl_J in hkl_G-hkl]) #;print(V_iG.shape)
+            hG = [str(tuple(h)) for h in hkl_G-hkl]
+
+            # print(df_Fhkl['Ug'].max())
+            U_iG = df_Fhkl.loc[hG,'Ug'].values
+            # print(U_iG.max())
             # print('G : ',hkl_G)
             # print('U_G:',Ug[tuple(U0_idx+hkl_G)])
             # print('idx iG:',[tuple(hkl_J+U0_idx) for hkl_J in hkl_G-hkl])
@@ -434,94 +446,62 @@ class Bloch:
     def _set_excitation_errors(self,Smax=0.02,hkl=None,felix=False,f_sw=None):
         """ get excitation errors for Sg<Smax
         - Smax : maximum excitation error to be included
-        - hkl : list of tuple or nbeams x 3 ndarray - beams to be included (for comparison with other programs)
+        - hkl : Reflections to be included (for comparison with other programs)
+            - list       - of str in the standard blochwave format, i.e. str((h,k,l))
+            - np.ndarray - nbeams x 3 shape 
             Note that the Smax filter will still be applied to these beams(use Smax=0 to force all beams)
         - felix : to compare with felix
         - f_sw : optional function to compute Sw f(hkl,frame) for
         """
         # print(colors.blue+'... setting excitation error ... '+colors.black)
-        K,K0 = self.K,self.k0
-        if isinstance(hkl,list) or isinstance(hkl,np.ndarray):
-            hkl = np.array(hkl)
-            h,k,l = hkl.T
-            qx,qy,qz = hkl.dot(self.lat_vec).T
+        K,K0 = self.K,self.k0        
+        if isinstance(hkl,list) :
+            h,k,l = np.array([eval(h) for h in hkl]).T
+        elif isinstance(hkl,np.ndarray):
+            h,k,l = np.array(hkl).T            
         else:
             (h,k,l),(qx,qy,qz) = self.get_lattice()
-            # print(hkl.shape)
-            # h,k,l = hkl
-            hkl = np.array([h,k,l])
+            
+        
+        hkl_str = [str((h,k,l)) for h,k,l in zip(h,k,l)]
+        df_Fhkl = self.get_Fhkl().loc[hkl_str]
+        qxyz = (np.array([h,k,l]).T).dot(self.lat_vec).T
+        df_Fhkl[['qx','qy','qz']] = qxyz.T
+        df_Fhkl['q']  = np.linalg.norm(df_Fhkl[['qx','qy','qz']].values,axis=1)        
+    
+        ## compute excitation errors
         if f_sw:
             args  = {'hkl':hkl.T,'frame':self.frame}
             Sw = f_sw(**args)
         else:
             Kx,Ky,Kz = K
-            Sw = (K0**2-((Kx+qx)**2+(Ky+qy)**2+(Kz+qz)**2))/(2*K0)
-        q = np.linalg.norm(np.array([qx,qy,qz]).T,axis=1)
-        if felix:
-            self.df_G[['qx','qy','qz','q','Sw','Swa']] = np.array([qx,qy,qz,q,Sw,abs(Sw)]).T
-            self.df_G['I'] = 0
-            self.df_G.loc[str((0,0,0)),'I'] = 1
-            return
-
-        # print('ok')
+            Sw = (K0**2-((Kx+df_Fhkl.qx)**2+(Ky+df_Fhkl.qy)**2+(Kz+df_Fhkl.qz)**2))/(2*K0)
+        df_Fhkl['Sw']  = Sw
+        
+        #### Smax filter 
         if Smax:
-            idx = abs(Sw)<Smax
-            h,k,l = np.array([h[idx],k[idx],l[idx]],dtype=int)
-            qx,qy,qz,q,Sw = qx[idx],qy[idx],qz[idx],q[idx],Sw[idx]#,Swa[idx]
-            # Gz,GzG = Gz[idx],GzG[idx]
-        d = dict(zip(['h','k','l','qx','qy','qz','q','Sw','Swa'],[h,k,l,qx,qy,qz,q,Sw,abs(Sw)]))
-
-
-        self.Smax = Smax
-        self.nbeams = Sw.size
-        self.df_G = pd.DataFrame.from_dict(d)
-        self.df_G.index = [str(tuple(h)) for h in self.df_G[['h','k','l']].values]
+            df_Fhkl=df_Fhkl.loc[df_Fhkl.Sw.abs()<Smax]
+        df_Fhkl['Swa'] = np.abs(df_Fhkl.Sw)
+        df_Fhkl['I']   = 0
+        
+        self.df_G   = df_Fhkl
+        self.Smax   = Smax
+        self.nbeams = len(Sw)
         self.solved = False
-        self.df_G['I'] = 0
-        self.df_G.loc[str((0,0,0)),'I'] = 1
-        # print(self.df_G.iloc[60])
-
 
     def _set_Vg(self,felix=0):
-        ##### opt was used for testing against FELIX
-        if felix:
-            q    = self.df_G['q']
-            hkl  = self.df_G[['h','k','l']].values
-            idx = [i for i,x in enumerate(self.pattern[:,:3]) if all(x<0.99)]
-            xi   = self.pattern[idx,:3].T
-            # print(xi)
-            Za   = np.array(self.pattern[idx,-1],dtype=int)
-            fj   = scatf.get_fe(Za,q) #;fj = 1 #testing exp factor alone
-            #### Fhkl[nGs] = sum_{natoms} fj [nGs x natoms] * hkl[nGsx3].dot(xi[3,natoms])
-            Fhkl = np.sum(fj*np.exp(-2J*np.pi*hkl.dot(xi)),axis=1)
-            # print(self.crys,xi)
-        else:
-            hkl  = self.df_G[['h','k','l']].values
-            Fhkl = self.get_Fhkl()
-            V0_idx = np.array([2*self.Nmax]*3)
-            Fhkl[tuple(V0_idx)] = 0
-            # print(Fhkl.shape,hkl.max())
-            Fhkl = np.array([ Fhkl[tuple(hkl_G+V0_idx)] for hkl_G in hkl])
-
-        self.pre = 1/np.sqrt(1-cst.keV2v(self.keV)**2)
-        # Vg_G = Fhkl/(self.crys.volume*np.pi)*self.pre*self.eps
-        Vg_G = Fhkl
-        px,py,e0x = ut.project_beams(K=self.K,qxyz=self.get_G(),e0=[1,0,0],v=1)
-        self.e0x = e0x
-        self.df_G['px'] = px
-        self.df_G['py'] = py
-        self.df_G['Fg' ]  = Fhkl
-        self.df_G['Fg2']  = np.abs(self.df_G.Fg)**2
+        self.df_G['Fg' ]  = self.df_G.F
+        self.df_G['Fg2']  = np.abs(self.df_G.F)**2
+        self.df_G['I']    = 0
         self.df_G['Vg']   = np.abs(self.df_G.Fg)/self.crys.volume
-        self.df_G['Ug']   = self.pre*self.df_G.Fg/(self.crys.volume*np.pi)*self.eps
-        self.df_G['Uga']  = np.abs(self.df_G.Ug)
         self.df_G['Ug/2KSg'] = self.df_G.Uga/(2*self.k0*self.df_G.Swa)
-        self.df_G['xi_g'] = self.k0/self.df_G.Uga
         self.df_G['Swl']  = bloch_util.logM(self.df_G['Sw'])
-        self.df_G['L']    = np.ones(Vg_G.shape)
-
+        self.df_G['L']    = 1
+        self.df_G['I'] = 0
+        self.df_G.loc[str((0,0,0)),'I'] = 1
+        
         self._set_zones()
-        self.df_G.loc[str((0,0,0)),'Vg'] = 0
+        self.df_G.loc[str((0,0,0)),'Ug'] = 0
         # print('set_Vg : Vg=',self.df_G['Vg'][80])
 
     def _set_zones(self):
@@ -715,20 +695,15 @@ class Bloch:
 
 
     def get_lattice(self):
-        # U0_idx = [2*self.Nmax]*3
-        # lat=np.load(os.path.join(self.path,'lattice.npy'))
-        # print(lat)#self.Nmax,lat.shape)
-        # if lat.shape[0]>4*self.Nmax:
-        #     print(self.Nmax)
-        #     snmax=slice(U0_idx-2*Nmax,U0_idx-2+Nmax)
-        #     lat=lat[snmax,snmax,snmax]
-        #     print(lat)
         lat = ut.get_lattice(self.lat_vec,self.Nmax)
         return lat
+        
     def get_Fhkl(self):
-        return np.load(self.Fhkl_file())
-    def Fhkl_file(self):
-        return os.path.join(self.path,'Fhkl_%d.npy' %self.Nmax)
+        # return np.load(self.Fhkl_file())
+        return ut.load_pkl(self.get_Fhkl_file())
+        
+    def get_Fhkl_file(self):
+        return os.path.join(self.path,'Fhkl_%d.pkl' %self.Nmax)
         # return os.path.join(self.path,'Fhkl_%.2f.npy' %self.dmin)
 
     def get_intensities(self):return self.df_G.I

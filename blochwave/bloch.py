@@ -238,6 +238,7 @@ class Bloch:
         Smax:Optional[float]=None,hkl:Optional[Iterable[int]]=None,
         Nmax:Optional[int]=None,dmin:Optional[int]=None,
         beam:Optional[dict]={},dyngo_args:Optional[dict]={},
+        solver:Optional[str]='',bethe_args:Optional[dict]=dict(ugS_max=0.001,Sgmax=0.1),
         thick:float=None,thicks:Sequence[float]=None,
         opts:str='sv0',
         felix:bool=False,
@@ -272,7 +273,7 @@ class Bloch:
 
             If hkl is specified, Smax is not taken into account
         """
-        if felix:
+        if felix or solver=='felix':
             self._prepare_Felix(nbeams=nbeams)
             self._run_felix() #wait='w' in opts)
             self._postprocess_felix(show_log='v' in opts)
@@ -284,8 +285,13 @@ class Bloch:
             if Smax or isinstance(hkl,np.ndarray) or isinstance(hkl,list):                
                 self._set_excitation_errors(Smax=Smax,hkl=hkl,f_sw=f_sw)
                 self._set_Vg()
-            self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts,
-                dyngo_args=dyngo_args)
+            self.dyngo = any(dyngo_args)
+            self.solver=solver
+            if solver=='bethe':
+                self._solve_Bethe(**bethe_args,v='v' in opts)
+            else:
+                self._solve_Bloch(show_H='H' in opts,Vopt0='0' in opts,v='v' in opts,
+                    dyngo_args=dyngo_args)
         ##### postprocess
         if thick or 't' in opts:
             self.set_thickness(thick)
@@ -360,14 +366,62 @@ class Bloch:
         self.df_G.index = [str(tuple(h)) for h in self.df_G.values]
         self.solved=True
 
+    def _solve_Bethe(self,ugS_max=0.001,Sgmax=0.1,v=False):
+        ### find strong/weak beams 
+        h_weak    = self.df_G.loc[(self.df_G['Ug/2KSg']>ugS_max) & (self.df_G.Swa>Sgmax)].index
+        h_strong  = self.df_G.loc[self.df_G.Swa<=Sgmax,['h','k','l']].index
+        self.df_G['strong'] = '?'
+        self.df_G.loc[h_weak  ,'strong'] = False
+        self.df_G.loc[h_strong,'strong'] = True 
+        df_Fhkl   = self.get_Fhkl()
+        df_Fhkl.loc[str((0,0,0)),'Ug'] = 0        
+  
+        
+        #pertubation potentials
+        self.df_G['Ug_eff'] = df_Fhkl.Ug
+        
+        self.df_G['Sg_eff'] = self.df_G.Sw
+        hkl_weak   = self.df_G.loc[h_weak,['h','k','l']].values
+        hkl_strong = self.df_G.loc[h_strong,['h','k','l']].values 
+        # hH = [ str(tuple(h)) for h in hkl_H]        
+        for iG,hkl_G in enumerate(hkl_strong) :            
+            hG_H = [str(tuple(h)) for h in hkl_G-hkl_weak]
+            hH_G = [str(tuple(h)) for h in hkl_weak-hkl_G]
+            hg = str(tuple(hkl_G))
+            self.df_G.loc[hg,'Ug_eff'] -= np.sum(df_Fhkl.loc[hG_H,'Ug']*df_Fhkl.loc[h_weak,'Ug']/(2*self.k0*self.df_G.loc[h_weak,'Sw']))
+            self.df_G.loc[hg,'Sg_eff'] -= np.sum(df_Fhkl.loc[hG_H,'Ug']*df_Fhkl.loc[hH_G,'Ug']/(2*self.k0*self.df_G.loc[h_weak,'Sw']))/(2*self.k0)
+
+      
+        nGs = hkl_strong.shape[0]
+        H = np.zeros((nGs,nGs),dtype=complex)
+        df_Fhkl['Ug_eff'] = df_Fhkl.Ug
+        df_Fhkl.loc[h_strong,'Ug_eff'] = self.df_G.loc[h_strong,'Ug_eff']
+        if v:
+            msg = '...assembling {N}x{N} matrix and {Nweak} weak beams... \
+            '.format(N=nGs,Nweak=len(h_weak))
+            print(colors.blue,msg,colors.black)
+        for iG,hkl_G in enumerate(hkl_strong) :            
+            hG = [str(tuple(h)) for h in hkl_G-hkl_strong]
+            U_iG = df_Fhkl.loc[hG,'Ug_eff'].values                  
+            H[iG,:]  = U_iG/(2*self.k0)
+            H[iG,iG] = self.df_G.loc[str(tuple(hkl_G)),'Sg_eff']
+
+        H *= 2*np.pi
+        self.H=H        
+        
+        
+        if v:print(colors.blue+'...diagonalization...'+colors.black)
+        self.gammaj,self.CjG = np.linalg.eigh(self.H)
+        # print(self.gammaj)
+        self.invCjG = np.linalg.inv(self.CjG)
+        self.solved = True
+        
     def _solve_Bloch(self,show_H=False,Vopt0=True,dyngo_args={},v=False):
         ''' Diagonalize the Hamiltonian'''
         # Ug is a (2*Nmax+1)^3 tensor :
         # Ug[l] = [U(-N,-N,l) .. U(-N,0,l) .. U(-N,N,l)
         #          U( 0,-N,l) .. U( 0,0,l) .. U( 0,N,l)
         #          U(-N,-N,l) .. U( N,0,l) .. U( N,N,l)]
-        self.dyngo = any(dyngo_args)
-
         hkl = self.df_G[['h','k','l']].values
         Sg  = self.df_G.Sw.values
         if self.dyngo:
@@ -471,7 +525,7 @@ class Bloch:
     
         ## compute excitation errors
         if f_sw:
-            args  = {'hkl':hkl.T,'frame':self.frame}
+            args  = {'hkl':np.array([h,k,l]).T,'frame':self.frame}
             Sw = f_sw(**args)
         else:
             Kx,Ky,Kz = K
@@ -517,16 +571,25 @@ class Bloch:
 
     def _set_intensities(self):
         """get beam intensities at thickness"""
-        id0 = self._get_central_beam()
+        
         gammaj,CjG = self.gammaj,self.CjG
         if self.dyngo:
             S = CjG.dot(np.diag(np.exp(1J*gammaj*self.thick*self.k0/self.Knorm))).dot(self.invCjG)
         else:
-            S = CjG.dot(np.diag(np.exp(1J*gammaj*self.thick))).dot(self.invCjG)
-        # S = S[:,id0]
+            S = CjG.dot(np.diag(np.exp(1J*gammaj*self.thick))).dot(self.invCjG)      
+        
+        #### get the central beam index
+        id0 = self._get_central_beam()
+        if self.solver=='bethe':
+            id0 = np.where(self.df_G.loc[self.df_G.strong==True].index==str((0,0,0)))[0][0]            
         S = S[id0,:]
-        self.df_G['S'] = S
-        self.df_G['I'] = np.abs(S)**2
+        
+        #### For bethe potential, only the strong beams have been diagonalized so make sure to assign the scattering amplitudes to those beams 
+        if self.solver=='bethe':
+            self.df_G.loc[self.df_G.strong==True,'S'] = S
+        else:
+            self.df_G['S'] = S
+        self.df_G['I'] = np.abs(self.df_G.S)**2
         # print(CjG[0]);print(self.df_G.sort_values('I')[['Sw','Ig','I']])
         if self.dyngo:
             self.df_G['I']*=self.scale**2

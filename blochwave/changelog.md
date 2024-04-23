@@ -1,5 +1,8 @@
 ## 1.3dev
 
+### Tue Apr 23 15:02:31 UTC 2024
+- implemented bethe potential. Results are very close to without Bethe because the perturbation are too small. 
+
 ## 1.0
 ### Thu 15 Feb 16:25:55 GMT 2024
 - added `collect_beams`

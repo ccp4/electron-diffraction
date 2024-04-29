@@ -139,10 +139,74 @@ class Rocking:
             self.save()
             print(colors.green+'rock.Iz updated'+colors.black)
 
+
     def get_rocking(self,iZs:Optional[slice]=-1,
         zs:Optional[Iterable[float]]=None,
         refl:Sequence[tuple]=[],cond:str='',opts:str='',n=0,
-        kin = False,
+        kin:bool=False,
+        v=False):
+        """Get intensities at required beams and thicknesses
+
+        Parameters
+        ----------
+        zs
+            selected thicknesses
+        iZs
+            slice into thicknesses
+        refl
+            reflections to get
+        cond
+            condition to apply to selecte reflections
+        opts
+            F(include friedel), O(include central beam)
+        kin
+            Also include kinematic values if True(default False)
+        Returns
+        -------
+            z,dict
+                z,{beam:I(z)}
+        """
+        iZs,nzs  = self._get_iZs(iZs,zs)        #;print(iZs)
+        z0 = self.load(0).z.copy()[iZs][-1]
+
+        refl,nbs = self.get_beams(cond=cond,refl=refl,opts=opts)  #;print(refl)
+        nts = self.ts.size
+        I = {}
+        # for h in refl : I[str(h)]=np.nan*np.ones((nts,nzs))
+        for h in refl :
+            if kin:
+                I[str(h)]=[np.zeros((nts,nzs)),np.zeros((nts,nzs))]
+            else:
+                I[str(h)]=np.zeros((nts,nzs))
+
+        if v : print("gathering the intensities")
+        for i in range(nts):
+            # print(colors.red,i,colors.black)
+            sim_obj = self.load(i)
+            hkl0  = sim_obj.get_beam(refl=refl,index=False)
+            if hkl0:
+                idx  = sim_obj.get_beam(refl=refl,index=True)
+                # hkl0 = [str(tuple(h)) for h in sim_obj.get_hkl()[idx]]
+                for idB,hkl_0 in zip(idx,hkl0):
+                    if kin:
+                        I[hkl_0][0][i,:] = np.array(sim_obj.Iz[idB,iZs])
+                        I[hkl_0][1][i,:] = np.array(sim_obj.Iz_kin[idB,iZs])
+                    else:
+                        I[hkl_0][i,:] = np.array(sim_obj.Iz[idB,iZs])
+        if n and nbs>n:
+            print('keeping only %d strongest beams' %n)
+            df_Imax = pd.DataFrame.from_dict({h:Ib[:,0].max() for h,Ib in I.items()},orient='index',columns=['I'])
+            hkls = df_Imax.sort_values('I',ascending=False)[:n].index
+            I = {h:I[h] for h in hkls}
+
+        z = self.load(0).z.copy()[iZs]
+        return z,I
+
+    
+    def get_rocking_old(self,iZs:Optional[slice]=-1,
+        zs:Optional[Iterable[float]]=None,
+        refl:Sequence[tuple]=[],cond:str='',opts:str='',n=0,
+        kin:bool=False,
         v=False):
         """Get intensities at required beams and thicknesses
 
@@ -255,7 +319,7 @@ class Rocking:
     ###########################################################################
     def show_excitation_map(self,cmaps=('Reds','Reds_r'),hkls=[],
             sw_color=lambda Sw:Sw,vm=0.05,vmin=-0.005,vmax=0.005,
-            figs=(20,5),nb_max=80,sw_min=1e-3,**kwargs,
+            figs=(20,5),nb_max=80,sw_min=1e-3,sort='nframes',**kwargs,
         ):
         # cmaps=('PuRd','OrRd_r')
         # swc,vm = lambda Sw:-np.sign(Sw)*np.log10(np.maximum(np.abs(Sw),1e-10)),4
@@ -278,7 +342,9 @@ class Rocking:
                 hkls = self.beams.sort_values('Sw_cen')[:nb_max].index
 
         # sort by how long they sitck around
-        df      = self.beams.loc[hkls].sort_values('nframes',ascending=False)
+        df = self.beams.loc[hkls]
+        if sort :
+            df = self.beams.loc[hkls].sort_values('nframes',ascending=False)
         hkls    = df.index
         df['i'] = np.arange(len(hkls))
 
@@ -332,7 +398,7 @@ class Rocking:
 
     def plot_rocking(self,cmap='viridis',x:str='Sw',
         cond='',refl=[],opts:str='',iZs=-1,zs=None,n:int=0,
-        kin=False,v=False,
+        kin=False,v=False,ms='',ls='',
         **kwargs):
         """plot rocking curve for set of selected beams at thickness zs
 
@@ -353,32 +419,36 @@ class Rocking:
 
         if v:print('gathering plots')
         nbs,nzs = len(refl),z.size
+        if not ls:
+            ls={'kin':'--','dyn':'-'}        
         if nbs>=nzs:
-            cs,ms = dsp.getCs(cmap,nbs), dsp.markers
+            cs = dsp.getCs(cmap,nbs)
+            if not ms:ms=dsp.markers
             legElt = { '%s' %refl0:[cs[i],'-'] for i,refl0 in enumerate(refl)}
             for iz,zi in enumerate(z):
                 legElt.update({'$z=%d A$' %(zi):['k',ms[iz]+'-']})
                 for i,refl0 in enumerate(refl):
                     df_b=self.beams.loc[refl0]
                     if kin :
-                        plts += [[df_b[x],I[refl0][0][df_b.Frame,iz],[cs[i],ms[i]+'-' ],'']]
-                        plts += [[df_b[x],I[refl0][1][df_b.Frame,iz],[cs[i],ms[i]+'--'],'']]
+                        plts += [[df_b[x],I[refl0][0][df_b.Frame,iz],[cs[i],ms[i]+ls['dyn']],'']]
+                        plts += [[df_b[x],I[refl0][1][df_b.Frame,iz],[cs[i],ms[i]+ls['kin']],'']]
                     else:
-                        plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[i],ms[iz]+'-'],'']]
+                        plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[i],ms[iz]+ls['dyn']],'']]
 
         else:
             # rocking for different thicknesses
-            cs,ms = dsp.getCs(cmap,nzs),  dsp.markers
+            cs = dsp.getCs(cmap,nzs)
+            if not ms:ms=dsp.markers
             legElt = { '%s' %refl0:['k','-'+ms[i]] for i,refl0 in enumerate(refl)}
             # self.get_frames(hkl,iTs=slice(0,None))
             for i,refl0 in enumerate(refl):
                 for iz,zi in enumerate(z):
                     df_b=self.beams.loc[refl0]
                     if kin :
-                        plts += [[df_b[x],I[refl0][0][df_b.Frame,iz],[cs[iz],ms[i]+'-' ],'']]
-                        plts += [[df_b[x],I[refl0][1][df_b.Frame,iz],[cs[iz],ms[i]+'--'],'']]
+                        plts += [[df_b[x],I[refl0][0][df_b.Frame,iz],[cs[iz],ms[i]+ls['dyn']],'']]
+                        plts += [[df_b[x],I[refl0][1][df_b.Frame,iz],[cs[iz],ms[i]+ls['kin']],'']]
                     else:
-                        plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[iz],ms[i]+'-'],'']]
+                        plts += [[df_b[x],I[refl0][df_b.Frame,iz],[cs[iz],ms[i]+ls['dyn']],'']]
             legElt.update({'$z=%d A$' %(zi):[cs[iz],'-'] for iz,zi in enumerate(z) })
 
         if kin :

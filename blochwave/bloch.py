@@ -366,10 +366,10 @@ class Bloch:
         self.df_G.index = [str(tuple(h)) for h in self.df_G.values]
         self.solved=True
 
-    def _solve_Bethe(self,ugS_max=0.001,Sgmax=0.1,v=False):
+    def _solve_Bethe(self,ugS_max=0.001,Sgmax=0.1,h_strong=[],h_weak=[],v=False):
         ### find strong/weak beams 
-        h_weak    = self.df_G.loc[(self.df_G['Ug/2KSg']>ugS_max) & (self.df_G.Swa>Sgmax)].index
-        h_strong  = self.df_G.loc[self.df_G.Swa<=Sgmax,['h','k','l']].index
+        if not any(h_weak):h_weak    = self.df_G.loc[(self.df_G['Ug/2KSg']>ugS_max) & (self.df_G.Swa>Sgmax)].index
+        if not any(h_strong):h_strong  = self.df_G.loc[self.df_G.Swa<=Sgmax,['h','k','l']].index
         self.df_G['strong'] = '?'
         self.df_G.loc[h_weak  ,'strong'] = False
         self.df_G.loc[h_strong,'strong'] = True 
@@ -378,18 +378,18 @@ class Bloch:
   
         
         #pertubation potentials
-        self.df_G['Ug_eff'] = df_Fhkl.Ug
-        
-        self.df_G['Sg_eff'] = self.df_G.Sw
+        self.df_G['Ug_eff'] = 0#df_Fhkl.Ug        
+        self.df_G['Sg_eff'] = 0#self.df_G.Sw
         hkl_weak   = self.df_G.loc[h_weak,['h','k','l']].values
-        hkl_strong = self.df_G.loc[h_strong,['h','k','l']].values 
+        hkl_strong = self.df_G.loc[h_strong,['h','k','l']].values
+        # print(h_strong,df_Fhkl)
         # hH = [ str(tuple(h)) for h in hkl_H]        
         for iG,hkl_G in enumerate(hkl_strong) :            
             hG_H = [str(tuple(h)) for h in hkl_G-hkl_weak]
             hH_G = [str(tuple(h)) for h in hkl_weak-hkl_G]
             hg = str(tuple(hkl_G))
-            self.df_G.loc[hg,'Ug_eff'] -= np.sum(df_Fhkl.loc[hG_H,'Ug']*df_Fhkl.loc[h_weak,'Ug']/(2*self.k0*self.df_G.loc[h_weak,'Sw']))
-            self.df_G.loc[hg,'Sg_eff'] -= np.sum(df_Fhkl.loc[hG_H,'Ug']*df_Fhkl.loc[hH_G,'Ug']/(2*self.k0*self.df_G.loc[h_weak,'Sw']))/(2*self.k0)
+            self.df_G.loc[hg,'Ug_eff'] = self.df_G.loc[hg,'Ug'] - np.sum(df_Fhkl.loc[hG_H,'Ug'].values*df_Fhkl.loc[h_weak,'Ug'].values/(2*self.k0*self.df_G.loc[h_weak,'Sw'].values))
+            self.df_G.loc[hg,'Sg_eff'] = self.df_G.loc[hg,'Sw'] - np.sum(df_Fhkl.loc[hG_H,'Ug'].values*df_Fhkl.loc[hH_G  ,'Ug'].values/(2*self.k0*self.df_G.loc[h_weak,'Sw'].values))/(2*self.k0)
 
       
         nGs = hkl_strong.shape[0]

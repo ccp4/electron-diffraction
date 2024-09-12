@@ -1,7 +1,10 @@
 # Changelog Summaries
-##1.3.1
+## 1.6
+- installation bug fixes 
 
-##1.2
+## 1.3.1
+
+## 1.2
 - EDutils 1.2:
   - pets :
   - dials :
@@ -25,7 +28,8 @@
   - dev : added `show_df_G`
   - ref : - added structure factor dataframe `pd.read_pickle(b0.get_Fhkl_pkl())` as loadable structure factors
   - ref : changes to `get_lattice`
-##1.1.0
+## 1.1.0
+
 ### EDutils
 - xds importer
 - dials importer

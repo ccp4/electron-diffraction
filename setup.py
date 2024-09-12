@@ -1,6 +1,6 @@
 import setuptools
-import utils
-version = utils.get_version("changelog.md")
+from getversion import get_version
+version = get_version("changelog.md")
 with open("README.md", "r") as fh:
    long_description = fh.read()
 
